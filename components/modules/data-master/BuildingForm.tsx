@@ -172,6 +172,7 @@ function ZoneSelect({
       )}
       <option value="__add_new__">＋ Add new zone…</option>
     </Select>
+    <ErrorMessage message={error} />
   )
 }
 

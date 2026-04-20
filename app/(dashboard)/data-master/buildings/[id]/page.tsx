@@ -42,10 +42,6 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
 
   if (!building) notFound()
 
-  const location = building.city
-    ? `${building.city.name}, ${building.city.state?.isoCode ?? ''} ${building.zipcode ?? ''}`
-    : [building.address, building.zipcode].filter(Boolean).join(', ')
-
   const emergencyContacts = Array.isArray(building.emergencyContacts)
     ? (building.emergencyContacts as { name: string; phone: string; role: string }[])
     : []

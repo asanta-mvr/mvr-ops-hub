@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 
 // One-time seed endpoint — super_admin only
 // POST /api/v1/admin/seed
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const session = await auth()
   if (!session?.user || session.user.role !== 'super_admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
