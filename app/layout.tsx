@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Montserrat, Playfair_Display } from 'next/font/google'
 import './globals.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 const montserrat = Montserrat({
   subsets: ['latin'],
