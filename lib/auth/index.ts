@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import CredentialsProvider from 'next-auth/providers/credentials'
+import { db } from '@/lib/db'
 
 // PrismaAdapter removed temporarily — NextAuth v5 beta has a known conflict
 // between PrismaAdapter + JWT strategy + Google OAuth callback.
@@ -30,6 +31,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           credentials?.email === devEmail &&
           credentials?.password === devPassword
         ) {
+          await db.user.upsert({
+            where: { id: 'dev-user-001' },
+            update: { lastLoginAt: new Date() },
+            create: {
+              id: 'dev-user-001',
+              name: 'Dev User',
+              email: devEmail,
+              role: 'super_admin',
+            },
+          })
           return {
             id: 'dev-user-001',
             name: 'Dev User',

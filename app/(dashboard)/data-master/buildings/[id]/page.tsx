@@ -1,9 +1,18 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, Pencil, MapPin, Phone, Mail, Clock } from 'lucide-react'
+import { ChevronRight, Pencil, MapPin, Phone, Mail, Clock, Building2, ExternalLink, Globe } from 'lucide-react'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
+import PropertyManagersPanel from '@/components/modules/data-master/PropertyManagersPanel'
+
+const GCS_BASE = 'https://storage.googleapis.com/mvr-ops-hub-assets'
+
+function resolveImageUrl(url: string | null): string | null {
+  if (!url) return null
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  return `${GCS_BASE}/${url}`
+}
 
 export const metadata: Metadata = { title: 'Building Detail' }
 
@@ -41,43 +50,106 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
     ? (building.emergencyContacts as { name: string; phone: string; role: string }[])
     : []
 
+  const imageUrl = resolveImageUrl(building.imageUrl)
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <nav className="flex items-center gap-1 text-xs text-muted-foreground mb-3">
-          <Link href="/data-master/buildings" className="hover:text-mvr-primary">Buildings</Link>
-          <ChevronRight className="w-3 h-3" />
-          <span className="text-foreground">{building.name}</span>
-        </nav>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-mvr-primary">{building.name}</h1>
-              {building.nickname && (
-                <span className="text-sm text-muted-foreground">({building.nickname})</span>
-              )}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                  statusStyles[building.status] ?? statusStyles.inactive
-                }`}
-              >
-                {building.status}
-              </span>
+      {/* Hero image + header */}
+      <div className="bg-white rounded-2xl border overflow-hidden shadow-card">
+        {/* Hero image */}
+        {imageUrl ? (
+          <div
+            className="h-56 md:h-72 w-full bg-cover bg-center relative"
+            style={{ backgroundImage: `url(${imageUrl})` }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-t from-mvr-primary/60 via-transparent to-transparent" />
+            <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                      statusStyles[building.status] ?? statusStyles.inactive
+                    }`}
+                  >
+                    {building.status}
+                  </span>
+                  {building.zone && (
+                    <span className="text-white/80 text-xs bg-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                      {building.zone}
+                    </span>
+                  )}
+                </div>
+                <h1 className="font-display text-2xl md:text-3xl font-bold text-white drop-shadow">
+                  {building.name}
+                </h1>
+                {building.nickname && (
+                  <p className="text-white/70 text-sm mt-0.5">{building.nickname}</p>
+                )}
+              </div>
+              <Link href={`/data-master/buildings/${params.id}/edit`}>
+                <Button size="sm" variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm">
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit
+                </Button>
+              </Link>
             </div>
-            {building.address && (
-              <p className="text-muted-foreground text-sm mt-1 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" />
-                {building.address}{building.zipcode ? `, ${building.zipcode}` : ''}
-              </p>
+          </div>
+        ) : (
+          <div className="h-32 bg-mvr-primary/8 flex items-center justify-between px-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                    statusStyles[building.status] ?? statusStyles.inactive
+                  }`}
+                >
+                  {building.status}
+                </span>
+              </div>
+              <h1 className="font-display text-2xl font-bold text-mvr-primary">{building.name}</h1>
+              {building.nickname && (
+                <p className="text-muted-foreground text-sm">{building.nickname}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <Building2 className="w-12 h-12 text-mvr-primary/20" />
+              <Link href={`/data-master/buildings/${params.id}/edit`}>
+                <Button variant="outline" size="sm">
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Edit
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Address bar */}
+        <div className="px-5 py-3 border-t border-[#E0DBD4] flex items-center justify-between flex-wrap gap-3">
+          <nav className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Link href="/data-master/buildings" className="hover:text-mvr-primary">Buildings</Link>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-foreground">{building.name}</span>
+          </nav>
+          {building.address && (
+            <p className="text-muted-foreground text-xs flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              {building.address}{building.zipcode ? `, ${building.zipcode}` : ''}
+            </p>
+          )}
+          <div className="flex items-center gap-3">
+            {building.googleUrl && (
+              <a href={building.googleUrl} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-mvr-primary hover:underline flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Maps <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            )}
+            {building.website && (
+              <a href={building.website} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-mvr-primary hover:underline flex items-center gap-1">
+                <Globe className="w-3 h-3" /> Website <ExternalLink className="w-2.5 h-2.5" />
+              </a>
             )}
           </div>
-          <Link href={`/data-master/buildings/${params.id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Pencil className="w-3.5 h-3.5 mr-1.5" />
-              Edit
-            </Button>
-          </Link>
         </div>
       </div>
 
@@ -206,63 +278,11 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
 
         {/* Right column */}
         <div className="space-y-5">
-          {/* Links */}
-          {(building.googleUrl || building.website) && (
-            <div className="bg-white rounded-xl border p-5 space-y-2">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary mb-3">Links</h2>
-              {building.googleUrl && (
-                <a
-                  href={building.googleUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-sm text-mvr-primary hover:underline truncate"
-                >
-                  📍 Google Maps
-                </a>
-              )}
-              {building.website && (
-                <a
-                  href={building.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-sm text-mvr-primary hover:underline truncate"
-                >
-                  🌐 Website
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* Property Managers */}
-          <div className="bg-white rounded-xl border p-5 space-y-3">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
-              Property Managers
-            </h2>
-            {building.propertyManagers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">None on file.</p>
-            ) : (
-              <div className="space-y-3">
-                {building.propertyManagers.map((pm) => (
-                  <div key={pm.id} className="text-sm">
-                    <p className="font-medium">{pm.name}</p>
-                    {pm.contactName && (
-                      <p className="text-muted-foreground text-xs">{pm.contactName}</p>
-                    )}
-                    {pm.contactPhone && (
-                      <a href={`tel:${pm.contactPhone}`} className="text-xs text-mvr-primary hover:underline block">
-                        {pm.contactPhone}
-                      </a>
-                    )}
-                    {pm.isPrimary && (
-                      <span className="text-xs bg-mvr-primary/10 text-mvr-primary px-1.5 py-0.5 rounded">
-                        Primary
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            {/* Property Managers — interactive panel */}
+          <PropertyManagersPanel
+            buildingId={params.id}
+            initialManagers={building.propertyManagers}
+          />
 
           {/* Emergency Contacts */}
           {emergencyContacts.length > 0 && (

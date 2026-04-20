@@ -7,26 +7,42 @@ import BuildingForm from '@/components/modules/data-master/BuildingForm'
 
 export const metadata: Metadata = { title: 'Edit Building' }
 
+async function getZones(): Promise<string[]> {
+  const buildings = await db.building.findMany({
+    where: { zone: { not: null } },
+    select: { zone: true },
+    distinct: ['zone'],
+    orderBy: { zone: 'asc' },
+  })
+  return buildings.map((b) => b.zone).filter((z): z is string => z !== null)
+}
+
 export default async function EditBuildingPage({ params }: { params: { id: string } }) {
-  const building = await db.building.findUnique({ where: { id: params.id } })
+  const [building, zones] = await Promise.all([
+    db.building.findUnique({ where: { id: params.id } }),
+    getZones(),
+  ])
+
   if (!building) notFound()
 
   const defaultValues = {
-    name: building.name,
-    nickname: building.nickname ?? '',
-    status: building.status,
-    address: building.address ?? '',
-    zone: building.zone ?? '',
-    zipcode: building.zipcode ?? '',
-    googleUrl: building.googleUrl ?? '',
-    website: building.website ?? '',
-    frontdeskPhone: building.frontdeskPhone ?? '',
-    frontdeskEmail: building.frontdeskEmail ?? '',
-    checkinHours: building.checkinHours ?? '',
-    checkoutHours: building.checkoutHours ?? '',
-    rules: building.rules ?? '',
-    knowledgeBase: building.knowledgeBase ?? '',
-    amenitiesRaw: building.amenities.join('\n'),
+    name:          building.name,
+    nickname:      building.nickname ?? '',
+    status:        building.status,
+    address:       building.address ?? '',
+    zone:          building.zone ?? '',
+    zipcode:       building.zipcode ?? '',
+    googleUrl:     building.googleUrl ?? '',
+    website:       building.website ?? '',
+    imageUrl:      building.imageUrl ?? '',
+    floorplanUrls: building.floorplanUrls.map((url) => ({ url })),
+    frontdeskPhone:    building.frontdeskPhone ?? '',
+    frontdeskEmail:    building.frontdeskEmail ?? '',
+    checkinHours:      building.checkinHours ?? '',
+    checkoutHours:     building.checkoutHours ?? '',
+    rules:             building.rules ?? '',
+    knowledgeBase:     building.knowledgeBase ?? '',
+    amenitiesRaw:      building.amenities.join('\n'),
     emergencyContacts: Array.isArray(building.emergencyContacts)
       ? (building.emergencyContacts as { name: string; phone: string; role: string }[])
       : [],
@@ -48,7 +64,7 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
         <p className="text-muted-foreground text-sm mt-1">{building.name}</p>
       </div>
 
-      <BuildingForm buildingId={params.id} defaultValues={defaultValues} />
+      <BuildingForm buildingId={params.id} defaultValues={defaultValues} zones={zones} />
     </div>
   )
 }

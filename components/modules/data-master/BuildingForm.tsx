@@ -1,79 +1,91 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, useFieldArray } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, Check, X } from 'lucide-react'
 
 const formSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(200),
-  nickname: z.string().max(100).optional().or(z.literal('')),
-  status: z.enum(['active', 'inactive', 'onboarding']),
-  address: z.string().max(500).optional().or(z.literal('')),
-  zone: z.string().max(100).optional().or(z.literal('')),
-  zipcode: z.string().max(20).optional().or(z.literal('')),
-  googleUrl: z.string().optional().or(z.literal('')),
-  website: z.string().optional().or(z.literal('')),
-  frontdeskPhone: z.string().max(30).optional().or(z.literal('')),
-  frontdeskEmail: z.string().optional().or(z.literal('')),
-  checkinHours: z.string().max(100).optional().or(z.literal('')),
-  checkoutHours: z.string().max(100).optional().or(z.literal('')),
-  amenitiesRaw: z.string().optional(),
-  rules: z.string().optional(),
-  knowledgeBase: z.string().optional(),
-  emergencyContacts: z.array(
-    z.object({
-      name: z.string().min(1, 'Name required'),
-      phone: z.string().min(1, 'Phone required'),
-      role: z.string().min(1, 'Role required'),
-    })
-  ).default([]),
+  name:           z.string().min(1, 'Building name is required').max(200),
+  nickname:       z.string().min(1, 'Nickname is required').max(100),
+  status:         z.enum(['active', 'inactive', 'onboarding']),
+  zone:           z.string().min(1, 'Zone is required').max(100),
+  address:        z.string().min(1, 'Address is required').max(500),
+  zipcode:        z.string().min(1, 'Zip code is required').max(20),
+  googleUrl:      z.string().optional(),
+  website:        z.string().optional(),
+  imageUrl:       z.string().optional(),
+  floorplanUrls:  z.array(z.object({ url: z.string() })).default([]),
+  frontdeskPhone: z.string().max(30).optional(),
+  frontdeskEmail: z.string().optional(),
+  checkinHours:   z.string().max(100).optional(),
+  checkoutHours:  z.string().max(100).optional(),
+  amenitiesRaw:   z.string().optional(),
+  rules:          z.string().optional(),
+  knowledgeBase:  z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
 
 interface BuildingFormProps {
-  buildingId?: string
+  buildingId?:    string
   defaultValues?: Partial<FormValues>
+  zones?:         string[]
 }
+
+// ── Shared micro-components ────────────────────────────────────────────────
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
     <label className="block text-xs font-medium text-muted-foreground mb-1">
-      {children} {required && <span className="text-mvr-danger">*</span>}
+      {children}{required && <span className="text-mvr-danger ml-0.5">*</span>}
     </label>
   )
 }
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary disabled:bg-gray-50 disabled:text-gray-400"
-    />
-  )
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null
+  return <p className="text-xs text-mvr-danger mt-1">{message}</p>
 }
 
-function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary resize-y min-h-[80px]"
-    />
-  )
-}
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function Input({ className: _cls, ...props }, ref) {
+    return (
+      <input
+        ref={ref}
+        {...props}
+        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary disabled:bg-gray-50 disabled:text-gray-400"
+      />
+    )
+  }
+)
 
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary bg-white"
-    />
-  )
-}
+const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className: _cls, ...props }, ref) {
+    return (
+      <textarea
+        ref={ref}
+        {...props}
+        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary resize-y min-h-[80px]"
+      />
+    )
+  }
+)
+
+const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  function Select({ className: _cls, ...props }, ref) {
+    return (
+      <select
+        ref={ref}
+        {...props}
+        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary bg-white"
+      />
+    )
+  }
+)
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -84,53 +96,151 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
-export default function BuildingForm({ buildingId, defaultValues }: BuildingFormProps) {
-  const router = useRouter()
+// ── Zone selector: dropdown + inline "add new zone" ───────────────────────
+
+function ZoneSelect({
+  zones,
+  value,
+  onChange,
+  error,
+}: {
+  zones:    string[]
+  value:    string
+  onChange: (v: string) => void
+  error?:   string
+}) {
+  const [addingNew, setAddingNew]   = useState(false)
+  const [newZoneName, setNewZoneName] = useState('')
+
+  const knownZones  = Array.from(new Set(zones.filter(Boolean)))
+  const isCustomVal = value && !knownZones.includes(value)
+
+  function confirmNew() {
+    const trimmed = newZoneName.trim()
+    if (!trimmed) return
+    onChange(trimmed)
+    setAddingNew(false)
+    setNewZoneName('')
+  }
+
+  if (addingNew) {
+    return (
+      <div className="flex gap-2">
+        <input
+          autoFocus
+          value={newZoneName}
+          onChange={(e) => setNewZoneName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmNew() } }}
+          placeholder="New neighborhood name"
+          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary"
+        />
+        <button
+          type="button"
+          onClick={confirmNew}
+          className="px-3 py-2 bg-mvr-primary text-white rounded-lg text-sm hover:bg-mvr-primary/90 transition-colors"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => { setAddingNew(false); setNewZoneName('') }}
+          className="px-3 py-2 border rounded-lg text-sm hover:bg-mvr-neutral transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <Select
+      value={isCustomVal ? value : (value || '')}
+      onChange={(e) => {
+        if (e.target.value === '__add_new__') {
+          setAddingNew(true)
+        } else {
+          onChange(e.target.value)
+        }
+      }}
+    >
+      <option value="">Select zone…</option>
+      {knownZones.map((z) => (
+        <option key={z} value={z}>{z}</option>
+      ))}
+      {isCustomVal && (
+        <option value={value}>{value}</option>
+      )}
+      <option value="__add_new__">＋ Add new zone…</option>
+    </Select>
+  )
+}
+
+// ── Main form ──────────────────────────────────────────────────────────────
+
+export default function BuildingForm({ buildingId, defaultValues, zones = [] }: BuildingFormProps) {
+  const router    = useRouter()
   const [serverError, setServerError] = useState('')
-  const isEdit = !!buildingId
+  const isEdit    = !!buildingId
 
   const {
     register,
     handleSubmit,
     control,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: standardSchemaResolver(formSchema),
     defaultValues: {
-      status: 'onboarding',
-      emergencyContacts: [],
+      name:          '',
+      nickname:      '',
+      status:        'onboarding',
+      zone:          '',
+      address:       '',
+      zipcode:       '',
+      googleUrl:     '',
+      website:       '',
+      imageUrl:      '',
+      frontdeskPhone: '',
+      frontdeskEmail: '',
+      checkinHours:  '',
+      checkoutHours: '',
+      amenitiesRaw:  '',
+      rules:         '',
+      knowledgeBase: '',
+      floorplanUrls: [] as { url: string }[],
       ...defaultValues,
     },
   })
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'emergencyContacts' })
+  const { fields: fpFields, append: appendFp, remove: removeFp } =
+    useFieldArray({ control, name: 'floorplanUrls' })
+
+  const zoneValue = watch('zone') ?? ''
 
   async function onSubmit(values: FormValues) {
     setServerError('')
 
-    const { amenitiesRaw, ...rest } = values
-    const amenities = amenitiesRaw
-      ? amenitiesRaw.split('\n').map((s) => s.trim()).filter(Boolean)
-      : []
+    const { amenitiesRaw, floorplanUrls: fpArr, ...rest } = values
+    const amenities     = amenitiesRaw ? amenitiesRaw.split('\n').map((s) => s.trim()).filter(Boolean) : []
+    const floorplanUrls = fpArr.map((f) => f.url).filter(Boolean)
 
     const payload = {
       ...rest,
       amenities,
-      nickname: rest.nickname || undefined,
-      address: rest.address || undefined,
-      zone: rest.zone || undefined,
-      zipcode: rest.zipcode || undefined,
-      googleUrl: rest.googleUrl || undefined,
-      website: rest.website || undefined,
+      floorplanUrls,
+      googleUrl:      rest.googleUrl      || undefined,
+      website:        rest.website        || undefined,
+      imageUrl:       rest.imageUrl       || undefined,
       frontdeskPhone: rest.frontdeskPhone || undefined,
       frontdeskEmail: rest.frontdeskEmail || undefined,
-      checkinHours: rest.checkinHours || undefined,
-      checkoutHours: rest.checkoutHours || undefined,
-      rules: rest.rules || undefined,
-      knowledgeBase: rest.knowledgeBase || undefined,
+      checkinHours:   rest.checkinHours   || undefined,
+      checkoutHours:  rest.checkoutHours  || undefined,
+      rules:          rest.rules          || undefined,
+      knowledgeBase:  rest.knowledgeBase  || undefined,
     }
 
-    const url = isEdit ? `/api/v1/buildings/${buildingId}` : '/api/v1/buildings'
+    const url    = isEdit ? `/api/v1/buildings/${buildingId}` : '/api/v1/buildings'
     const method = isEdit ? 'PATCH' : 'POST'
 
     const res = await fetch(url, {
@@ -158,16 +268,18 @@ export default function BuildingForm({ buildingId, defaultValues }: BuildingForm
         </div>
       )}
 
+      {/* ── Basic Info ── */}
       <SectionCard title="Basic Info">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label required>Building Name</Label>
             <Input {...register('name')} placeholder="e.g. Icon Brickell" />
-            {errors.name && <p className="text-xs text-mvr-danger mt-1">{errors.name.message}</p>}
+            <FieldError message={errors.name?.message} />
           </div>
           <div>
-            <Label>Nickname</Label>
+            <Label required>Nickname</Label>
             <Input {...register('nickname')} placeholder="e.g. ICON" />
+            <FieldError message={errors.nickname?.message} />
           </div>
           <div>
             <Label required>Status</Label>
@@ -178,35 +290,83 @@ export default function BuildingForm({ buildingId, defaultValues }: BuildingForm
             </Select>
           </div>
           <div>
-            <Label>Zone</Label>
-            <Input {...register('zone')} placeholder="e.g. Brickell" />
+            <Label required>Zone</Label>
+            <ZoneSelect
+              zones={zones}
+              value={zoneValue}
+              onChange={(v) => setValue('zone', v, { shouldValidate: true })}
+              error={errors.zone?.message}
+            />
+            <FieldError message={errors.zone?.message} />
           </div>
+        </div>
+        <div>
+          <Label>Building Photo URL</Label>
+          <Input {...register('imageUrl')} placeholder="https://…/photo.jpg" />
+          <p className="text-xs text-muted-foreground mt-1">Main photo shown on the building card and detail page.</p>
         </div>
       </SectionCard>
 
+      {/* ── Location ── */}
       <SectionCard title="Location">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
-            <Label>Address</Label>
+            <Label required>Address</Label>
             <Input {...register('address')} placeholder="485 Brickell Avenue" />
+            <FieldError message={errors.address?.message} />
           </div>
           <div>
-            <Label>Zip Code</Label>
+            <Label required>Zip Code</Label>
             <Input {...register('zipcode')} placeholder="33131" />
+            <FieldError message={errors.zipcode?.message} />
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>Google Maps URL</Label>
-            <Input {...register('googleUrl')} placeholder="https://maps.google.com/..." type="url" />
+            <Input {...register('googleUrl')} placeholder="https://maps.google.com/…" type="url" />
           </div>
           <div>
             <Label>Website</Label>
-            <Input {...register('website')} placeholder="https://..." type="url" />
+            <Input {...register('website')} placeholder="https://…" type="url" />
           </div>
         </div>
       </SectionCard>
 
+      {/* ── Documents & Media ── */}
+      <SectionCard title="Documents & Media">
+        <div className="space-y-2">
+          {fpFields.length === 0 && (
+            <p className="text-xs text-muted-foreground">No documents added yet.</p>
+          )}
+          {fpFields.map((field, i) => (
+            <div key={field.id} className="flex gap-2">
+              <Input
+                {...register(`floorplanUrls.${i}.url`)}
+                placeholder={`Document ${i + 1} URL`}
+              />
+              <button
+                type="button"
+                onClick={() => removeFp(i)}
+                className="shrink-0 text-mvr-danger hover:text-mvr-danger/80 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => appendFp({ url: '' })}
+          >
+            <Plus className="w-3 h-3 mr-1" />
+            Add Document
+          </Button>
+        </div>
+      </SectionCard>
+
+      {/* ── Front Desk ── */}
       <SectionCard title="Front Desk">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -216,9 +376,7 @@ export default function BuildingForm({ buildingId, defaultValues }: BuildingForm
           <div>
             <Label>Email</Label>
             <Input {...register('frontdeskEmail')} placeholder="frontdesk@building.com" type="email" />
-            {errors.frontdeskEmail && (
-              <p className="text-xs text-mvr-danger mt-1">{errors.frontdeskEmail.message}</p>
-            )}
+            <FieldError message={errors.frontdeskEmail?.message} />
           </div>
           <div>
             <Label>Check-in Hours</Label>
@@ -231,75 +389,25 @@ export default function BuildingForm({ buildingId, defaultValues }: BuildingForm
         </div>
       </SectionCard>
 
-      <SectionCard title="Emergency Contacts">
-        <div className="space-y-3">
-          {fields.map((field, index) => (
-            <div key={field.id} className="flex gap-2 items-start">
-              <div className="grid grid-cols-3 gap-2 flex-1">
-                <div>
-                  <Input
-                    {...register(`emergencyContacts.${index}.name`)}
-                    placeholder="Name"
-                  />
-                  {errors.emergencyContacts?.[index]?.name && (
-                    <p className="text-xs text-mvr-danger mt-0.5">
-                      {errors.emergencyContacts[index]?.name?.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Input
-                    {...register(`emergencyContacts.${index}.phone`)}
-                    placeholder="Phone"
-                  />
-                </div>
-                <div>
-                  <Input
-                    {...register(`emergencyContacts.${index}.role`)}
-                    placeholder="Role (e.g. Security)"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(index)}
-                className="mt-2 text-mvr-danger hover:text-mvr-danger/80"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append({ name: '', phone: '', role: '' })}
-          >
-            <Plus className="w-3 h-3 mr-1" />
-            Add Contact
-          </Button>
-        </div>
-      </SectionCard>
-
+      {/* ── Amenities ── */}
       <SectionCard title="Amenities">
-        <div>
-          <Label>Amenities (one per line)</Label>
-          <Textarea
-            {...register('amenitiesRaw')}
-            placeholder={"Pool\nGym\nConcierge\nValet"}
-            rows={5}
-          />
-        </div>
+        <Label>Amenities (one per line)</Label>
+        <Textarea
+          {...register('amenitiesRaw')}
+          placeholder={"Pool\nGym\nConcierge\nValet"}
+          rows={5}
+        />
       </SectionCard>
 
+      {/* ── House Rules & KB ── */}
       <SectionCard title="House Rules & Knowledge Base">
         <div>
           <Label>House Rules</Label>
-          <Textarea {...register('rules')} rows={4} placeholder="No parties, quiet hours after 10pm..." />
+          <Textarea {...register('rules')} rows={4} placeholder="No parties, quiet hours after 10pm…" />
         </div>
         <div>
           <Label>Knowledge Base</Label>
-          <Textarea {...register('knowledgeBase')} rows={4} placeholder="Building-specific notes for the team..." />
+          <Textarea {...register('knowledgeBase')} rows={4} placeholder="Building-specific notes for the team…" />
         </div>
       </SectionCard>
 
@@ -311,12 +419,7 @@ export default function BuildingForm({ buildingId, defaultValues }: BuildingForm
         >
           {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Building'}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.back()}
-          disabled={isSubmitting}
-        >
+        <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
           Cancel
         </Button>
       </div>

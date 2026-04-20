@@ -2,11 +2,11 @@ import { z } from 'zod'
 
 export const createBuildingSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
-  nickname: z.string().max(100).optional(),
+  nickname: z.string().min(1, 'Nickname is required').max(100),
   status: z.enum(['active', 'inactive', 'onboarding']).default('onboarding'),
-  address: z.string().max(500).optional(),
-  zone: z.string().max(100).optional(),
-  zipcode: z.string().max(20).optional(),
+  address: z.string().min(1, 'Address is required').max(500),
+  zone: z.string().min(1, 'Zone is required').max(100),
+  zipcode: z.string().min(1, 'Zip code is required').max(20),
   lat: z.number().min(-90).max(90).optional(),
   long: z.number().min(-180).max(180).optional(),
   googleUrl: z.string().url().optional().or(z.literal('')),

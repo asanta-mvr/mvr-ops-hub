@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const building = await db.building.create({ data: validated.data })
 
-    await db.auditLog.create({
+    db.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'CREATE',
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
-    })
+    }).catch((e) => console.error('[audit] buildings CREATE', e))
 
     return NextResponse.json({ data: building }, { status: 201 })
   } catch (error) {

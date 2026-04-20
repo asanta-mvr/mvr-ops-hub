@@ -57,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       data: validated.data,
     })
 
-    await db.auditLog.create({
+    db.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'UPDATE',
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
-    })
+    }).catch((e) => console.error('[audit] buildings UPDATE', e))
 
     return NextResponse.json({ data: building })
   } catch (error) {
@@ -94,7 +94,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       data: { status: 'inactive' },
     })
 
-    await db.auditLog.create({
+    db.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'DELETE',
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
-    })
+    }).catch((e) => console.error('[audit] buildings DELETE', e))
 
     return NextResponse.json({ data: { id: building.id, status: building.status } })
   } catch (error) {
