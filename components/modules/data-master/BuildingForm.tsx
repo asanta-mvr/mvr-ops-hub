@@ -18,7 +18,7 @@ const formSchema = z.object({
   googleUrl:      z.string().optional(),
   website:        z.string().optional(),
   imageUrl:       z.string().optional(),
-  floorplanUrls:  z.array(z.object({ url: z.string() })).default([]),
+  floorplanUrls:  z.array(z.object({ url: z.string() })),
   frontdeskPhone: z.string().max(30).optional(),
   frontdeskEmail: z.string().optional(),
   checkinHours:   z.string().max(100).optional(),
