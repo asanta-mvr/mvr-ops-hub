@@ -1,13 +1,519 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── SYSTEM ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  super_admin
+  operations_manager
+  owner_relations
+  cx_agent
+  maintenance_tech
+  housekeeping
+  accounting
+  read_only
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(read_only)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  Account[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String // CREATE | UPDATE | DELETE | LOGIN | EXPORT
+  tableName String
+  recordId  String?
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([tableName, recordId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model WebhookLog {
+  id          String    @id @default(cuid())
+  source      String // guesty | breezeway | suiteop | conduit | stripe | n8n
+  eventType   String
+  payload     Json
+  status      String    @default("received") // received | processed | failed
+  errorMsg    String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([source, status])
+  @@index([createdAt])
+  @@map("webhook_logs")
+}
+
+// ─── GEOGRAPHY ───────────────────────────────────────────────────────────────
+
+model Country {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isoCode   String   @db.Char(2)
+  createdAt DateTime @default(now())
+
+  states State[]
+
+  @@map("countries")
+}
+
+model State {
+  id        String   @id @default(cuid())
+  name      String
+  isoCode   String?
+  countryId String
+  createdAt DateTime @default(now())
+
+  country Country @relation(fields: [countryId], references: [id])
+  cities  City[]
+
+  @@map("states")
+}
+
+model City {
+  id        String   @id @default(cuid())
+  name      String
+  stateId   String
+  createdAt DateTime @default(now())
+
+  state     State      @relation(fields: [stateId], references: [id])
+  buildings Building[]
+
+  @@map("cities")
+}
+
+// ─── BUILDINGS ───────────────────────────────────────────────────────────────
+
+enum BuildingStatus {
+  active
+  inactive
+  onboarding
+}
+
+model Building {
+  id                String         @id @default(cuid())
+  name              String
+  nickname          String?
+  status            BuildingStatus @default(onboarding)
+  address           String?
+  zone              String?
+  zipcode           String?
+  lat               Decimal?       @db.Decimal(10, 8)
+  long              Decimal?       @db.Decimal(11, 8)
+  googleUrl         String?
+  website           String?
+  imageUrl          String?
+  floorplanUrls     String[]
+  amenities         String[]
+  checkinHours      String?
+  checkoutHours     String?
+  rules             String?        @db.Text
+  emergencyContacts Json?
+  knowledgeBase     String?        @db.Text
+  frontdeskPhone    String?
+  frontdeskEmail    String?
+  cityId            String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  city             City?             @relation(fields: [cityId], references: [id])
+  units            Unit[]
+  propertyManagers PropertyManager[]
+  contracts        OwnerContract[]
+
+  @@index([status])
+  @@index([cityId])
+  @@map("buildings")
+}
+
+model PropertyManager {
+  id             String   @id @default(cuid())
+  buildingId     String
+  name           String
+  contactName    String?
+  contactPhone   String?
+  contactEmail   String?
+  contactRole    String?
+  contactArea    String?
+  contactMatters String?  @db.Text
+  isPrimary      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@index([buildingId])
+  @@map("property_managers")
+}
+
+// ─── OWNERS ──────────────────────────────────────────────────────────────────
+
+enum OwnerStatus {
+  active
+  inactive
+  churned
+}
+
+enum OwnerType {
+  individual
+  company
+}
+
+model Owner {
+  id             String      @id @default(cuid())
+  uniqueId       String      @unique
+  nickname       String
+  type           OwnerType   @default(individual)
+  category       String?
+  personality    String?
+  documentType   String?
+  documentNumber String?
+  phone          String?
+  address        String?     @db.Text
+  email          String?
+  otherEmail     String?
+  photoUrl       String?
+  linkedin       String?
+  age            Int?
+  nationality    String?
+  language       String      @default("en")
+  siteUser       String?
+  notes          String?     @db.Text
+  status         OwnerStatus @default(active)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  units       Unit[]
+  guestyOwner GuestyOwner?
+  contracts   OwnerContract[]
+
+  @@index([status])
+  @@map("owners")
+}
+
+model GuestyOwner {
+  id              String    @id @default(cuid())
+  guestyId        String    @unique
+  fullName        String?
+  accountId       String?
+  email           String?
+  ownerType       String?
+  createdAtGuesty DateTime?
+  ownerUniqueId   String?   @unique
+  addressField9   String?
+  syncedAt        DateTime  @default(now())
+
+  owner Owner? @relation(fields: [ownerUniqueId], references: [uniqueId])
+
+  @@map("guesty_owners")
+}
+
+// ─── UNITS ───────────────────────────────────────────────────────────────────
+
+enum UnitStatus {
+  active
+  inactive
+  renovation
+  onboarding
+}
+
+enum UnitType {
+  studio
+  one_br
+  two_br
+  three_br
+  four_br
+  penthouse
+  other
+}
+
+model Unit {
+  id            String     @id @default(cuid())
+  number        String
+  floor         Int?
+  line          String?
+  view          String?
+  type          UnitType?
+  bedrooms      Int?
+  bathrooms     Decimal?   @db.Decimal(3, 1)
+  bathType      String?
+  sqft          Int?
+  mt2           Decimal?   @db.Decimal(8, 2)
+  capacity      Int?
+  amenityCap    Int?
+  totalBeds     Int?
+  kings         Int        @default(0)
+  queens        Int        @default(0)
+  twins         Int        @default(0)
+  otherBeds     String?
+  hasKitchen    Boolean    @default(false)
+  hasBalcony    Boolean    @default(false)
+  photoUrls     String[]
+  status        UnitStatus @default(onboarding)
+  score         Decimal?   @db.Decimal(3, 1)
+  notes         String?    @db.Text
+  buildingId    String
+  ownerUniqueId String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  building   Building            @relation(fields: [buildingId], references: [id])
+  owner      Owner?              @relation(fields: [ownerUniqueId], references: [uniqueId])
+  listings   Listing[]
+  contracts  OwnerContract[]
+  inspections UnitInspection[]
+  onboarding OnboardingChecklist?
+
+  @@unique([buildingId, number])
+  @@index([status])
+  @@index([buildingId])
+  @@index([ownerUniqueId])
+  @@map("units")
+}
+
+// ─── LISTINGS ────────────────────────────────────────────────────────────────
+
+model Listing {
+  id             String    @id @default(cuid())
+  name           String
+  guestyId       String?   @unique
+  listedStatusId String?
+  groupTypeId    String?
+  propertyTypeId String?
+  nickname       String?
+  sqrFeet        Int?
+  sqrMeter       Decimal?  @db.Decimal(8, 2)
+  totalOccupancy Int?
+  activeStatusId String?
+  liveDate       DateTime?
+  urlAirbnb      String?
+  urlBooking     String?
+  urlVrbo        String?
+  urlExpedia     String?
+  urlVacasa      String?
+  unitId         String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@map("listings")
+}
+
+// ─── CONTRACTS ───────────────────────────────────────────────────────────────
+
+model OwnerContract {
+  id         String    @id @default(cuid())
+  name       String
+  fileUrl    String?
+  startDate  DateTime?
+  endDate    DateTime?
+  reason     String?   @db.Text
+  liveDate   DateTime?
+  commission Decimal?  @db.Decimal(5, 2)
+  hasLinen   Boolean   @default(false)
+  dto1yr     Decimal?  @db.Decimal(5, 2)
+  dto2yr     Decimal?  @db.Decimal(5, 2)
+  deposit    Decimal?  @db.Decimal(10, 2)
+  regFeeDate DateTime?
+  accountNum String?
+  routingNum String?
+  hoa        Decimal?  @db.Decimal(10, 2)
+  hasW9      Boolean   @default(false)
+  hasFpl     Boolean   @default(false)
+  buildingId String?
+  unitId     String?
+  ownerId    String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  building  Building?      @relation(fields: [buildingId], references: [id])
+  unit      Unit?          @relation(fields: [unitId], references: [id])
+  owner     Owner?         @relation(fields: [ownerId], references: [id])
+  docs      OwnerDoc[]
+  utilities OwnerUtility[]
+
+  @@index([unitId])
+  @@index([ownerId])
+  @@map("owner_contracts")
+}
+
+model OwnerDoc {
+  id          String    @id @default(cuid())
+  code        String
+  type        String?
+  startDate   DateTime?
+  endDate     DateTime?
+  expireDate  DateTime?
+  periodicity String?
+  dueDate     DateTime?
+  fileUrl     String?
+  contractId  String
+  createdAt   DateTime  @default(now())
+
+  contract OwnerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@map("owner_docs")
+}
+
+model OwnerUtility {
+  id            String    @id @default(cuid())
+  code          String
+  type          String?
+  provider      String?
+  startDate     DateTime?
+  accountNumber String?
+  monthlyCost   Decimal?  @db.Decimal(10, 2)
+  contractId    String
+  createdAt     DateTime  @default(now())
+
+  contract OwnerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@map("owner_utilities")
+}
+
+// ─── ONBOARDING & INSPECTIONS ────────────────────────────────────────────────
+
+enum OnboardingStage {
+  initial_contact
+  contract_signed
+  initial_inspection
+  guesty_setup
+  ota_setup
+  go_live
+  completed
+}
+
+model OnboardingChecklist {
+  id           String          @id @default(cuid())
+  unitId       String          @unique
+  currentStage OnboardingStage @default(initial_contact)
+  completedAt  DateTime?
+  notes        String?         @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  unit  Unit             @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tasks OnboardingTask[]
+
+  @@map("onboarding_checklists")
+}
+
+model OnboardingTask {
+  id          String          @id @default(cuid())
+  checklistId String
+  stage       OnboardingStage
+  title       String
+  description String?         @db.Text
+  assignedTo  String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  isRequired  Boolean         @default(true)
+  order       Int
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  checklist OnboardingChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId, stage])
+  @@map("onboarding_tasks")
+}
+
+model UnitInspection {
+  id           String    @id @default(cuid())
+  unitId       String
+  inspectedBy  String
+  type         String    @default("initial")
+  status       String    @default("draft")
+  overallScore Int?
+  notes        String?   @db.Text
+  reportUrl    String?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  unit  Unit             @relation(fields: [unitId], references: [id])
+  items InspectionItem[]
+
+  @@index([unitId])
+  @@map("unit_inspections")
+}
+
+model InspectionItem {
+  id           String   @id @default(cuid())
+  inspectionId String
+  section      String
+  itemName     String
+  status       String
+  notes        String?
+  photoUrls    String[]
+  order        Int
+  createdAt    DateTime @default(now())
+
+  inspection UnitInspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+  @@map("inspection_items")
 }
