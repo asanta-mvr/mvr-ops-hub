@@ -153,26 +153,28 @@ function ZoneSelect({
   }
 
   return (
-    <Select
-      value={isCustomVal ? value : (value || '')}
-      onChange={(e) => {
-        if (e.target.value === '__add_new__') {
-          setAddingNew(true)
-        } else {
-          onChange(e.target.value)
-        }
-      }}
-    >
-      <option value="">Select zone…</option>
-      {knownZones.map((z) => (
-        <option key={z} value={z}>{z}</option>
-      ))}
-      {isCustomVal && (
-        <option value={value}>{value}</option>
-      )}
-      <option value="__add_new__">＋ Add new zone…</option>
-    </Select>
-    <ErrorMessage message={error} />
+    <>
+      <Select
+        value={isCustomVal ? value : (value || '')}
+        onChange={(e) => {
+          if (e.target.value === '__add_new__') {
+            setAddingNew(true)
+          } else {
+            onChange(e.target.value)
+          }
+        }}
+      >
+        <option value="">Select zone…</option>
+        {knownZones.map((z) => (
+          <option key={z} value={z}>{z}</option>
+        ))}
+        {isCustomVal && (
+          <option value={value}>{value}</option>
+        )}
+        <option value="__add_new__">＋ Add new zone…</option>
+      </Select>
+      <ErrorMessage message={error} />
+    </>
   )
 }
 
