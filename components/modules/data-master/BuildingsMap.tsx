@@ -2,7 +2,6 @@
 
 import { useRef, useEffect } from 'react'
 import Map, { Marker, NavigationControl, type MapRef } from 'react-map-gl/maplibre'
-import 'maplibre-gl/dist/maplibre-gl.css'
 
 export interface BuildingMapItem {
   id:       string
