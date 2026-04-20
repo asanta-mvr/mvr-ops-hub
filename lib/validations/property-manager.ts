@@ -8,7 +8,7 @@ export const createPropertyManagerSchema = z.object({
   contactRole: z.string().max(100).optional(),
   contactArea: z.string().max(200).optional(),
   contactMatters: z.string().optional(),
-  isPrimary: z.boolean().default(false),
+  isPrimary: z.boolean(),
 })
 
 export const updatePropertyManagerSchema = createPropertyManagerSchema.partial()
