@@ -1,10 +1,13 @@
 import Redis from 'ioredis'
 
-const globalForRedis = globalThis as unknown as { redis: Redis }
+const globalForRedis = globalThis as unknown as { redis: Redis | null }
 
-function createRedisClient(): Redis {
+function createRedisClient(): Redis | null {
   const url = process.env.REDIS_URL
-  if (!url) throw new Error('REDIS_URL environment variable is not set')
+  if (!url) {
+    console.warn('[Redis] REDIS_URL not set — Redis disabled')
+    return null
+  }
 
   const client = new Redis(url, {
     maxRetriesPerRequest: 3,
