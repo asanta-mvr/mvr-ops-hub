@@ -43,11 +43,20 @@ async function getBuildings() {
   })
 }
 
+async function getUnits() {
+  return db.unit.findMany({
+    where: { status: { not: 'inactive' } },
+    select: { id: true, number: true, building: { select: { name: true } } },
+    orderBy: [{ building: { name: 'asc' } }, { number: 'asc' }],
+  })
+}
+
 export default async function TicketsPage({ searchParams }: PageProps) {
-  const [tickets, agents, buildings] = await Promise.all([
+  const [tickets, agents, buildings, units] = await Promise.all([
     getTickets(searchParams),
     getAgents(),
     getBuildings(),
+    getUnits(),
   ])
 
   return (
@@ -57,7 +66,7 @@ export default async function TicketsPage({ searchParams }: PageProps) {
         <p className="text-muted-foreground text-sm mt-1">{tickets.length} tickets</p>
       </div>
 
-      <TicketList tickets={tickets} agents={agents} buildings={buildings} filters={searchParams} />
+      <TicketList tickets={tickets} agents={agents} buildings={buildings} units={units} filters={searchParams} />
     </div>
   )
 }

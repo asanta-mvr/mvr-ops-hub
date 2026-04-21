@@ -113,17 +113,19 @@ type Ticket = {
 
 type Agent    = { id: string; name: string | null }
 type Building = { id: string; name: string }
+type Unit     = { id: string; number: string; building: { name: string } | null }
 
 interface TicketListProps {
   tickets:   Ticket[]
   agents:    Agent[]
   buildings: Building[]
+  units:     Unit[]
   filters:   { status?: string; source?: string; assignedToId?: string; buildingId?: string }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function TicketList({ tickets, agents, buildings, filters }: TicketListProps) {
+export function TicketList({ tickets, agents, buildings, units, filters }: TicketListProps) {
   const router      = useRouter()
   const [showCreate, setShowCreate] = useState(false)
   const [search,     setSearch]     = useState('')
@@ -154,6 +156,7 @@ export function TicketList({ tickets, agents, buildings, filters }: TicketListPr
         <CreateTicketModal
           buildings={buildings}
           agents={agents}
+          units={units}
           onClose={() => setShowCreate(false)}
         />
       )}

@@ -27,12 +27,27 @@ type FormValues = z.infer<typeof schema>
 
 type Building = { id: string; name: string }
 type Agent    = { id: string; name: string | null }
+type Unit     = { id: string; number: string; building: { name: string } | null }
 
 interface CreateTicketModalProps {
   buildings: Building[]
   agents:    Agent[]
+  units:     Unit[]
   onClose:   () => void
 }
+
+const CATEGORY_OPTIONS = [
+  'Noise Complaint',
+  'Damage Claim',
+  'Refund Request',
+  'Early Check-in',
+  'Late Check-out',
+  'Cleanliness Issue',
+  'Amenity Issue',
+  'Billing Dispute',
+  'Guest Dispute',
+  'Maintenance Issue',
+]
 
 const OTA_OPTIONS: { value: OtaSource; label: string }[] = [
   { value: 'airbnb',   label: 'Airbnb' },
@@ -43,7 +58,7 @@ const OTA_OPTIONS: { value: OtaSource; label: string }[] = [
   { value: 'other',    label: 'Other' },
 ]
 
-export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketModalProps) {
+export function CreateTicketModal({ buildings, agents, units, onClose }: CreateTicketModalProps) {
   const router = useRouter()
 
   const [lookupCode,   setLookupCode]   = useState('')
@@ -231,7 +246,7 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
             </div>
           </div>
 
-          {/* 5. Building | Assignee */}
+          {/* 5. Building | Unit */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Building</label>
@@ -243,11 +258,13 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">Assignee</label>
-              <select {...register('assignedToId')} className={inputBase}>
+              <label className="text-xs font-medium text-gray-600">Unit</label>
+              <select {...register('unitId')} className={inputBase}>
                 <option value="">— None —</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name ?? a.id}</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.building ? `${u.building.name} · ${u.number}` : u.number}
+                  </option>
                 ))}
               </select>
             </div>
@@ -255,10 +272,22 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
 
           <hr className="border-[#E0DBD4]" />
 
-          {/* 6. Category */}
+          {/* 6. Category — combobox: escribe o selecciona */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Category</label>
-            <input {...register('category')} type="text" placeholder="e.g. Noise Complaint, Refund Request…" className={inputBase} />
+            <input
+              {...register('category')}
+              list="category-options"
+              type="text"
+              placeholder="e.g. Noise Complaint, Refund Request…"
+              className={inputBase}
+              autoComplete="off"
+            />
+            <datalist id="category-options">
+              {CATEGORY_OPTIONS.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </div>
 
           {/* 7. Subject */}
