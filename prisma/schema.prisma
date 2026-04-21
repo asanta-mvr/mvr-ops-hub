@@ -549,6 +549,11 @@ model SupportTicket {
   externalId       String?
   confirmationCode String?
   guestName        String?
+  guestPhone       String?
+  checkinDate      DateTime?
+  checkoutDate     DateTime?
+  successRate      Float?
+  category         String?
   status           TicketStatus @default(open)
   subject          String
   body             String       @db.Text

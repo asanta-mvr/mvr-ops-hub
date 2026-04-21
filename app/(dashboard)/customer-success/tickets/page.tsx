@@ -6,21 +6,22 @@ import type { OtaSource, TicketStatus } from '@prisma/client'
 export const metadata: Metadata = { title: 'OTA Tickets' }
 
 interface PageProps {
-  searchParams: { status?: string; source?: string; assignedToId?: string }
+  searchParams: { status?: string; source?: string; assignedToId?: string; buildingId?: string }
 }
 
 async function getTickets(filters: PageProps['searchParams']) {
   return db.supportTicket.findMany({
     where: {
-      ...(filters.status ? { status: filters.status as TicketStatus } : {}),
-      ...(filters.source ? { source: filters.source as OtaSource } : {}),
-      ...(filters.assignedToId ? { assignedToId: filters.assignedToId } : {}),
+      ...(filters.status     ? { status:      filters.status as TicketStatus } : {}),
+      ...(filters.source     ? { source:      filters.source as OtaSource }   : {}),
+      ...(filters.assignedToId ? { assignedToId: filters.assignedToId }       : {}),
+      ...(filters.buildingId ? { buildingId:  filters.buildingId }            : {}),
     },
     include: {
       assignedTo: { select: { id: true, name: true } },
-      unit: { select: { id: true, number: true } },
-      building: { select: { id: true, name: true } },
-      _count: { select: { comments: true } },
+      unit:       { select: { id: true, number: true } },
+      building:   { select: { id: true, name: true } },
+      _count:     { select: { comments: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

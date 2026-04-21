@@ -5,12 +5,17 @@ export const createTicketSchema = z.object({
   externalId: z.string().optional(),
   confirmationCode: z.string().optional(),
   guestName: z.string().optional(),
+  guestPhone: z.string().optional(),
+  checkinDate: z.string().datetime().optional(),
+  checkoutDate: z.string().datetime().optional(),
+  category: z.string().optional(),
   subject: z.string().min(1),
   body: z.string(),
   fromEmail: z.string().email(),
   listingId: z.string().optional(),
   unitId: z.string().optional(),
   buildingId: z.string().optional(),
+  assignedToId: z.string().optional(),
 })
 
 export const updateTicketSchema = z.object({
@@ -20,6 +25,11 @@ export const updateTicketSchema = z.object({
   unitId: z.string().nullable().optional(),
   buildingId: z.string().nullable().optional(),
   resolvedAt: z.string().datetime().nullable().optional(),
+  guestPhone: z.string().nullable().optional(),
+  checkinDate: z.string().datetime().nullable().optional(),
+  checkoutDate: z.string().datetime().nullable().optional(),
+  category: z.string().nullable().optional(),
+  successRate: z.number().nullable().optional(),
 })
 
 export const createCommentSchema = z.object({
