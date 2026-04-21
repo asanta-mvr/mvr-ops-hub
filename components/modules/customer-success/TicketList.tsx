@@ -8,52 +8,55 @@ import { cn } from '@/lib/utils'
 import type { OtaSource, TicketStatus } from '@prisma/client'
 import { CreateTicketModal } from './CreateTicketModal'
 
-// ─── OTA SVG logos ────────────────────────────────────────────────────────────
+// ─── OTA logos ───────────────────────────────────────────────────────────────
+
+const OTA_IMAGES: Partial<Record<OtaSource, string>> = {
+  airbnb:  '/icons/ota-airbnb.jpg',
+  booking: '/icons/ota-booking.png',
+  expedia: '/icons/ota-expedia.png',
+  vrbo:    '/icons/ota-vrbo.png',
+  other:   '/icons/ota-other.png',
+}
+
+const OTA_FALLBACK_BG: Record<OtaSource, string> = {
+  airbnb:  '#FF5A5F',
+  booking: '#003580',
+  vrbo:    '#1B7FCA',
+  expedia: '#FFC72C',
+  vacasa:  '#1C3D5A',
+  other:   '#9CA3AF',
+}
+
+const OTA_LABELS: Record<OtaSource, string> = {
+  airbnb: 'Airbnb', booking: 'Booking', vrbo: 'VRBO',
+  expedia: 'Expedia', vacasa: 'Vacasa', other: 'Other',
+}
 
 function OtaBadge({ source }: { source: OtaSource }) {
-  const config: Record<OtaSource, { bg: string; logo: React.ReactNode }> = {
-    airbnb: {
-      bg: '#FF5A5F',
-      logo: (
-        <svg viewBox="0 0 32 32" fill="white" className="w-4 h-4">
-          <path d="M16 1C8.268 1 2 7.268 2 15c0 4.418 2.01 8.373 5.178 11.022L16 31l8.822-4.978C27.99 23.373 30 19.418 30 15 30 7.268 23.732 1 16 1zm0 21.5c-3.59 0-6.5-2.91-6.5-6.5S12.41 9.5 16 9.5s6.5 2.91 6.5 6.5-2.91 6.5-6.5 6.5z" />
-        </svg>
-      ),
-    },
-    booking: {
-      bg: '#003580',
-      logo: <span className="text-white font-black text-[11px] tracking-tight">B.</span>,
-    },
-    vrbo: {
-      bg: '#1B7FCA',
-      logo: <span className="text-white font-black text-[11px]">vrbo</span>,
-    },
-    expedia: {
-      bg: '#FFC72C',
-      logo: (
-        <svg viewBox="0 0 32 32" className="w-4 h-4">
-          <circle cx="16" cy="16" r="14" fill="#FFC72C" />
-          <path d="M8 12h16M8 16h12M8 20h14" stroke="#00355F" strokeWidth="2.5" strokeLinecap="round" />
-        </svg>
-      ),
-    },
-    vacasa: {
-      bg: '#1C3D5A',
-      logo: <span className="text-white font-black text-[11px]">V</span>,
-    },
-    other: {
-      bg: '#9CA3AF',
-      logo: <span className="text-white font-bold text-xs">?</span>,
-    },
+  const imgSrc = OTA_IMAGES[source]
+
+  if (imgSrc) {
+    return (
+      <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#E0DBD4] bg-white shrink-0 flex items-center justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imgSrc}
+          alt={OTA_LABELS[source]}
+          className="w-full h-full object-contain p-0.5"
+        />
+      </div>
+    )
   }
 
-  const { bg, logo } = config[source]
+  // Vacasa: no image yet, use text badge
   return (
     <div
       className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-      style={{ background: bg }}
+      style={{ background: OTA_FALLBACK_BG[source] }}
     >
-      {logo}
+      <span className="text-white font-black text-[11px]">
+        {OTA_LABELS[source].charAt(0)}
+      </span>
     </div>
   )
 }
