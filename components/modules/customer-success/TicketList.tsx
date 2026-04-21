@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, MoreHorizontal } from 'lucide-react'
+import { Search, Plus, MoreHorizontal, Trash2, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { OtaSource, TicketStatus } from '@prisma/client'
 import { CreateTicketModal } from './CreateTicketModal'
@@ -100,6 +100,7 @@ type Ticket = {
   source: OtaSource
   status: TicketStatus
   subject: string
+  category: string | null
   guestName: string | null
   guestPhone: string | null
   confirmationCode: string | null
@@ -130,8 +131,31 @@ interface TicketListProps {
 
 export function TicketList({ tickets, agents, buildings, units, filters }: TicketListProps) {
   const router      = useRouter()
-  const [showCreate, setShowCreate] = useState(false)
-  const [search,     setSearch]     = useState('')
+  const [showCreate,  setShowCreate]  = useState(false)
+  const [search,      setSearch]      = useState('')
+  const [deleteId,    setDeleteId]    = useState<string | null>(null)
+  const [deleting,    setDeleting]    = useState(false)
+  const [openMenuId,  setOpenMenuId]  = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  async function handleDelete() {
+    if (!deleteId) return
+    setDeleting(true)
+    await fetch(`/api/v1/tickets/${deleteId}`, { method: 'DELETE' })
+    setDeleting(false)
+    setDeleteId(null)
+    router.refresh()
+  }
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams()
@@ -164,21 +188,37 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
         />
       )}
 
-      <div className="space-y-4">
-        {/* Search + Filters + New button */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Global search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search guest, property, code…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-sm border border-[#E0DBD4] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary w-56"
-            />
+      {/* Confirmation modal */}
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteId(null)} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-panel p-6 w-full max-w-sm mx-4 space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-mvr-primary">Delete Ticket</h2>
+              <p className="text-sm text-gray-500">This action cannot be undone. Are you sure?</p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="flex-1 py-2 text-sm font-medium border border-[#E0DBD4] rounded-lg hover:bg-mvr-neutral transition-colors text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
           </div>
+        </div>
+      )}
 
+      <div className="space-y-4">
+        {/* Filters + Search + New button */}
+        <div className="flex flex-wrap items-center gap-3">
           <select
             className="text-sm border border-[#E0DBD4] rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-mvr-primary/20"
             value={filters.source ?? ''}
@@ -226,13 +266,27 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
             ))}
           </select>
 
-          <button
-            onClick={() => setShowCreate(true)}
-            className="ml-auto flex items-center gap-2 px-4 py-1.5 bg-mvr-primary text-white text-sm font-medium rounded-lg hover:bg-mvr-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New Ticket
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {/* Global search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search guest, property, code…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 text-sm border border-[#E0DBD4] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary w-56"
+              />
+            </div>
+
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-1.5 bg-mvr-primary text-white text-sm font-medium rounded-lg hover:bg-mvr-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Ticket
+            </button>
+          </div>
         </div>
 
         {/* Table */}
@@ -318,25 +372,8 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
                       </td>
 
                       {/* Success Rate */}
-                      <td className="px-4 py-3 min-w-[110px]">
-                        <div className="space-y-1.5">
-                          <p className="text-xs font-medium text-gray-700">
-                            {ticket.successRate !== null ? `${ticket.successRate}%` : '%'}
-                          </p>
-                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: ticket.successRate !== null ? `${ticket.successRate}%` : '100%',
-                                background: ticket.successRate === null
-                                  ? '#8B2030'
-                                  : ticket.successRate >= 80 ? '#2D6A4F'
-                                  : ticket.successRate >= 60 ? '#B5541C'
-                                  : '#8B2030',
-                              }}
-                            />
-                          </div>
-                        </div>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-700">
+                        {ticket.successRate !== null ? `${ticket.successRate}%` : '—'}
                       </td>
 
                       {/* Action */}
@@ -344,15 +381,35 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
                         {action.label}
                       </td>
 
-                      {/* Detail — ••• */}
+                      {/* Detail — dropdown menu */}
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/customer-success/tickets/${ticket.id}`}
-                          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-mvr-neutral transition-colors text-gray-500 hover:text-mvr-primary"
-                          title="View detail"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Link>
+                        <div className="relative" ref={openMenuId === ticket.id ? menuRef : undefined}>
+                          <button
+                            onClick={() => setOpenMenuId(openMenuId === ticket.id ? null : ticket.id)}
+                            className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-mvr-neutral transition-colors text-gray-500 hover:text-mvr-primary"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                          {openMenuId === ticket.id && (
+                            <div className="absolute right-0 top-9 z-20 w-40 bg-white rounded-lg border border-[#E0DBD4] shadow-panel py-1">
+                              <Link
+                                href={`/customer-success/tickets/${ticket.id}`}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-mvr-neutral transition-colors"
+                                onClick={() => setOpenMenuId(null)}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                View Details
+                              </Link>
+                              <button
+                                onClick={() => { setOpenMenuId(null); setDeleteId(ticket.id) }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

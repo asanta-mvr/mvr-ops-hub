@@ -20,6 +20,7 @@ const schema = z.object({
   checkoutDate:     z.string().optional(),
   category:         z.string().optional(),
   buildingId:       z.string().optional(),
+  unitId:           z.string().optional(),
   assignedToId:     z.string().optional(),
 })
 

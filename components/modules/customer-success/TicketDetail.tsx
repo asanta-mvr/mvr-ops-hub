@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Send, User } from 'lucide-react'
+import { ArrowLeft, Send, User, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type { OtaSource, TicketStatus } from '@prisma/client'
@@ -64,9 +64,11 @@ interface TicketDetailProps {
 export function TicketDetail({ ticket, agents }: TicketDetailProps) {
   const router = useRouter()
   const [, startTransition] = useTransition()
-  const [commentBody, setCommentBody] = useState('')
-  const [isInternal, setIsInternal] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [commentBody,  setCommentBody]  = useState('')
+  const [isInternal,   setIsInternal]   = useState(false)
+  const [submitting,   setSubmitting]   = useState(false)
+  const [showDelete,   setShowDelete]   = useState(false)
+  const [deleting,     setDeleting]     = useState(false)
 
   async function handleStatusChange(status: TicketStatus) {
     await fetch(`/api/v1/tickets/${ticket.id}`, {
@@ -86,6 +88,15 @@ export function TicketDetail({ ticket, agents }: TicketDetailProps) {
     startTransition(() => router.refresh())
   }
 
+  async function handleDelete() {
+    setDeleting(true)
+    await fetch(`/api/v1/tickets/${ticket.id}`, { method: 'DELETE' })
+    setDeleting(false)
+    setShowDelete(false)
+    router.push('/customer-success/tickets')
+    router.refresh()
+  }
+
   async function submitComment(e: React.FormEvent) {
     e.preventDefault()
     if (!commentBody.trim()) return
@@ -102,13 +113,50 @@ export function TicketDetail({ ticket, agents }: TicketDetailProps) {
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* Delete confirmation modal */}
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowDelete(false)} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-panel p-6 w-full max-w-sm mx-4 space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-mvr-primary">Delete Ticket</h2>
+              <p className="text-sm text-gray-500">This action cannot be undone. Are you sure?</p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowDelete(false)}
+                className="flex-1 py-2 text-sm font-medium border border-[#E0DBD4] rounded-lg hover:bg-mvr-neutral transition-colors text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Back link */}
-      <Link
-        href="/customer-success/tickets"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to tickets
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/customer-success/tickets"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to tickets
+        </Link>
+        <button
+          onClick={() => setShowDelete(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete Ticket
+        </button>
+      </div>
 
       {/* Header */}
       <div className="bg-white rounded-lg border p-5 space-y-3">
