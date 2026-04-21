@@ -1,10 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MessageSquare, User } from 'lucide-react'
+import { MessageSquare, User, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { OtaSource, TicketStatus } from '@prisma/client'
+import { CreateTicketModal } from './CreateTicketModal'
 
 const OTA_LABELS: Record<OtaSource, string> = {
   airbnb: 'Airbnb',
@@ -57,16 +59,19 @@ type Ticket = {
   _count: { comments: number }
 }
 
-type Agent = { id: string; name: string | null }
+type Agent    = { id: string; name: string | null }
+type Building = { id: string; name: string }
 
 interface TicketListProps {
-  tickets: Ticket[]
-  agents: Agent[]
-  filters: { status?: string; source?: string; assignedToId?: string }
+  tickets:   Ticket[]
+  agents:    Agent[]
+  buildings: Building[]
+  filters:   { status?: string; source?: string; assignedToId?: string }
 }
 
-export function TicketList({ tickets, agents, filters }: TicketListProps) {
+export function TicketList({ tickets, agents, buildings, filters }: TicketListProps) {
   const router = useRouter()
+  const [showCreate, setShowCreate] = useState(false)
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams()
@@ -82,9 +87,17 @@ export function TicketList({ tickets, agents, filters }: TicketListProps) {
   }
 
   return (
+    <>
+    {showCreate && (
+      <CreateTicketModal
+        buildings={buildings}
+        agents={agents}
+        onClose={() => setShowCreate(false)}
+      />
+    )}
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      {/* Filters + New button */}
+      <div className="flex flex-wrap items-center gap-3">
         <select
           className="text-sm border rounded-md px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-mvr-primary/30"
           value={filters.source ?? ''}
@@ -117,6 +130,14 @@ export function TicketList({ tickets, agents, filters }: TicketListProps) {
             <option key={a.id} value={a.id}>{a.name ?? a.id}</option>
           ))}
         </select>
+
+        <button
+          onClick={() => setShowCreate(true)}
+          className="ml-auto flex items-center gap-2 px-4 py-1.5 bg-mvr-primary text-white text-sm font-medium rounded-lg hover:bg-mvr-primary/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          New Ticket
+        </button>
       </div>
 
       {/* Table */}
@@ -206,5 +227,6 @@ export function TicketList({ tickets, agents, filters }: TicketListProps) {
         </div>
       )}
     </div>
+    </>
   )
 }
