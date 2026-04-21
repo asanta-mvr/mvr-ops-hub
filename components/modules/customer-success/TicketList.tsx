@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { MessageSquare, Search, Plus } from 'lucide-react'
+import { Search, Plus, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { OtaSource, TicketStatus } from '@prisma/client'
 import { CreateTicketModal } from './CreateTicketModal'
@@ -18,13 +18,22 @@ const OTA_IMAGES: Partial<Record<OtaSource, string>> = {
   other:   '/icons/ota-other.png',
 }
 
-const OTA_FALLBACK_BG: Record<OtaSource, string> = {
+const OTA_TINT_BG: Record<OtaSource, string> = {
+  airbnb:  '#FEF0F0',
+  booking: '#EEF2F9',
+  vrbo:    '#EEF6FB',
+  expedia: '#FFFBEA',
+  vacasa:  '#EEF2F5',
+  other:   '#F3F4F6',
+}
+
+const OTA_TEXT_COLOR: Record<OtaSource, string> = {
   airbnb:  '#FF5A5F',
   booking: '#003580',
   vrbo:    '#1B7FCA',
-  expedia: '#FFC72C',
+  expedia: '#B8860B',
   vacasa:  '#1C3D5A',
-  other:   '#9CA3AF',
+  other:   '#6B7280',
 }
 
 const OTA_LABELS: Record<OtaSource, string> = {
@@ -35,28 +44,19 @@ const OTA_LABELS: Record<OtaSource, string> = {
 function OtaBadge({ source }: { source: OtaSource }) {
   const imgSrc = OTA_IMAGES[source]
 
-  if (imgSrc) {
-    return (
-      <div className="w-9 h-9 rounded-xl overflow-hidden border border-[#E0DBD4] bg-white shrink-0 flex items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imgSrc}
-          alt={OTA_LABELS[source]}
-          className="w-full h-full object-contain p-0.5"
-        />
-      </div>
-    )
-  }
-
-  // Vacasa: no image yet, use text badge
   return (
     <div
-      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-      style={{ background: OTA_FALLBACK_BG[source] }}
+      className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center overflow-hidden"
+      style={{ background: OTA_TINT_BG[source] }}
     >
-      <span className="text-white font-black text-[11px]">
-        {OTA_LABELS[source].charAt(0)}
-      </span>
+      {imgSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imgSrc} alt={OTA_LABELS[source]} className="w-6 h-6 object-contain" />
+      ) : (
+        <span className="font-black text-sm" style={{ color: OTA_TEXT_COLOR[source] }}>
+          {OTA_LABELS[source].charAt(0)}
+        </span>
+      )}
     </div>
   )
 }
@@ -64,12 +64,12 @@ function OtaBadge({ source }: { source: OtaSource }) {
 // ─── Status + Action helpers ──────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
-  open:          'bg-red-100 text-red-700 border-red-200',
-  in_progress:   'bg-blue-100 text-blue-700 border-blue-200',
-  pending_guest: 'bg-amber-100 text-amber-700 border-amber-200',
-  pending_ota:   'bg-amber-100 text-amber-700 border-amber-200',
-  resolved:      'bg-green-100 text-green-700 border-green-200',
-  closed:        'bg-green-100 text-green-700 border-green-200',
+  open:          'bg-transparent text-red-500 border-red-300',
+  in_progress:   'bg-transparent text-blue-600 border-blue-300',
+  pending_guest: 'bg-transparent text-amber-600 border-amber-300',
+  pending_ota:   'bg-transparent text-amber-600 border-amber-300',
+  resolved:      'bg-transparent text-green-600 border-green-300',
+  closed:        'bg-transparent text-green-600 border-green-300',
 }
 
 const STATUS_LABELS: Record<TicketStatus, string> = {
@@ -254,7 +254,7 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Check-out</th>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Success Rate</th>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Action</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Detail</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F0EBE4]">
@@ -277,7 +277,7 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
 
                       {/* Guest */}
                       <td className="px-4 py-3 min-w-[140px]">
-                        <p className="text-gray-800">{ticket.guestName ?? <span className="text-gray-300">—</span>}</p>
+                        <p className="font-semibold text-gray-900">{ticket.guestName ?? <span className="text-gray-300 font-normal">—</span>}</p>
                         {ticket.guestPhone && (
                           <p className="text-xs text-gray-400 mt-0.5">{ticket.guestPhone}</p>
                         )}
@@ -319,22 +319,24 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
 
                       {/* Success Rate */}
                       <td className="px-4 py-3 min-w-[110px]">
-                        {ticket.successRate !== null ? (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-gray-800">{ticket.successRate}%</p>
-                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${ticket.successRate}%`,
-                                  background: ticket.successRate >= 80 ? '#2D6A4F' : ticket.successRate >= 60 ? '#B5541C' : '#8B2030',
-                                }}
-                              />
-                            </div>
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium text-gray-700">
+                            {ticket.successRate !== null ? `${ticket.successRate}%` : '%'}
+                          </p>
+                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: ticket.successRate !== null ? `${ticket.successRate}%` : '100%',
+                                background: ticket.successRate === null
+                                  ? '#8B2030'
+                                  : ticket.successRate >= 80 ? '#2D6A4F'
+                                  : ticket.successRate >= 60 ? '#B5541C'
+                                  : '#8B2030',
+                              }}
+                            />
                           </div>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
+                        </div>
                       </td>
 
                       {/* Action */}
@@ -342,22 +344,15 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
                         {action.label}
                       </td>
 
-                      {/* Details */}
+                      {/* Detail — ••• */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          {ticket._count.comments > 0 && (
-                            <span className="flex items-center gap-1 text-xs text-gray-400">
-                              <MessageSquare className="w-3 h-3" />
-                              {ticket._count.comments}
-                            </span>
-                          )}
-                          <Link
-                            href={`/customer-success/tickets/${ticket.id}`}
-                            className="text-xs text-mvr-primary hover:underline font-medium whitespace-nowrap"
-                          >
-                            Details
-                          </Link>
-                        </div>
+                        <Link
+                          href={`/customer-success/tickets/${ticket.id}`}
+                          className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-mvr-neutral transition-colors text-gray-500 hover:text-mvr-primary"
+                          title="View detail"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Link>
                       </td>
                     </tr>
                   )
