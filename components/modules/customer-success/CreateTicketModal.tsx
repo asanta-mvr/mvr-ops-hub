@@ -36,7 +36,9 @@ interface CreateTicketModalProps {
   onClose:   () => void
 }
 
-const CATEGORY_OPTIONS = [
+const CATEGORY_OPTIONS = ['Refund', 'Penalty', 'Cancellation']
+
+const SUBCATEGORY_OPTIONS = [
   'Noise Complaint',
   'Damage Claim',
   'Refund Request',
@@ -272,28 +274,33 @@ export function CreateTicketModal({ buildings, agents, units, onClose }: CreateT
 
           <hr className="border-[#E0DBD4]" />
 
-          {/* 6. Category — combobox: escribe o selecciona */}
+          {/* 6. Category — select fijo */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Category</label>
+            <select {...register('category')} className={inputBase}>
+              <option value="">— Select category —</option>
+              {CATEGORY_OPTIONS.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 7. Subcategory (stored as subject) — combobox */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">Subcategory *</label>
             <input
-              {...register('category')}
-              list="category-options"
+              {...register('subject')}
+              list="subcategory-options"
               type="text"
               placeholder="e.g. Noise Complaint, Refund Request…"
               className={inputBase}
               autoComplete="off"
             />
-            <datalist id="category-options">
-              {CATEGORY_OPTIONS.map((c) => (
+            <datalist id="subcategory-options">
+              {SUBCATEGORY_OPTIONS.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
-          </div>
-
-          {/* 7. Subject */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-600">Subject *</label>
-            <input {...register('subject')} type="text" placeholder="e.g. Guest complaint about noise" className={inputBase} />
             {errors.subject && <p className="text-xs text-mvr-danger">{errors.subject.message}</p>}
           </div>
 

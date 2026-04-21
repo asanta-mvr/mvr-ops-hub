@@ -246,7 +246,7 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
               <thead className="bg-mvr-neutral border-b">
                 <tr>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">OTA</th>
-                  <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Subject</th>
+                  <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Category</th>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Guest</th>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Property</th>
                   <th className="text-left px-4 py-3 font-semibold text-mvr-primary text-xs uppercase tracking-wide">Status</th>
@@ -267,9 +267,9 @@ export function TicketList({ tickets, agents, buildings, units, filters }: Ticke
                         <OtaBadge source={ticket.source} />
                       </td>
 
-                      {/* Subject */}
+                      {/* Category */}
                       <td className="px-4 py-3 max-w-[200px]">
-                        <p className="font-medium text-gray-900 truncate">{ticket.subject}</p>
+                        <p className="font-medium text-gray-900 truncate">{ticket.category ?? <span className="text-gray-300 font-normal">—</span>}</p>
                         {ticket.confirmationCode && (
                           <p className="text-xs text-gray-400 mt-0.5 font-mono">{ticket.confirmationCode}</p>
                         )}
