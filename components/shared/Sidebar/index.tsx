@@ -13,6 +13,7 @@ import {
   Home,
   FileText,
   ChevronDown,
+  Ticket,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -36,8 +37,11 @@ const navigation = [
   },
   {
     label: 'Customer Success',
-    href: '/customer-success',
+    href: '/customer-success/tickets',
     icon: HeadphonesIcon,
+    children: [
+      { label: 'OTA Tickets', href: '/customer-success/tickets', icon: Ticket },
+    ],
   },
   {
     label: 'Operations',
@@ -144,7 +148,10 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-white/10">
+      <div className="px-4 py-4 border-t border-white/10 space-y-1">
+        <p className="text-[10px] text-white/35 uppercase tracking-widest text-center">
+          Developed by Tech
+        </p>
         <p className="text-[10px] text-white/25 uppercase tracking-widest text-center">
           Stay Iconic
         </p>

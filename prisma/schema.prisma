@@ -32,9 +32,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  auditLogs AuditLog[]
+  accounts        Account[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  assignedTickets SupportTicket[] @relation("AssignedTickets")
+  ticketComments  TicketComment[] @relation("TicketComments")
 
   @@map("users")
 }
@@ -181,6 +183,7 @@ model Building {
   units            Unit[]
   propertyManagers PropertyManager[]
   contracts        OwnerContract[]
+  tickets          SupportTicket[]
 
   @@index([status])
   @@index([cityId])
@@ -318,12 +321,13 @@ model Unit {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  building   Building            @relation(fields: [buildingId], references: [id])
-  owner      Owner?              @relation(fields: [ownerUniqueId], references: [uniqueId])
-  listings   Listing[]
-  contracts  OwnerContract[]
+  building    Building             @relation(fields: [buildingId], references: [id])
+  owner       Owner?               @relation(fields: [ownerUniqueId], references: [uniqueId])
+  listings    Listing[]
+  contracts   OwnerContract[]
   inspections UnitInspection[]
-  onboarding OnboardingChecklist?
+  onboarding  OnboardingChecklist?
+  tickets     SupportTicket[]
 
   @@unique([buildingId, number])
   @@index([status])
@@ -356,7 +360,8 @@ model Listing {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit    Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tickets SupportTicket[]
 
   @@index([unitId])
   @@map("listings")
@@ -516,4 +521,79 @@ model InspectionItem {
 
   @@index([inspectionId])
   @@map("inspection_items")
+}
+
+// ─── SUPPORT TICKETS ─────────────────────────────────────────────────────────
+
+enum OtaSource {
+  airbnb
+  booking
+  vrbo
+  expedia
+  vacasa
+  other
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  pending_guest
+  pending_ota
+  resolved
+  closed
+}
+
+model SupportTicket {
+  id               String       @id @default(cuid())
+  source           OtaSource
+  externalId       String?
+  confirmationCode String?
+  guestName        String?
+  status           TicketStatus @default(open)
+  subject          String
+  body             String       @db.Text
+  fromEmail        String
+
+  reservationId String?
+
+  listingId  String?
+  listing    Listing?  @relation(fields: [listingId], references: [id])
+  unitId     String?
+  unit       Unit?     @relation(fields: [unitId], references: [id])
+  buildingId String?
+  building   Building? @relation(fields: [buildingId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  resolvedAt   DateTime?
+  webhookLogId String?
+
+  comments TicketComment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, confirmationCode])
+  @@index([status])
+  @@index([source])
+  @@index([confirmationCode])
+  @@index([listingId])
+  @@index([unitId])
+  @@map("support_tickets")
+}
+
+model TicketComment {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?         @relation("TicketComments", fields: [authorId], references: [id])
+  body       String        @db.Text
+  isInternal Boolean       @default(false)
+  source     String        @default("web")
+
+  createdAt DateTime @default(now())
+
+  @@map("ticket_comments")
 }

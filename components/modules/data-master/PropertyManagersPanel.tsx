@@ -205,7 +205,7 @@ export default function PropertyManagersPanel({
       {formOpen && (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 border-t pt-4">
           <p className="text-xs font-medium text-mvr-primary uppercase tracking-wide">
-            {editingId ? 'Edit Property Manager' : 'New Property Manager'}
+            {editingId ? 'Edit Employee' : 'New Employee'}
           </p>
 
           {serverError && (

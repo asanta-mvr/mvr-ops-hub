@@ -32,6 +32,9 @@ export interface BuildingFull extends BuildingMapItem {
   checkoutHours:   string | null
   amenities:       string[]
   unitCount:       number
+  keyCount:        number
+  ownerCount:      number
+  createdAt:       string
   city?: { name: string; state?: { isoCode: string | null } | null } | null
 }
 
@@ -95,12 +98,14 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
         {/* Stats row */}
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-mvr-neutral rounded-lg p-3 text-center">
-            <p className="text-xl font-bold text-mvr-primary">{building.unitCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Units</p>
+            <p className="text-xl font-bold text-mvr-primary">
+              {building.unitCount} / {building.keyCount}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Units / Keys</p>
           </div>
           <div className="bg-mvr-neutral rounded-lg p-3 text-center">
-            <p className="text-sm font-semibold text-mvr-primary truncate">{building.zone ?? '—'}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Zone</p>
+            <p className="text-xl font-bold text-mvr-primary">{building.ownerCount}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Owners</p>
           </div>
         </div>
 
@@ -109,6 +114,9 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
           <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Location</p>
           {location && (
             <Row icon={<MapPin className="w-3.5 h-3.5" />}>{location}</Row>
+          )}
+          {building.zone && (
+            <p className="text-xs text-muted-foreground pl-5">{building.zone}</p>
           )}
           {building.googleUrl && (
             <a
@@ -243,7 +251,9 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Zone</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Units</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Units / Keys</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Owners</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Created</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -271,7 +281,12 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
                     {b.status}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{b.unitCount}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">
+                  <span className="font-medium text-foreground">{b.unitCount}</span>
+                  <span className="text-muted-foreground"> / {b.keyCount}</span>
+                </td>
+                <td className="px-4 py-2.5 text-muted-foreground">{b.ownerCount}</td>
+                <td className="px-4 py-2.5 text-muted-foreground text-xs">{b.createdAt}</td>
               </tr>
             ))}
           </tbody>

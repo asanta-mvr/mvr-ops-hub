@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
+import { FileUploader } from '@/components/ui/file-uploader'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X } from 'lucide-react'
 
 const formSchema = z.object({
   name:           z.string().min(1, 'Building name is required').max(200),
@@ -15,15 +16,17 @@ const formSchema = z.object({
   zone:           z.string().min(1, 'Zone is required').max(100),
   address:        z.string().min(1, 'Address is required').max(500),
   zipcode:        z.string().min(1, 'Zip code is required').max(20),
+  lat:            z.string().optional(),
+  long:           z.string().optional(),
   googleUrl:      z.string().optional(),
   website:        z.string().optional(),
   imageUrl:       z.string().optional(),
-  floorplanUrls:  z.array(z.object({ url: z.string() })),
+  floorplanUrls:  z.array(z.string()),
   frontdeskPhone: z.string().max(30).optional(),
   frontdeskEmail: z.string().optional(),
   checkinHours:   z.string().max(100).optional(),
   checkoutHours:  z.string().max(100).optional(),
-  amenitiesRaw:   z.string().optional(),
+  amenities:      z.array(z.string()),
   rules:          z.string().optional(),
   knowledgeBase:  z.string().optional(),
 })
@@ -178,6 +181,114 @@ function ZoneSelect({
   )
 }
 
+// ── Amenities ─────────────────────────────────────────────────────────────
+
+const PRESET_AMENITIES = [
+  'Pool', 'Heated Pool', 'Rooftop Pool', 'Hot Tub', 'Sauna', 'Steam Room', 'Spa',
+  'Gym', 'Tennis Court', 'Racquetball', 'Golf Simulator',
+  'Valet Parking', 'Self-Parking', 'EV Charging', 'Bike Storage',
+  'Concierge', '24/7 Security', 'Doorman', 'Shuttle Service',
+  'Rooftop Terrace', 'BBQ Area', 'Club Room', 'Party Room',
+  'Business Center', 'Co-Working Space', 'Game Room', 'Screening Room',
+  'Restaurant On-Site', 'Café', 'Wine Cellar',
+  'Ocean View', 'Bay View', 'City View', 'Private Beach Access', 'Marina',
+  'Pet Friendly', 'Dog Park',
+  'In-Unit Laundry', 'Package Lockers', 'Storage Units', 'Kids Room',
+]
+
+function AmenitiesTagPicker({
+  value,
+  onChange,
+}: {
+  value: string[]
+  onChange: (v: string[]) => void
+}) {
+  const [customInput, setCustomInput] = useState('')
+
+  function toggle(amenity: string) {
+    if (value.includes(amenity)) {
+      onChange(value.filter((a) => a !== amenity))
+    } else {
+      onChange([...value, amenity])
+    }
+  }
+
+  function addCustom() {
+    const trimmed = customInput.trim()
+    if (!trimmed || value.includes(trimmed)) return
+    onChange([...value, trimmed])
+    setCustomInput('')
+  }
+
+  const customAmenities = value.filter((a) => !PRESET_AMENITIES.includes(a))
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {PRESET_AMENITIES.map((amenity) => {
+          const selected = value.includes(amenity)
+          return (
+            <button
+              key={amenity}
+              type="button"
+              onClick={() => toggle(amenity)}
+              className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                selected
+                  ? 'bg-mvr-primary text-white border-mvr-primary'
+                  : 'bg-white text-mvr-olive border-[#E0DBD4] hover:border-mvr-primary hover:text-mvr-primary'
+              }`}
+            >
+              {selected && <Check className="w-3 h-3" />}
+              {amenity}
+            </button>
+          )
+        })}
+      </div>
+
+      {customAmenities.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1.5">Custom amenities</p>
+          <div className="flex flex-wrap gap-2">
+            {customAmenities.map((amenity) => (
+              <span
+                key={amenity}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-mvr-primary text-white border border-mvr-primary"
+              >
+                {amenity}
+                <button
+                  type="button"
+                  onClick={() => onChange(value.filter((a) => a !== amenity))}
+                  className="hover:opacity-70 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <input
+          value={customInput}
+          onChange={(e) => setCustomInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom() } }}
+          placeholder="Add custom amenity…"
+          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary"
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          disabled={!customInput.trim()}
+          className="px-3 py-2 bg-mvr-primary text-white rounded-lg text-sm hover:bg-mvr-primary/90 transition-colors disabled:opacity-40"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main form ──────────────────────────────────────────────────────────────
 
 export default function BuildingForm({ buildingId, defaultValues, zones = [] }: BuildingFormProps) {
@@ -201,6 +312,8 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       zone:          '',
       address:       '',
       zipcode:       '',
+      lat:           '',
+      long:          '',
       googleUrl:     '',
       website:       '',
       imageUrl:      '',
@@ -208,30 +321,27 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       frontdeskEmail: '',
       checkinHours:  '',
       checkoutHours: '',
-      amenitiesRaw:  '',
+      amenities:     [] as string[],
       rules:         '',
       knowledgeBase: '',
-      floorplanUrls: [] as { url: string }[],
+      floorplanUrls: [] as string[],
       ...defaultValues,
     },
   })
-
-  const { fields: fpFields, append: appendFp, remove: removeFp } =
-    useFieldArray({ control, name: 'floorplanUrls' })
 
   const zoneValue = watch('zone') ?? ''
 
   async function onSubmit(values: FormValues) {
     setServerError('')
 
-    const { amenitiesRaw, floorplanUrls: fpArr, ...rest } = values
-    const amenities     = amenitiesRaw ? amenitiesRaw.split('\n').map((s) => s.trim()).filter(Boolean) : []
-    const floorplanUrls = fpArr.map((f) => f.url).filter(Boolean)
+    const { amenities, floorplanUrls, lat, long, ...rest } = values
 
     const payload = {
       ...rest,
       amenities,
       floorplanUrls,
+      lat:            lat  ? parseFloat(lat)  : undefined,
+      long:           long ? parseFloat(long) : undefined,
       googleUrl:      rest.googleUrl      || undefined,
       website:        rest.website        || undefined,
       imageUrl:       rest.imageUrl       || undefined,
@@ -326,6 +436,16 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
+            <Label>Latitude</Label>
+            <Input {...register('lat')} placeholder="25.768458" type="number" step="any" />
+          </div>
+          <div>
+            <Label>Longitude</Label>
+            <Input {...register('long')} placeholder="-80.188991" type="number" step="any" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
             <Label>Google Maps URL</Label>
             <Input {...register('googleUrl')} placeholder="https://maps.google.com/…" type="url" />
           </div>
@@ -338,35 +458,19 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
 
       {/* ── Documents & Media ── */}
       <SectionCard title="Documents & Media">
-        <div className="space-y-2">
-          {fpFields.length === 0 && (
-            <p className="text-xs text-muted-foreground">No documents added yet.</p>
+        <Controller
+          control={control}
+          name="floorplanUrls"
+          render={({ field }) => (
+            <FileUploader
+              value={field.value}
+              onChange={field.onChange}
+              folder="buildings"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              label="Floorplans & building documents"
+            />
           )}
-          {fpFields.map((field, i) => (
-            <div key={field.id} className="flex gap-2">
-              <Input
-                {...register(`floorplanUrls.${i}.url`)}
-                placeholder={`Document ${i + 1} URL`}
-              />
-              <button
-                type="button"
-                onClick={() => removeFp(i)}
-                className="shrink-0 text-mvr-danger hover:text-mvr-danger/80 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => appendFp({ url: '' })}
-          >
-            <Plus className="w-3 h-3 mr-1" />
-            Add Document
-          </Button>
-        </div>
+        />
       </SectionCard>
 
       {/* ── Front Desk ── */}
@@ -394,11 +498,13 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
 
       {/* ── Amenities ── */}
       <SectionCard title="Amenities">
-        <Label>Amenities (one per line)</Label>
-        <Textarea
-          {...register('amenitiesRaw')}
-          placeholder={"Pool\nGym\nConcierge\nValet"}
-          rows={5}
+        <p className="text-xs text-muted-foreground -mt-2 mb-1">Select all that apply or add a custom one.</p>
+        <Controller
+          control={control}
+          name="amenities"
+          render={({ field }) => (
+            <AmenitiesTagPicker value={field.value} onChange={field.onChange} />
+          )}
         />
       </SectionCard>
 

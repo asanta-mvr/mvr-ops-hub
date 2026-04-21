@@ -8,6 +8,12 @@ import { db } from '@/lib/db'
 // Sessions are stored in signed JWT cookies. Re-enable adapter after upgrading
 // to NextAuth stable when it releases.
 
+export function validateApiKey(req: Request): boolean {
+  const authHeader = req.headers.get('authorization') ?? ''
+  const key = authHeader.replace(/^Bearer\s+/i, '').trim()
+  return !!process.env.N8N_API_KEY && key === process.env.N8N_API_KEY
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   debug: process.env.NODE_ENV === 'development',
@@ -36,14 +42,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             update: { lastLoginAt: new Date() },
             create: {
               id: 'dev-user-001',
-              name: 'Dev User',
+              name: 'Andrés Santa',
               email: devEmail,
               role: 'super_admin',
             },
           })
           return {
             id: 'dev-user-001',
-            name: 'Dev User',
+            name: 'Andrés Santa',
             email: devEmail,
             role: 'super_admin',
           }

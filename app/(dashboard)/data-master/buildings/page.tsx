@@ -13,6 +13,7 @@ async function getBuildings(): Promise<BuildingFull[]> {
     include: {
       city:   { include: { state: true } },
       _count: { select: { units: true } },
+      units:  { select: { ownerUniqueId: true, _count: { select: { listings: true } } } },
     },
     orderBy: { name: 'asc' },
   })
@@ -36,6 +37,9 @@ async function getBuildings(): Promise<BuildingFull[]> {
     checkoutHours:  b.checkoutHours,
     amenities:      b.amenities,
     unitCount:      b._count.units,
+    keyCount:       b.units.reduce((sum, u) => sum + u._count.listings, 0),
+    ownerCount:     new Set(b.units.map((u) => u.ownerUniqueId).filter(Boolean)).size,
+    createdAt:      b.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     city:           b.city,
   }))
 }

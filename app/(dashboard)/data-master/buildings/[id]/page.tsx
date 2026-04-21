@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, Pencil, MapPin, Phone, Mail, Clock, Building2, ExternalLink, Globe } from 'lucide-react'
+import { ChevronRight, Pencil, MapPin, Building2, ExternalLink, Globe } from 'lucide-react'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
-import PropertyManagersPanel from '@/components/modules/data-master/PropertyManagersPanel'
+import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
+import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
 
 const GCS_BASE = 'https://storage.googleapis.com/mvr-ops-hub-assets'
 
@@ -45,6 +46,8 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
   const emergencyContacts = Array.isArray(building.emergencyContacts)
     ? (building.emergencyContacts as { name: string; phone: string; role: string }[])
     : []
+
+  const ownerCount = new Set(building.units.map((u) => u.ownerUniqueId).filter(Boolean)).size
 
   const imageUrl = resolveImageUrl(building.imageUrl)
 
@@ -126,12 +129,17 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             <ChevronRight className="w-3 h-3" />
             <span className="text-foreground">{building.name}</span>
           </nav>
-          {building.address && (
-            <p className="text-muted-foreground text-xs flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {building.address}{building.zipcode ? `, ${building.zipcode}` : ''}
-            </p>
-          )}
+          <div className="flex flex-col gap-0.5">
+            {building.address && (
+              <p className="text-muted-foreground text-xs flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {building.address}{building.zipcode ? `, ${building.zipcode}` : ''}
+              </p>
+            )}
+            {building.zone && (
+              <p className="text-muted-foreground text-xs pl-4">{building.zone}</p>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             {building.googleUrl && (
               <a href={building.googleUrl} target="_blank" rel="noopener noreferrer"
@@ -155,7 +163,7 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
           { label: 'Total Units', value: building._count.units },
           { label: 'Active Units', value: building.units.filter((u) => u.status === 'active').length },
           { label: 'Contracts', value: building._count.contracts },
-          { label: 'Zone', value: building.zone ?? '—' },
+          { label: 'Owners', value: ownerCount },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border p-4 text-center">
             <p className="text-2xl font-bold text-mvr-primary">{stat.value}</p>
@@ -167,44 +175,6 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left column: details */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Contact & Hours */}
-          <div className="bg-white rounded-xl border p-5 space-y-3">
-            <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">Front Desk</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              {building.frontdeskPhone && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="w-4 h-4 shrink-0" />
-                  <a href={`tel:${building.frontdeskPhone}`} className="hover:text-mvr-primary">
-                    {building.frontdeskPhone}
-                  </a>
-                </div>
-              )}
-              {building.frontdeskEmail && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="w-4 h-4 shrink-0" />
-                  <a href={`mailto:${building.frontdeskEmail}`} className="hover:text-mvr-primary">
-                    {building.frontdeskEmail}
-                  </a>
-                </div>
-              )}
-              {building.checkinHours && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="w-4 h-4 shrink-0" />
-                  <span>Check-in: {building.checkinHours}</span>
-                </div>
-              )}
-              {building.checkoutHours && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="w-4 h-4 shrink-0" />
-                  <span>Check-out: {building.checkoutHours}</span>
-                </div>
-              )}
-              {!building.frontdeskPhone && !building.frontdeskEmail && !building.checkinHours && (
-                <p className="text-muted-foreground col-span-2">No contact info yet.</p>
-              )}
-            </div>
-          </div>
-
           {/* Units */}
           <div className="bg-white rounded-xl border overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b">
@@ -274,10 +244,14 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
 
         {/* Right column */}
         <div className="space-y-5">
-            {/* Property Managers — interactive panel */}
-          <PropertyManagersPanel
+          {/* Property Managers + Front Desk — tabbed panel */}
+          <ContactTabsPanel
             buildingId={params.id}
             initialManagers={building.propertyManagers}
+            frontdeskPhone={building.frontdeskPhone ?? null}
+            frontdeskEmail={building.frontdeskEmail ?? null}
+            checkinHours={building.checkinHours ?? null}
+            checkoutHours={building.checkoutHours ?? null}
           />
 
           {/* Emergency Contacts */}
@@ -301,12 +275,7 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
           )}
 
           {/* Rules */}
-          {building.rules && (
-            <div className="bg-white rounded-xl border p-5 space-y-3">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">House Rules</h2>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{building.rules}</p>
-            </div>
-          )}
+          {building.rules && <HouseRulesPanel rules={building.rules} />}
         </div>
       </div>
     </div>
