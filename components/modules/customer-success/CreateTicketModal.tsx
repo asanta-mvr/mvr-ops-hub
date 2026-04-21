@@ -125,7 +125,7 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
 
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4 max-h-[78vh] overflow-y-auto">
 
-          {/* Confirmation Code lookup */}
+          {/* 1. Confirmation Code + Look up */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Confirmation Code</label>
             <div className="flex gap-2">
@@ -162,39 +162,9 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
             )}
           </div>
 
-          {/* OTA + Assignee */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">OTA Source *</label>
-              <select
-                {...register('source')}
-                disabled={autoFilled}
-                className={autoFilled ? readonlyInput : inputBase}
-              >
-                {OTA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">Assignee</label>
-              <select {...register('assignedToId')} className={inputBase}>
-                <option value="">Unassigned</option>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name ?? a.id}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <hr className="border-[#E0DBD4]" />
 
-          {/* Subject */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-600">Subject *</label>
-            <input {...register('subject')} type="text" placeholder="e.g. Guest complaint about noise" className={inputBase} />
-            {errors.subject && <p className="text-xs text-mvr-danger">{errors.subject.message}</p>}
-          </div>
-
-          {/* Guest Name + Phone */}
+          {/* 2. Guest Name | Phone */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Guest Name</label>
@@ -218,7 +188,7 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
             </div>
           </div>
 
-          {/* Check-in + Check-out */}
+          {/* 3. Check-in | Check-out */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Check-in</label>
@@ -240,13 +210,29 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
             </div>
           </div>
 
-          {/* Email + Building */}
+          {/* 4. Contact Email * | OTA Source */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Contact Email *</label>
               <input {...register('fromEmail')} type="email" placeholder="guest@example.com" className={inputBase} />
               {errors.fromEmail && <p className="text-xs text-mvr-danger">{errors.fromEmail.message}</p>}
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">OTA Source *</label>
+              <select
+                {...register('source')}
+                disabled={autoFilled}
+                className={autoFilled ? readonlyInput : inputBase}
+              >
+                {OTA_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 5. Building | Assignee */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Building</label>
               <select {...register('buildingId')} className={inputBase}>
@@ -256,15 +242,33 @@ export function CreateTicketModal({ buildings, agents, onClose }: CreateTicketMo
                 ))}
               </select>
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">Assignee</label>
+              <select {...register('assignedToId')} className={inputBase}>
+                <option value="">— None —</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name ?? a.id}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Category */}
+          <hr className="border-[#E0DBD4]" />
+
+          {/* 6. Category */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Category</label>
             <input {...register('category')} type="text" placeholder="e.g. Noise Complaint, Refund Request…" className={inputBase} />
           </div>
 
-          {/* Description */}
+          {/* 7. Subject */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">Subject *</label>
+            <input {...register('subject')} type="text" placeholder="e.g. Guest complaint about noise" className={inputBase} />
+            {errors.subject && <p className="text-xs text-mvr-danger">{errors.subject.message}</p>}
+          </div>
+
+          {/* 8. Description */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Description *</label>
             <textarea {...register('body')} rows={4} placeholder="Describe the issue…" className={`${inputBase} resize-none`} />
