@@ -78,7 +78,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const ticket = await db.supportTicket.create({ data: validated.data })
+    const { checkinDate, checkoutDate, ...rest } = validated.data
+    const ticket = await db.supportTicket.create({
+      data: {
+        ...rest,
+        ...(checkinDate  ? { checkinDate:  new Date(checkinDate) }  : {}),
+        ...(checkoutDate ? { checkoutDate: new Date(checkoutDate) } : {}),
+      },
+    })
 
     const userId = session?.user?.id ?? 'system'
     db.auditLog.create({
