@@ -28,27 +28,67 @@ interface ContactTabsPanelProps {
   initialManagers: PropertyManager[]
   frontdeskPhone: string | null
   frontdeskEmail: string | null
+  frontdeskHours: string | null
   checkinHours: string | null
   checkoutHours: string | null
 }
 
-type Tab = 'managers' | 'frontdesk'
+type Tab = 'frontdesk' | 'managers'
 
 export default function ContactTabsPanel({
   buildingId,
   initialManagers,
   frontdeskPhone,
   frontdeskEmail,
+  frontdeskHours,
   checkinHours,
   checkoutHours,
 }: ContactTabsPanelProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<Tab>('managers')
+  const [activeTab, setActiveTab] = useState<Tab>('frontdesk')
   const [managers, setManagers] = useState<PropertyManager[]>(initialManagers)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
+
+  // Front desk inline edit state
+  const [fdValues, setFdValues] = useState({
+    phone:    frontdeskPhone   ?? '',
+    email:    frontdeskEmail   ?? '',
+    hours:    frontdeskHours   ?? '',
+    checkin:  checkinHours     ?? '',
+    checkout: checkoutHours    ?? '',
+  })
+  const [editFD, setEditFD] = useState(fdValues)
+  const [editingFD, setEditingFD] = useState(false)
+  const [fdSaving, setFdSaving] = useState(false)
+  const [fdError, setFdError] = useState<string | null>(null)
+
+  async function saveFD() {
+    setFdSaving(true)
+    setFdError(null)
+    const res = await fetch(`/api/v1/buildings/${buildingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        frontdeskPhone:  editFD.phone    || undefined,
+        frontdeskEmail:  editFD.email    || undefined,
+        frontdeskHours:  editFD.hours    || undefined,
+        checkinHours:    editFD.checkin  || undefined,
+        checkoutHours:   editFD.checkout || undefined,
+      }),
+    })
+    setFdSaving(false)
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({})) as { error?: string }
+      setFdError(json.error ?? 'Failed to save')
+      return
+    }
+    setFdValues(editFD)
+    setEditingFD(false)
+    router.refresh()
+  }
 
   const {
     register,
@@ -104,12 +144,12 @@ export default function ContactTabsPanel({
     })
 
     if (!res.ok) {
-      const json = await res.json().catch(() => ({}))
+      const json = await res.json().catch(() => ({})) as { error?: string }
       setServerError(json.error ?? 'Something went wrong')
       return
     }
 
-    const { data: saved } = await res.json()
+    const { data: saved } = await res.json() as { data: PropertyManager }
 
     if (data.isPrimary) {
       setManagers((prev) =>
@@ -139,19 +179,21 @@ export default function ContactTabsPanel({
     router.refresh()
   }
 
-  const hasFrontdesk = !!(frontdeskPhone || frontdeskEmail || checkinHours || checkoutHours)
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'frontdesk', label: 'Front Desk' },
+    { key: 'managers',  label: 'Property Managers' },
+  ]
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden">
       {/* Tab header */}
       <div className="flex border-b border-[#E0DBD4]">
-        {(['managers', 'frontdesk'] as Tab[]).map((tab) => {
-          const label = tab === 'managers' ? 'Property Managers' : 'Front Desk'
-          const isActive = activeTab === tab
+        {TABS.map(({ key, label }) => {
+          const isActive = activeTab === key
           return (
             <button
-              key={tab}
-              onClick={() => { setActiveTab(tab); if (tab !== 'managers') closeForm() }}
+              key={key}
+              onClick={() => { setActiveTab(key); if (key !== 'managers') closeForm() }}
               className={`flex-1 px-4 py-3 text-xs font-semibold uppercase tracking-wide transition-colors ${
                 isActive
                   ? 'text-mvr-primary border-b-2 border-mvr-primary -mb-px bg-white'
@@ -166,6 +208,137 @@ export default function ContactTabsPanel({
 
       {/* Tab content */}
       <div className="p-5">
+        {/* ── Front Desk ── */}
+        {activeTab === 'frontdesk' && (
+          <div className="space-y-3">
+            {!editingFD ? (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Contact Info</span>
+                  <button
+                    onClick={() => { setEditFD(fdValues); setEditingFD(true); setFdError(null) }}
+                    className="p-1 rounded hover:bg-mvr-neutral text-muted-foreground hover:text-mvr-primary transition-colors"
+                    title="Edit front desk"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-2 text-sm">
+                  {fdValues.phone && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="w-4 h-4 shrink-0" />
+                      <a href={`tel:${fdValues.phone}`} className="hover:text-mvr-primary">{fdValues.phone}</a>
+                    </div>
+                  )}
+                  {fdValues.email && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="w-4 h-4 shrink-0" />
+                      <a href={`mailto:${fdValues.email}`} className="hover:text-mvr-primary">{fdValues.email}</a>
+                    </div>
+                  )}
+                  {fdValues.hours && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>{fdValues.hours}</span>
+                    </div>
+                  )}
+                  {fdValues.checkin && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>Check-in: {fdValues.checkin}</span>
+                    </div>
+                  )}
+                  {fdValues.checkout && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>Check-out: {fdValues.checkout}</span>
+                    </div>
+                  )}
+                  {!fdValues.phone && !fdValues.email && !fdValues.hours && !fdValues.checkin && !fdValues.checkout && (
+                    <p className="text-muted-foreground">No contact info yet.</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Edit Front Desk</p>
+                {fdError && (
+                  <p className="text-xs text-mvr-danger bg-mvr-danger-light rounded px-3 py-2">{fdError}</p>
+                )}
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Hours of Operation</label>
+                    <input
+                      value={editFD.hours}
+                      onChange={(e) => setEditFD((p) => ({ ...p, hours: e.target.value }))}
+                      placeholder="Mon–Fri 9am–5pm"
+                      className="w-full text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-mvr-primary"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Phone</label>
+                      <input
+                        value={editFD.phone}
+                        onChange={(e) => setEditFD((p) => ({ ...p, phone: e.target.value }))}
+                        placeholder="+1 (305) 000-0000"
+                        className="w-full text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-mvr-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Email</label>
+                      <input
+                        value={editFD.email}
+                        onChange={(e) => setEditFD((p) => ({ ...p, email: e.target.value }))}
+                        placeholder="frontdesk@..."
+                        type="email"
+                        className="w-full text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-mvr-primary"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Check-in Hours</label>
+                      <input
+                        value={editFD.checkin}
+                        onChange={(e) => setEditFD((p) => ({ ...p, checkin: e.target.value }))}
+                        placeholder="3:00 PM – 10:00 PM"
+                        className="w-full text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-mvr-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Check-out Hours</label>
+                      <input
+                        value={editFD.checkout}
+                        onChange={(e) => setEditFD((p) => ({ ...p, checkout: e.target.value }))}
+                        placeholder="By 11:00 AM"
+                        className="w-full text-sm border rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-mvr-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button type="button" size="sm" onClick={saveFD} disabled={fdSaving} className="h-7 px-3 text-xs">
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    {fdSaving ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setEditingFD(false); setFdError(null) }}
+                    className="h-7 px-3 text-xs"
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Property Managers ── */}
         {activeTab === 'managers' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -317,42 +490,6 @@ export default function ContactTabsPanel({
                   </Button>
                 </div>
               </form>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'frontdesk' && (
-          <div className="space-y-2 text-sm">
-            {frontdeskPhone && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="w-4 h-4 shrink-0" />
-                <a href={`tel:${frontdeskPhone}`} className="hover:text-mvr-primary">
-                  {frontdeskPhone}
-                </a>
-              </div>
-            )}
-            {frontdeskEmail && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="w-4 h-4 shrink-0" />
-                <a href={`mailto:${frontdeskEmail}`} className="hover:text-mvr-primary">
-                  {frontdeskEmail}
-                </a>
-              </div>
-            )}
-            {checkinHours && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="w-4 h-4 shrink-0" />
-                <span>Check-in: {checkinHours}</span>
-              </div>
-            )}
-            {checkoutHours && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="w-4 h-4 shrink-0" />
-                <span>Check-out: {checkoutHours}</span>
-              </div>
-            )}
-            {!hasFrontdesk && (
-              <p className="text-muted-foreground">No contact info yet.</p>
             )}
           </div>
         )}

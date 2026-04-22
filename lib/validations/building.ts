@@ -16,6 +16,7 @@ export const createBuildingSchema = z.object({
   amenities: z.array(z.string()).default([]),
   checkinHours: z.string().max(100).optional(),
   checkoutHours: z.string().max(100).optional(),
+  frontdeskHours: z.string().max(100).optional(),
   rules: z.string().optional(),
   emergencyContacts: z
     .array(

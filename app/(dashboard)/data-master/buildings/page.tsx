@@ -33,6 +33,7 @@ async function getBuildings(): Promise<BuildingFull[]> {
     imageUrl:       b.imageUrl,
     frontdeskPhone: b.frontdeskPhone,
     frontdeskEmail: b.frontdeskEmail,
+    frontdeskHours: b.frontdeskHours,
     checkinHours:   b.checkinHours,
     checkoutHours:  b.checkoutHours,
     amenities:      b.amenities,

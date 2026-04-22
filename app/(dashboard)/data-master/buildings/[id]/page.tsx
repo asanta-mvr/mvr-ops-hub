@@ -250,6 +250,7 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             initialManagers={building.propertyManagers}
             frontdeskPhone={building.frontdeskPhone ?? null}
             frontdeskEmail={building.frontdeskEmail ?? null}
+            frontdeskHours={(building as unknown as { frontdeskHours: string | null }).frontdeskHours ?? null}
             checkinHours={building.checkinHours ?? null}
             checkoutHours={building.checkoutHours ?? null}
           />
@@ -274,8 +275,11 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             </div>
           )}
 
-          {/* Rules */}
-          {building.rules && <HouseRulesPanel rules={building.rules} />}
+          {/* Rules & Knowledge Base */}
+          <HouseRulesPanel
+            rules={building.rules ?? null}
+            knowledgeBase={building.knowledgeBase ?? null}
+          />
         </div>
       </div>
     </div>

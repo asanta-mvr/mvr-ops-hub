@@ -170,6 +170,7 @@ model Building {
   amenities         String[]
   checkinHours      String?
   checkoutHours     String?
+  frontdeskHours    String?
   rules             String?        @db.Text
   emergencyContacts Json?
   knowledgeBase     String?        @db.Text

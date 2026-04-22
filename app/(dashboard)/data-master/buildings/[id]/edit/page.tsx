@@ -42,6 +42,7 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
     frontdeskEmail:    building.frontdeskEmail ?? '',
     checkinHours:      building.checkinHours ?? '',
     checkoutHours:     building.checkoutHours ?? '',
+    frontdeskHours:    building.frontdeskHours ?? '',
     rules:             building.rules ?? '',
     knowledgeBase:     building.knowledgeBase ?? '',
     amenities:         building.amenities,

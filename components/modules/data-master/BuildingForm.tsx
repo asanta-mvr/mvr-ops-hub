@@ -26,6 +26,7 @@ const formSchema = z.object({
   frontdeskEmail: z.string().optional(),
   checkinHours:   z.string().max(100).optional(),
   checkoutHours:  z.string().max(100).optional(),
+  frontdeskHours: z.string().max(100).optional(),
   amenities:      z.array(z.string()),
   rules:          z.string().optional(),
   knowledgeBase:  z.string().optional(),
@@ -322,6 +323,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       frontdeskEmail: '',
       checkinHours:  '',
       checkoutHours: '',
+      frontdeskHours: '',
       amenities:     [] as string[],
       rules:         '',
       knowledgeBase: '',
@@ -350,6 +352,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       frontdeskEmail: rest.frontdeskEmail || undefined,
       checkinHours:   rest.checkinHours   || undefined,
       checkoutHours:  rest.checkoutHours  || undefined,
+      frontdeskHours: rest.frontdeskHours || undefined,
       rules:          rest.rules          || undefined,
       knowledgeBase:  rest.knowledgeBase  || undefined,
     }
@@ -517,6 +520,10 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
           <div>
             <Label>Check-out Hours</Label>
             <Input {...register('checkoutHours')} placeholder="By 11:00 AM" />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Hours of Operation</Label>
+            <Input {...register('frontdeskHours')} placeholder="Mon–Fri 9am–5pm, Sat–Sun 10am–4pm" />
           </div>
         </div>
       </SectionCard>

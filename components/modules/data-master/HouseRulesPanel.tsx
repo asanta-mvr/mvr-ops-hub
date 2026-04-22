@@ -1,171 +1,158 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { Search } from 'lucide-react'
 
-interface Section {
+interface ContentBlock {
   title: string
-  content: string
+  description: string
 }
 
-/**
- * Parses free-text rules into named sections using a cascade of heading detectors:
- * 1. Markdown # / ## headings
- * 2. **Bold** standalone lines
- * 3. ALL CAPS standalone lines
- * 4. Short title-case lines (≤ 50 chars, no terminal punctuation) followed by content
- * Falls back to a single "Rules" tab if no headings are found.
- */
-function parseRules(text: string): Section[] {
+function parseToBlocks(text: string | null): ContentBlock[] {
+  if (!text) return []
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (
+      Array.isArray(parsed) &&
+      parsed.length > 0 &&
+      typeof (parsed[0] as { title?: unknown }).title === 'string'
+    ) {
+      return parsed as ContentBlock[]
+    }
+  } catch {}
+  return parseTextToBlocks(text)
+}
+
+function parseTextToBlocks(text: string): ContentBlock[] {
   const lines = text.split('\n')
-
-  // Strategy 1 — markdown headings: lines starting with # or ##
-  const mdPattern = /^#{1,3}\s+(.+)$/
-  if (lines.some((l) => mdPattern.test(l.trim()))) {
-    return extractSections(lines, (l) => {
-      const m = l.trim().match(mdPattern)
-      return m ? m[1].trim() : null
-    })
-  }
-
-  // Strategy 2 — **bold** standalone lines
-  const boldPattern = /^\*\*(.+)\*\*$/
-  if (lines.some((l) => boldPattern.test(l.trim()))) {
-    return extractSections(lines, (l) => {
-      const m = l.trim().match(boldPattern)
-      return m ? m[1].trim() : null
-    })
-  }
-
-  // Strategy 3 — ALL CAPS lines (3+ chars, no punctuation, not a list item)
-  const capsPattern = /^[A-Z][A-Z\s\-–—&/]{2,}$/
-  if (lines.some((l) => capsPattern.test(l.trim()) && !l.trim().startsWith('-') && !l.trim().match(/^\d+\./))) {
-    return extractSections(lines, (l) => {
-      const t = l.trim()
-      return capsPattern.test(t) && !t.startsWith('-') && !t.match(/^\d+\./) ? t : null
-    })
-  }
-
-  // Strategy 4 — short standalone title lines (≤ 50 chars, not ending in . , ; :)
-  const titleLines = lines.filter((l, i) => {
-    const t = l.trim()
-    if (!t || t.length > 50) return false
-    if (/[.,;]$/.test(t)) return false
-    if (t.startsWith('-') || t.match(/^\d+\./)) return false
-    const next = lines[i + 1]?.trim()
-    const prev = lines[i - 1]?.trim()
-    return (!prev || prev === '') && next && next !== ''
-  })
-
-  if (titleLines.length >= 2) {
-    const titleSet = new Set(titleLines.map((l) => l.trim()))
-    return extractSections(lines, (l) => (titleSet.has(l.trim()) ? l.trim() : null))
-  }
-
-  // Fallback — single section
-  return [{ title: 'Rules', content: text.trim() }]
-}
-
-function extractSections(
-  lines: string[],
-  isHeading: (line: string) => string | null,
-): Section[] {
-  const sections: Section[] = []
+  const blocks: ContentBlock[] = []
   let currentTitle: string | null = null
   let currentLines: string[] = []
 
+  function detectHeading(line: string): string | null {
+    const t = line.trim()
+    const md = t.match(/^#{1,3}\s+(.+)$/)
+    if (md) return md[1].trim()
+    const bold = t.match(/^\*\*(.+)\*\*$/)
+    if (bold) return bold[1].trim()
+    if (/^[A-Z][A-Z\s\-–—&/]{2,}$/.test(t) && !t.startsWith('-')) return t
+    return null
+  }
+
+  function flush() {
+    if (currentTitle !== null) {
+      const desc = currentLines.join('\n').trim()
+      if (desc) blocks.push({ title: currentTitle, description: desc })
+    }
+  }
+
   for (const line of lines) {
-    const heading = isHeading(line)
+    const heading = detectHeading(line)
     if (heading) {
-      if (currentTitle !== null) {
-        const content = currentLines.join('\n').trim()
-        if (content) sections.push({ title: currentTitle, content })
-      }
+      flush()
       currentTitle = heading
       currentLines = []
     } else {
       currentLines.push(line)
     }
   }
+  flush()
 
-  if (currentTitle !== null) {
-    const content = currentLines.join('\n').trim()
-    if (content) sections.push({ title: currentTitle, content })
+  if (blocks.length === 0) {
+    return [{ title: 'Rules', description: text.trim() }]
   }
-
-  // Content that appeared before any heading
-  return sections
+  return blocks
 }
 
-/**
- * Renders section body with lightweight markdown:
- * - ### sub-headings become bold labels
- * - Numbered lists and bullet lists rendered as-is (whitespace-pre-wrap)
- */
-function RulesContent({ content }: { content: string }) {
-  const lines = content.split('\n')
-  const nodes: React.ReactNode[] = []
-  let i = 0
+type Tab = 'rules' | 'kb'
 
-  while (i < lines.length) {
-    const line = lines[i]
-    const subheading = line.trim().match(/^#{1,3}\s+(.+)$/)
+export default function HouseRulesPanel({
+  rules,
+  knowledgeBase,
+}: {
+  rules: string | null
+  knowledgeBase: string | null
+}) {
+  const [activeTab, setActiveTab] = useState<Tab>('rules')
+  const [rulesSearch, setRulesSearch] = useState('')
+  const [kbSearch, setKbSearch] = useState('')
 
-    if (subheading) {
-      nodes.push(
-        <p key={i} className="text-xs font-semibold text-mvr-primary uppercase tracking-wide mt-3 mb-1">
-          {subheading[1]}
-        </p>
-      )
-    } else {
-      nodes.push(
-        <span key={i} className="block whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
-          {line || '\u00A0'}
-        </span>
-      )
-    }
-    i++
-  }
+  const rulesBlocks = useMemo(() => parseToBlocks(rules), [rules])
+  const kbBlocks    = useMemo(() => parseToBlocks(knowledgeBase), [knowledgeBase])
 
-  return <div className="min-h-[80px]">{nodes}</div>
-}
+  const filteredRules = useMemo(() => {
+    if (!rulesSearch.trim()) return rulesBlocks
+    const q = rulesSearch.toLowerCase()
+    return rulesBlocks.filter(
+      (b) => b.title.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)
+    )
+  }, [rulesBlocks, rulesSearch])
 
-export default function HouseRulesPanel({ rules }: { rules: string }) {
-  const sections = useMemo(() => parseRules(rules), [rules])
-  const [activeIdx, setActiveIdx] = useState(0)
+  const filteredKb = useMemo(() => {
+    if (!kbSearch.trim()) return kbBlocks
+    const q = kbSearch.toLowerCase()
+    return kbBlocks.filter(
+      (b) => b.title.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)
+    )
+  }, [kbBlocks, kbSearch])
 
-  if (sections.length === 0) return null
-
-  const active = sections[Math.min(activeIdx, sections.length - 1)]
+  const currentSearch    = activeTab === 'rules' ? rulesSearch : kbSearch
+  const setCurrentSearch = activeTab === 'rules' ? setRulesSearch : setKbSearch
+  const currentBlocks    = activeTab === 'rules' ? filteredRules : filteredKb
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden">
-      {/* Panel title */}
-      <div className="px-5 py-3 border-b border-[#E0DBD4]">
-        <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">House Rules</h2>
-      </div>
-
-      {/* Tab header — only show if multiple sections */}
-      {sections.length > 1 && (
-        <div className="flex border-b border-[#E0DBD4] overflow-x-auto">
-          {sections.map((section, idx) => (
+      {/* Outer tabs */}
+      <div className="flex border-b border-[#E0DBD4]">
+        {(['rules', 'kb'] as Tab[]).map((tab) => {
+          const label    = tab === 'rules' ? 'House Rules' : 'Knowledge Base'
+          const isActive = activeTab === tab
+          return (
             <button
-              key={idx}
-              onClick={() => setActiveIdx(idx)}
-              className={`shrink-0 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
-                activeIdx === idx
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex-1 px-4 py-3 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                isActive
                   ? 'text-mvr-primary border-b-2 border-mvr-primary -mb-px bg-white'
                   : 'text-muted-foreground hover:text-mvr-primary hover:bg-mvr-cream'
               }`}
             >
-              {section.title}
+              {label}
             </button>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
 
-      {/* Content */}
-      <div className="p-5 min-h-[120px]">
-        <RulesContent content={active.content} />
+      {/* Search */}
+      <div className="px-4 py-3 border-b border-[#E0DBD4]">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={currentSearch}
+            onChange={(e) => setCurrentSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-[#E0DBD4] rounded-lg focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary"
+          />
+        </div>
+      </div>
+
+      {/* Content blocks */}
+      <div className="p-4 space-y-3 min-h-[100px]">
+        {currentBlocks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {currentSearch.trim() ? 'No matches.' : 'Nothing on file.'}
+          </p>
+        ) : (
+          currentBlocks.map((block, i) => (
+            <div key={i} className="space-y-1 pb-3 border-b border-[#E0DBD4] last:border-0 last:pb-0">
+              <p className="text-xs font-semibold text-mvr-primary">{block.title}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                {block.description}
+              </p>
+            </div>
+          ))
+        )}
       </div>
     </div>
   )
