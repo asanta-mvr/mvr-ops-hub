@@ -61,7 +61,7 @@ const OTA_OPTIONS: { value: OtaSource; label: string }[] = [
   { value: 'other',    label: 'Other' },
 ]
 
-export function CreateTicketModal({ buildings, agents, units, onClose }: CreateTicketModalProps) {
+export function CreateTicketModal({ buildings, agents: _agents, units, onClose }: CreateTicketModalProps) {
   const router = useRouter()
 
   const [lookupCode,   setLookupCode]   = useState('')

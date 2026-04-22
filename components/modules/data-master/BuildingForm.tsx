@@ -302,6 +302,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
     control,
     watch,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: standardSchemaResolver(formSchema),
@@ -364,7 +365,18 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setServerError(data.error ?? 'Something went wrong')
+      const fieldErrors = data.details?.fieldErrors as Record<string, string[]> | undefined
+      if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+        for (const [field, msgs] of Object.entries(fieldErrors)) {
+          setError(field as keyof FormValues, { message: msgs[0] })
+        }
+        const summary = Object.entries(fieldErrors)
+          .map(([f, msgs]) => `${f}: ${msgs[0]}`)
+          .join(' · ')
+        setServerError(`Validation failed — ${summary}`)
+      } else {
+        setServerError(data.error ?? 'Something went wrong')
+      }
       return
     }
 
@@ -437,11 +449,24 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>Latitude</Label>
-            <Input {...register('lat')} placeholder="25.768458" type="number" step="any" />
+            <Input
+              {...register('lat')}
+              placeholder="25.768458 — or paste 'lat, long'"
+              type="text"
+              onPaste={(e) => {
+                const pasted = e.clipboardData.getData('text')
+                if (pasted.includes(',')) {
+                  e.preventDefault()
+                  const [latPart, longPart] = pasted.split(',')
+                  setValue('lat',  latPart.trim())
+                  setValue('long', longPart.trim())
+                }
+              }}
+            />
           </div>
           <div>
             <Label>Longitude</Label>
-            <Input {...register('long')} placeholder="-80.188991" type="number" step="any" />
+            <Input {...register('long')} placeholder="-80.188991" type="text" />
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

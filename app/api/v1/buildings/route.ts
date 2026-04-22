@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
@@ -61,7 +62,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const building = await db.building.create({ data: validated.data })
+    const building = await db.building.create({
+      data: { id: randomBytes(4).toString('hex'), ...validated.data },
+    })
 
     db.auditLog.create({
       data: {

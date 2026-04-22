@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   MapPin, Phone, Mail, Clock, Globe, ExternalLink,
-  Pencil, X, Building2, ChevronRight,
+  Pencil, Trash2, X, Building2, ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { BuildingMapItem } from './BuildingsMap'
@@ -192,14 +193,8 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
       </div>
 
       {/* Actions */}
-      <div className="shrink-0 border-t p-3 flex gap-2">
-        <Link href={`/data-master/buildings/${building.id}/edit`} className="flex-1">
-          <Button variant="outline" size="sm" className="w-full">
-            <Pencil className="w-3.5 h-3.5 mr-1.5" />
-            Edit
-          </Button>
-        </Link>
-        <Link href={`/data-master/buildings/${building.id}`} className="flex-1">
+      <div className="shrink-0 border-t p-3">
+        <Link href={`/data-master/buildings/${building.id}`} className="block">
           <Button size="sm" className="w-full bg-mvr-primary hover:bg-mvr-primary/90">
             Full Details
             <ChevronRight className="w-3.5 h-3.5 ml-1" />
@@ -211,8 +206,25 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
 }
 
 export default function BuildingsMapView({ buildings }: { buildings: BuildingFull[] }) {
+  const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const selectedBuilding = buildings.find((b) => b.id === selectedId) ?? null
+  const [displayBuildings, setDisplayBuildings] = useState<BuildingFull[]>(buildings)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const selectedBuilding = displayBuildings.find((b) => b.id === selectedId) ?? null
+
+  async function handleDelete(id: string) {
+    try {
+      const res = await fetch(`/api/v1/buildings/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      setDisplayBuildings((prev) => prev.filter((b) => b.id !== id))
+      setConfirmDeleteId(null)
+      if (selectedId === id) setSelectedId(null)
+      router.refresh()
+    } catch {
+      alert('Failed to delete building. Please try again.')
+      setConfirmDeleteId(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -221,7 +233,7 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
         {/* Map */}
         <div className={`transition-all duration-300 ${selectedBuilding ? 'flex-1' : 'w-full'}`}>
           <BuildingsMap
-            buildings={buildings}
+            buildings={displayBuildings}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
@@ -242,7 +254,7 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
       <div className="bg-white rounded-xl border overflow-hidden">
         <div className="px-5 py-3 border-b bg-mvr-neutral">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {buildings.length} Buildings
+            {displayBuildings.length} Buildings
           </p>
         </div>
         <table className="w-full text-sm">
@@ -254,10 +266,11 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Units / Keys</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Owners</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Created</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {buildings.map((b) => (
+            {displayBuildings.map((b) => (
               <tr
                 key={b.id}
                 onClick={() => setSelectedId(b.id === selectedId ? null : b.id)}
@@ -287,6 +300,45 @@ export default function BuildingsMapView({ buildings }: { buildings: BuildingFul
                 </td>
                 <td className="px-4 py-2.5 text-muted-foreground">{b.ownerCount}</td>
                 <td className="px-4 py-2.5 text-muted-foreground text-xs">{b.createdAt}</td>
+                <td
+                  className="px-4 py-2.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {confirmDeleteId === b.id ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-mvr-danger font-medium">Delete?</span>
+                      <button
+                        onClick={() => handleDelete(b.id)}
+                        className="px-2 py-0.5 text-xs rounded bg-mvr-danger text-white hover:bg-mvr-danger/90 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="px-2 py-0.5 text-xs rounded bg-mvr-neutral text-foreground hover:bg-mvr-steel-light transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-0.5">
+                      <Link
+                        href={`/data-master/buildings/${b.id}/edit`}
+                        className="p-1.5 rounded text-mvr-primary hover:bg-mvr-primary-light transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Link>
+                      <button
+                        onClick={() => setConfirmDeleteId(b.id)}
+                        className="p-1.5 rounded text-mvr-danger hover:bg-mvr-danger-light transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
