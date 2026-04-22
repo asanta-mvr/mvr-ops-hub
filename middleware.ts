@@ -8,9 +8,10 @@ export default auth((req) => {
   const isAuthPage = pathname.startsWith('/login')
   const isApiWebhook = pathname.startsWith('/api/webhooks')
   const isApiAuth = pathname.startsWith('/api/auth')
+  const isApiV1 = pathname.startsWith('/api/v1')
 
-  // Webhooks and auth callbacks are public (webhooks protected by HMAC)
-  if (isApiWebhook || isApiAuth) return NextResponse.next()
+  // API routes handle their own auth (session or API key) — never redirect them
+  if (isApiWebhook || isApiAuth || isApiV1) return NextResponse.next()
 
   // Redirect unauthenticated users to login
   if (!isLoggedIn && !isAuthPage) {
