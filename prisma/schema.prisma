@@ -316,6 +316,7 @@ model Unit {
   photoUrls     String[]
   status        UnitStatus @default(onboarding)
   score         Decimal?   @db.Decimal(3, 1)
+  photoQuality  String?
   notes         String?    @db.Text
   buildingId    String
   ownerUniqueId String?
