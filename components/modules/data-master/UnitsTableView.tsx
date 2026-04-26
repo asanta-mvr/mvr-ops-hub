@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -264,44 +264,44 @@ function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuild
   )
 }
 
-// ── Floor Table ────────────────────────────────────────────────────────────
+// ── Unified Floor Table ───────────────────────────────────────────────────
+// Single <table> with floor-group separator rows so all columns stay aligned.
 
 const COLS: { key: SortKey; label: string }[] = [
-  { key: 'number',       label: 'Unit #' },
-  { key: 'ownerNickname', label: 'Owner' },
-  { key: 'sqft',         label: 'Sqft' },
-  { key: 'status',       label: 'Status' },
-  { key: 'listingCount', label: 'Listings' },
+  { key: 'number',        label: 'Unit #'   },
+  { key: 'ownerNickname', label: 'Owner'    },
+  { key: 'sqft',          label: 'Sqft'     },
+  { key: 'status',        label: 'Status'   },
+  { key: 'listingCount',  label: 'Listings' },
 ]
+// COLS (5) + View + Line + Score + chevron = 9 columns total
 
-interface FloorTableProps {
-  floorLabel: string
-  units:      UnitFull[]
-  selectedId: string | null
-  onSelect:   (id: string) => void
-  sortKey:    SortKey
-  sortDir:    SortDir
-  onSort:     (key: SortKey) => void
+interface UnifiedFloorTableProps {
+  floorGroups: { label: string; units: UnitFull[] }[]
+  selectedId:  string | null
+  onSelect:    (id: string) => void
+  sortKey:     SortKey
+  sortDir:     SortDir
+  onSort:      (key: SortKey) => void
 }
 
-function FloorTable({
-  floorLabel, units, selectedId, onSelect,
-  sortKey, sortDir, onSort,
-}: FloorTableProps) {
-  if (units.length === 0) return null
+function UnifiedFloorTable({
+  floorGroups, selectedId, onSelect, sortKey, sortDir, onSort,
+}: UnifiedFloorTableProps) {
+  if (floorGroups.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border p-10 text-center">
+        <p className="text-muted-foreground text-sm">No units match the current filters.</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="bg-white rounded-xl border overflow-hidden">
-      <div className="px-5 py-3 border-b bg-mvr-neutral flex items-center gap-2">
-        <Hash className="w-3.5 h-3.5 text-mvr-primary/50" />
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {floorLabel}
-        </p>
-      </div>
+    <div className="bg-white rounded-xl border overflow-hidden shadow-card">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b bg-mvr-cream">
               {COLS.map(({ key, label }) => (
                 <th
                   key={key}
@@ -315,48 +315,64 @@ function FloorTable({
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
-              <th className="px-4 py-2.5" />
+              <th className="px-4 py-2.5 w-6" />
             </tr>
           </thead>
-          <tbody className="divide-y">
-            {units.map((u) => (
-              <tr
-                key={u.id}
-                onClick={() => onSelect(u.id)}
-                className={`cursor-pointer transition-colors ${
-                  selectedId === u.id ? 'bg-mvr-primary-light' : 'hover:bg-mvr-neutral/50'
-                }`}
-              >
-                <td className="px-4 py-2.5">
-                  <span className="font-medium text-mvr-primary">{u.number}</span>
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{u.ownerNickname ?? '—'}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">
-                  {u.sqft ? u.sqft.toLocaleString() : '—'}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                    STATUS_STYLES[u.status] ?? STATUS_STYLES.inactive
-                  }`}>
-                    {statusLabel(u.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-muted-foreground">{u.listingCount}</td>
-                <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.view ?? '—'}</td>
-                <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.line ?? '—'}</td>
-                <td className="px-4 py-2.5">
-                  {u.score ? (
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreStyle(u.score)}`}>
-                      {u.score}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5">
-                  <ChevronRight className="w-3.5 h-3.5 text-mvr-primary/30" />
-                </td>
-              </tr>
+          <tbody>
+            {floorGroups.map(({ label, units }) => (
+              <React.Fragment key={label}>
+                {/* Floor separator row */}
+                <tr className="border-y border-[#E0DBD4]">
+                  <td colSpan={9} className="px-5 py-2 bg-mvr-neutral">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-mvr-primary/50 shrink-0" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {label}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                {/* Unit rows */}
+                {units.map((u) => (
+                  <tr
+                    key={u.id}
+                    onClick={() => onSelect(u.id)}
+                    className={`cursor-pointer transition-colors border-b border-[#E0DBD4] last:border-0 ${
+                      selectedId === u.id ? 'bg-mvr-primary-light' : 'hover:bg-mvr-neutral/50'
+                    }`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium text-mvr-primary">{u.number}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{u.ownerNickname ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">
+                      {u.sqft ? u.sqft.toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        STATUS_STYLES[u.status] ?? STATUS_STYLES.inactive
+                      }`}>
+                        {statusLabel(u.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{u.listingCount}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.view ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.line ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      {u.score ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreStyle(u.score)}`}>
+                          {u.score}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <ChevronRight className="w-3.5 h-3.5 text-mvr-primary/30" />
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -904,22 +920,12 @@ export default function UnitsTableView({ units, initialBuildingId }: UnitsTableV
           />
         </div>
 
-        {/* Center: floor-grouped tables */}
-        <div className="flex-1 min-w-0 space-y-4">
-          {floorGroups.length === 0 ? (
-            <div className="bg-white rounded-xl border p-10 text-center">
-              <p className="text-muted-foreground text-sm">No units match the current filters.</p>
-            </div>
-          ) : (
-            floorGroups.map(({ label, units: floorUnits }) => (
-              <FloorTable
-                key={label}
-                floorLabel={label}
-                units={floorUnits}
-                {...tableProps}
-              />
-            ))
-          )}
+        {/* Center: unified floor table */}
+        <div className="flex-1 min-w-0">
+          <UnifiedFloorTable
+            floorGroups={floorGroups}
+            {...tableProps}
+          />
         </div>
 
         {/* Right: detail panel */}
