@@ -1,8 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
 import { db } from '@/lib/db'
-import { Button } from '@/components/ui/button'
 import UnitsTableView from '@/components/modules/data-master/UnitsTableView'
 import type { UnitFull } from '@/components/modules/data-master/UnitsTableView'
 
@@ -27,6 +24,7 @@ async function getUnits(): Promise<UnitFull[]> {
     type:             u.type ?? null,
     bedrooms:         u.bedrooms,
     bathrooms:        u.bathrooms ? String(u.bathrooms) : null,
+    bathType:         u.bathType ?? null,
     sqft:             u.sqft,
     mt2:              u.mt2 ? String(u.mt2) : null,
     capacity:         u.capacity,
@@ -66,25 +64,10 @@ export default async function UnitsPage({
   ])
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-mvr-primary">Units</h1>
-          <p className="text-muted-foreground text-sm mt-1">{units.length} units in portfolio</p>
-        </div>
-        <Link href="/data-master/units/new">
-          <Button className="bg-mvr-primary hover:bg-mvr-primary/90">
-            <Plus className="w-4 h-4 mr-2" />
-            New Unit
-          </Button>
-        </Link>
-      </div>
-
-      <UnitsTableView
-        units={units}
-        buildings={buildings}
-        initialBuildingId={searchParams.buildingId}
-      />
-    </div>
+    <UnitsTableView
+      units={units}
+      buildings={buildings}
+      initialBuildingId={searchParams.buildingId}
+    />
   )
 }

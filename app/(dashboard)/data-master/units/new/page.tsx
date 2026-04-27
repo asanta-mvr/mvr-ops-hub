@@ -11,7 +11,7 @@ export default async function NewUnitPage({
 }: {
   searchParams: { buildingId?: string }
 }) {
-  const [buildings, owners] = await Promise.all([
+  const [buildings, owners, allOptions] = await Promise.all([
     db.building.findMany({
       select:  { id: true, name: true },
       orderBy: { name: 'asc' },
@@ -21,7 +21,16 @@ export default async function NewUnitPage({
       where:   { status: 'active' },
       orderBy: { nickname: 'asc' },
     }),
+    db.unitFieldOption.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    }),
   ])
+
+  const typeOptions     = allOptions.filter(o => o.field === 'type')
+  const viewOptions     = allOptions.filter(o => o.field === 'view')
+  const featureOptions  = allOptions.filter(o => o.field === 'feature')
+  const bathTypeOptions = allOptions.filter(o => o.field === 'bath_type')
+  const statusOptions   = allOptions.filter(o => o.field === 'status')
 
   const defaultValues = searchParams.buildingId
     ? { buildingId: searchParams.buildingId }
@@ -39,7 +48,16 @@ export default async function NewUnitPage({
         <p className="text-muted-foreground text-sm mt-1">Add a unit to the portfolio</p>
       </div>
 
-      <UnitForm buildings={buildings} owners={owners} defaultValues={defaultValues} />
+      <UnitForm
+        buildings={buildings}
+        owners={owners}
+        defaultValues={defaultValues}
+        typeOptions={typeOptions}
+        viewOptions={viewOptions}
+        featureOptions={featureOptions}
+        bathTypeOptions={bathTypeOptions}
+        statusOptions={statusOptions}
+      />
     </div>
   )
 }

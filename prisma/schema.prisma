@@ -275,53 +275,51 @@ model GuestyOwner {
 
 // ─── UNITS ───────────────────────────────────────────────────────────────────
 
-enum UnitStatus {
-  active
-  inactive
-  renovation
-  onboarding
-}
+model UnitFieldOption {
+  id        String   @id @default(cuid())
+  field     String   // "type" | "view" | "feature"
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
 
-enum UnitType {
-  studio
-  one_br
-  two_br
-  three_br
-  four_br
-  penthouse
-  other
+  @@unique([field, value])
+  @@index([field])
+  @@map("unit_field_options")
 }
 
 model Unit {
-  id            String     @id @default(cuid())
-  number        String
-  floor         Int?
-  line          String?
-  view          String?
-  type          UnitType?
-  bedrooms      Int?
-  bathrooms     Decimal?   @db.Decimal(3, 1)
-  bathType      String?
-  sqft          Int?
-  mt2           Decimal?   @db.Decimal(8, 2)
-  capacity      Int?
-  amenityCap    Int?
-  totalBeds     Int?
-  kings         Int        @default(0)
-  queens        Int        @default(0)
-  twins         Int        @default(0)
-  otherBeds     String?
-  hasKitchen    Boolean    @default(false)
-  hasBalcony    Boolean    @default(false)
-  photoUrls     String[]
-  status        UnitStatus @default(onboarding)
-  score         Decimal?   @db.Decimal(3, 1)
-  photoQuality  String?
-  notes         String?    @db.Text
-  buildingId    String
-  ownerUniqueId String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  number         String
+  floor          Int?
+  line           String?
+  view           String?
+  type           String?
+  bedrooms       Int?
+  bathrooms      Decimal?   @db.Decimal(3, 1)
+  bathType       String?
+  sqft           Int?
+  mt2            Decimal?   @db.Decimal(8, 2)
+  capacity       Int?
+  amenityCap     Int?
+  totalBeds      Int?
+  kings          Int        @default(0)
+  queens         Int        @default(0)
+  twins          Int        @default(0)
+  otherBeds      String?
+  hasKitchen     Boolean    @default(false)
+  hasBalcony     Boolean    @default(false)
+  features       String[]
+  driveFolderUrl String?
+  photoUrls      String[]
+  status         String     @default("onboarding")
+  score          Decimal?   @db.Decimal(3, 1)
+  photoQuality   String?
+  notes          String?    @db.Text
+  buildingId     String
+  ownerUniqueId  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   building    Building             @relation(fields: [buildingId], references: [id])
   owner       Owner?               @relation(fields: [ownerUniqueId], references: [uniqueId])

@@ -101,12 +101,12 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
           {/* Left: overview + location */}
           <div className="p-4 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Overview</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-mvr-neutral rounded-lg p-2.5 text-center">
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="bg-mvr-neutral rounded-lg px-3 py-3 text-center">
                 <p className="text-sm font-bold text-mvr-primary">{building.unitCount} / {building.keyCount}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Units / Keys</p>
+                <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">Units / Keys</p>
               </div>
-              <div className="bg-mvr-neutral rounded-lg p-2.5 text-center">
+              <div className="bg-mvr-neutral rounded-lg px-3 py-3 text-center">
                 <p className="text-sm font-bold text-mvr-primary">{building.ownerCount}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Owners</p>
               </div>

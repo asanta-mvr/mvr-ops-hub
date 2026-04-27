@@ -228,6 +228,57 @@ async function main() {
     console.log(`  ✅ Unit: ${unit.buildingId.slice(0, 6)} #${unit.number}`)
   }
 
+  // ── Unit Field Options ───────────────────────────────────────────────────
+  // Delete type + view options first so stale rows don't accumulate on re-seed.
+  await db.unitFieldOption.deleteMany({ where: { field: { in: ['type', 'view', 'bath_type', 'status'] } } })
+
+  const unitFieldOptions = [
+    // Type options — MVR portfolio classification
+    { field: 'type', value: 'single', label: 'Single', sortOrder: 1 },
+    { field: 'type', value: 'share',  label: 'Share',  sortOrder: 2 },
+    // View options — exact MVR portfolio list
+    { field: 'view', value: 'partial_bay_city',   label: 'Partial Bay / City',        sortOrder: 1 },
+    { field: 'view', value: 'city',               label: 'City',                      sortOrder: 2 },
+    { field: 'view', value: 'bay',                label: 'Bay',                       sortOrder: 3 },
+    { field: 'view', value: 'city_partial_bay',   label: 'City / Partial Bay',        sortOrder: 4 },
+    { field: 'view', value: 'no_view',            label: 'No view',                   sortOrder: 5 },
+    { field: 'view', value: 'bay_pool',           label: 'Bay / Pool',                sortOrder: 6 },
+    { field: 'view', value: 'partial_bay_pool',   label: 'Partial Bay / Pool',        sortOrder: 7 },
+    { field: 'view', value: 'city_bay',           label: 'City & Bay',                sortOrder: 8 },
+    { field: 'view', value: 'oceanfront',         label: 'Oceanfront',                sortOrder: 9 },
+    { field: 'view', value: 'city_river',         label: 'City & River',              sortOrder: 10 },
+    { field: 'view', value: 'city_river_partial', label: 'City, River & Partial Bay', sortOrder: 11 },
+    // Feature options
+    // Status options
+    { field: 'status', value: 'onboarding',  label: 'Onboarding',  sortOrder: 1 },
+    { field: 'status', value: 'active',      label: 'Active',      sortOrder: 2 },
+    { field: 'status', value: 'renovation',  label: 'Renovation',  sortOrder: 3 },
+    { field: 'status', value: 'inactive',    label: 'Inactive',    sortOrder: 4 },
+    { field: 'status', value: 'off_board',   label: 'Off Board',   sortOrder: 5 },
+    // Bath type options
+    { field: 'bath_type', value: 'full',    label: 'Full Bath',   sortOrder: 1 },
+    { field: 'bath_type', value: 'half',    label: 'Half Bath',   sortOrder: 2 },
+    { field: 'bath_type', value: 'ensuite', label: 'En-suite',    sortOrder: 3 },
+    { field: 'bath_type', value: 'shared',  label: 'Shared Bath', sortOrder: 4 },
+    // Feature options
+    { field: 'feature', value: 'kitchen',     label: 'Kitchen',      sortOrder: 1 },
+    { field: 'feature', value: 'balcony',     label: 'Balcony',      sortOrder: 2 },
+    { field: 'feature', value: 'parking',     label: 'Parking',      sortOrder: 3 },
+    { field: 'feature', value: 'gym',         label: 'Gym Access',   sortOrder: 4 },
+    { field: 'feature', value: 'pool',        label: 'Pool Access',  sortOrder: 5 },
+    { field: 'feature', value: 'washer_dryer',label: 'Washer/Dryer', sortOrder: 6 },
+    { field: 'feature', value: 'storage',     label: 'Storage Unit', sortOrder: 7 },
+  ]
+
+  for (const opt of unitFieldOptions) {
+    await db.unitFieldOption.upsert({
+      where: { field_value: { field: opt.field, value: opt.value } },
+      update: { label: opt.label, sortOrder: opt.sortOrder },
+      create: opt,
+    })
+  }
+  console.log('✅ Unit field options seeded')
+
   console.log('🎉 Seed complete!')
 }
 

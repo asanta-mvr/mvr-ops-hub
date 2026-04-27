@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const unit = await db.unit.update({
       where: { id: params.id },
-      data: validated.data,
+      data: validated.data as Parameters<typeof db.unit.update>[0]['data'],
     })
 
     db.auditLog.create({

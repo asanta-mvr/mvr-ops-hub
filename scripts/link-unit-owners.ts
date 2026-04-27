@@ -1,34 +1,33 @@
 /**
- * scripts/import-units.ts
- * Full upsert of all units from the AppSheet source CSV into Cloud SQL.
+ * scripts/link-unit-owners.ts
+ * Sets Unit.ownerUniqueId for every unit that has a matching owner in the DB.
  *
- * What this script does:
- *  - Parses all 27 CSV columns (unit_id through listing_id)
- *  - Stores photoQuality from the unit_photos column (Pro, Preliminary, etc.)
- *  - Programmatically resolves duplicate unit numbers per building (appends b/c/d suffixes)
- *  - Upserts by unit_id so it is safe to re-run at any time
- *  - Columns 25 (owner_id) and 26 (listing_id) are Guesty external IDs — parsed but
- *    not persisted; they are managed via the Guesty integration layer
+ * Background: when import-units.ts ran the first time, owners were not yet in
+ * the DB, so ownerSet.has() returned false for every row and all ownerUniqueId
+ * fields were saved as null.  Run this script AFTER import-owners.ts to
+ * restore the FK links without re-importing all unit data.
+ *
+ * What it does:
+ *  1. Loads all Owner.uniqueId values currently in the DB.
+ *  2. Parses columns 0 (unit_id) and 24 (owner_uniqueId) from the CSV.
+ *  3. For each row where col[24] is a valid 8-char owner uniqueId that exists
+ *     in the DB, updates Unit.ownerUniqueId.
+ *  4. Prints a summary: linked / skipped-owner-missing / skipped-empty /
+ *     skipped-unit-not-found.
  *
  * Prerequisites:
+ *  - import-owners.ts must have been run first (owners must be in the DB).
  *  - Cloud SQL Auth Proxy running: cloud-sql-proxy miami-vr-data:us-east1:mvr-ops-hub-db
- *  - Prisma migration applied: npx prisma migrate dev --name add_unit_photo_quality
  *
  * Run:
- *   npx ts-node -P tsconfig.json scripts/import-units.ts
- *
- * Building ID map (IDs are native short IDs seeded directly into the DB):
- *   6b274e4f → Hotel Arya
- *   3b08b87b → The Elser
- *   f9d8eb15 → Icon Brickell
- *   b6625228 → Natiivo
+ *   npx ts-node -P tsconfig.json scripts/link-unit-owners.ts
  */
 
-import { PrismaClient, UnitStatus } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
 const db = new PrismaClient()
 
-// ─── CSV parser (handles quoted fields with embedded commas) ──────────────────
+// ─── CSV parser (same as import-units.ts) ─────────────────────────────────────
 
 function parseCsvLine(line: string): string[] {
   const fields: string[] = []
@@ -56,67 +55,8 @@ function parseCsvLine(line: string): string[] {
   return fields
 }
 
-// ─── Transform helpers ────────────────────────────────────────────────────────
-
-function toNum(v: string): number | null {
-  const s = v.trim().replace(',', '.')
-  if (!s || s === '#VALUE!') return null
-  const n = parseFloat(s)
-  if (isNaN(n) || n === 0) return null
-  return n
-}
-
-function toInt(v: string): number | null {
-  const n = parseInt(v.trim(), 10)
-  return isNaN(n) ? null : n
-}
-
-function safeInt(v: string): number {
-  const n = parseInt(v.trim(), 10)
-  return isNaN(n) ? 0 : n
-}
-
-function parseBedrooms(v: string): number | null {
-  const s = v.trim()
-  if (s.includes('+')) return 1  // "1+den" → 1 bedroom
-  const n = parseInt(s, 10)
-  return isNaN(n) ? null : n
-}
-
-function parseKitchen(v: string): boolean {
-  return ['yes', 'kitchennette', 'kitchenette'].includes(v.trim().toLowerCase())
-}
-
-function parseBalcony(v: string): boolean {
-  return v.trim().toLowerCase() === 'yes'
-}
-
-function inferType(br: number | null): string | null {
-  if (br === 0) return 'studio'
-  if (br === 1) return 'one_br'
-  if (br === 2) return 'two_br'
-  if (br === 3) return 'three_br'
-  if (br !== null && br >= 4) return 'four_br'
-  return null
-}
-
-function inferStatus(notes: string, photoQuality: string): UnitStatus {
-  const n = notes.toLowerCase()
-  if (n.includes('renovaci')) return UnitStatus.renovation
-  if (n.includes('ya no lo manejamos') || n.includes('van a vender')) return UnitStatus.inactive
-  const p = photoQuality.toLowerCase()
-  if (p === 'preliminary' || p === 'no photos') return UnitStatus.onboarding
-  return UnitStatus.active
-}
-
-// ─── Source CSV (27 columns) ──────────────────────────────────────────────────
-// Columns: unit_id(0), unit_number(1), unit_floor(2), unit_line(3), unit_view(4),
-//   unit_type(5,ignored), unit_bedrooms(6), unit_bathrooms(7), unit_bath_type(8),
-//   unit_sqft(9), unit_mt2(10), unit_capacity(11), unit_amenity_cap(12),
-//   unit_beds(13), unit_kings(14), unit_queen(15), unit_twin(16),
-//   unit_kitchen(17), unit_balcony(18), unit_photos→photoQuality(19),
-//   unit_status(20,always TRUE,ignored), unit_score(21), unit_comment(22),
-//   building_id(23), owner_uniqueId(24), owner_id(25,ref only), listing_id(26,ref only)
+// ─── Source CSV (27 columns — only cols 0 and 24 are used here) ──────────────
+// Columns: unit_id(0) … owner_uniqueId(24) … listing_id(26)
 
 const CSV = `unit_id,unit_number,unit_floor,unit_line,unit_view,unit_type,unit_bedrooms,unit_bathrooms,unit_bath_type,unit_sqft,unit_mt2,unit_capacity,unit_amenity_cap,unit_beds,unit_kings,unit_queen,unit_twin,unit_kitchen,unit_balcony,unit_photos,unit_status,unit_score,unit_comment,building_id,owner_uniqueId,owner_id,listing_id
 6310aa83,1908-01,19,Line 08.01,Partial Bay / City,Single,0,1,Shower,943,87.6,4,2,2,1,0,0,Yes,Yes,Pro,TRUE,10,,6b274e4f,7b2c8ac0,,
@@ -365,7 +305,7 @@ ccef8e62,3705,37,Line 05,City & River,,0,1,,495,46,2,2,1,1,0,0,Yes,Yes,Prelimina
 e49f8515,4102,41,Line 02,Oceanfront,,2,2,,1386,128.8,4,4,2,1,0,0,Yes,Yes,Preliminary,TRUE,10,,f9d8eb15,716db63d,68378b4e3fbb6747fc9ae37f,6806b0c24511e50013027ada
 f916ac26,3307,33,Line 07,City & River,,1,1,,842,78.2,2,2,1,1,0,0,No,No,Pro,TRUE,10,,f9d8eb15,ef9ca5c0,686eb11ced89e4963b3cdf51,6806b21f5aa7e90013286db9
 5a15b5ec,3710,37,Line 10,Oceanfront,,2,2,,1347,125.1,2,4,1,1,0,0,Yes,Yes,Pro,TRUE,10,,f9d8eb15,c51d485a,68378b1f70c94cf2ee08bad2,6806b10022e8a400131db3df
-50b3e72d,4702,47,Line 02,Oceanfront,,2,2,,1386,128.8,4,4,2,1,0,0,,,No Photos,TRUE,10,,f9d8eb15,a4202ead,68378b4470c94cf2ee08bf17,6806b11fc1d93b0011c7606d
+50b3e72d,4702,47,Line 02,Oceanfront,,2,2,,1386,128.8,4,4,2,1,0,0,,,No Photos,TRUE,10,,f9d8eb15,a4202ead,68378b4444f2ee08bf17,6806b11fc1d93b0011c7606d
 8df05a5b,4211,42,Line 11,Oceanfront,,1,1,,876,81.4,6,2,3,1,1,0,Yes,Yes,Preliminary,TRUE,10,,f9d8eb15,ed52c147,68378b4f3fbb6747fc9ae3b7,6806b258bdf6c0001203bd3e
 bb38b366,4310,43,Line 10,Oceanfront,,2,2,,1347,125.1,4,4,2,1,0,0,Yes,Yes,Pro,TRUE,10,,f9d8eb15,832f7a39,68378b503fbb6747fc9ae3d6,6806b0a0d541a60014bcb407
 b5d421c8,4607,46,Line 07,City & River,,1,1,,842,78.2,4,2,2,1,0,0,,,No Photos,TRUE,10,,f9d8eb15,13ed2095,68378b5270c94cf2ee08c152,6806b10f4511e50013028070
@@ -380,10 +320,10 @@ c048375e,4408,44,Line 08,Oceanfront,,2,2,,1459,135.5,6,4,3,1,1,0,Yes,Yes,Pro,TRU
 30877bbf,3708,37,Line 08,City/ Partial Bay,,1,1,,697,64.8,4,2,2,1,0,0,,,Pro,TRUE,10,,b6625228,d4f06586,68378b5570c94cf2ee08c1b2,68378b5570c94cf2ee08c1b2
 21fb48fc,4612,46,Line 12,City/ Partial Bay,,0,1,,460,42.7,6,2,3,1,1,0,,,Pro,TRUE,10,,b6625228,6216c6df,68378b3a70c94cf2ee08bd7c,6806b2bb0d6ec90013d2a0b0`
 
-// ─── Import ───────────────────────────────────────────────────────────────────
+// ─── Link ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('📦 Starting units upsert...\n')
+  console.log('🔗 Linking unit → owner FK...\n')
 
   const allOwners = await db.owner.findMany({ select: { uniqueId: true } })
   const ownerSet  = new Set(allOwners.map((o) => o.uniqueId))
@@ -393,100 +333,60 @@ async function main() {
   const rawRows = lines.slice(1).map(parseCsvLine)
   console.log(`  Rows in CSV  : ${rawRows.length}\n`)
 
-  // Resolve duplicate unit_number per building:
-  // First occurrence keeps the original number; subsequent ones get b / c / d … appended.
-  const seenNums = new Map<string, number>()
-  const ALPHA    = 'bcdefghijklmnopqrstuvwxyz'
+  let linked       = 0
+  let skippedEmpty = 0
+  let skippedOwner = 0  // owner ID present in CSV but not in DB
+  let skippedUnit  = 0  // unit_id not found in DB
 
-  const rows = rawRows.map((row) => {
-    const number     = row[1]?.trim() ?? ''
-    const buildingId = row[23]?.trim() ?? ''
-    if (!number || !buildingId) return row
-    const key  = `${buildingId}::${number}`
-    const seen = seenNums.get(key) ?? 0
-    seenNums.set(key, seen + 1)
-    if (seen === 0) return row
-    const suffix  = seen < ALPHA.length ? ALPHA[seen - 1] : `_${seen}`
-    const newRow  = [...row]
-    newRow[1]     = `${number}${suffix}`
-    return newRow
-  })
-
-  let created = 0, updated = 0, failed = 0, noOwner = 0
-
-  for (const row of rows) {
-    const id            = row[0]?.trim()
-    const number        = row[1]?.trim()
-    const buildingId    = row[23]?.trim() ?? ''
+  for (const row of rawRows) {
+    const unitId        = row[0]?.trim()  ?? ''
     const ownerUniqueId = row[24]?.trim() ?? ''
-    // row[25] = owner_id (Guesty external ref, not stored)
-    // row[26] = listing_id (Guesty external ref, not stored)
 
-    if (!id || !number || !buildingId) { failed++; continue }
+    if (!ownerUniqueId) {
+      skippedEmpty++
+      continue
+    }
 
-    const br        = parseBedrooms(row[6] ?? '')
-    const ownerLink = ownerUniqueId && ownerSet.has(ownerUniqueId) ? ownerUniqueId : null
-    if (ownerUniqueId && !ownerLink) noOwner++
+    // Guesty-format IDs (24+ chars) are not owner uniqueIds — skip them
+    if (ownerUniqueId.length > 10) {
+      skippedOwner++
+      console.log(`  ⚠  Guesty ID skipped for unit ${unitId}: ${ownerUniqueId}`)
+      continue
+    }
 
-    const photoQuality = row[19]?.trim() || null
-    const notesStr     = row[22]?.trim() ?? ''
-    const sqftRaw      = toNum(row[9] ?? '')
-
-    const data = {
-      number,
-      floor:         toInt(row[2]  ?? ''),
-      line:          row[3]?.trim()  || null,
-      view:          row[4]?.trim()  || null,
-      type:          inferType(br),
-      bedrooms:      br,
-      bathrooms:     toNum(row[7]  ?? ''),
-      bathType:      row[8]?.trim()  || null,
-      sqft:          sqftRaw ? Math.round(sqftRaw) : null,
-      mt2:           toNum(row[10] ?? ''),
-      capacity:      toInt(row[11] ?? ''),
-      amenityCap:    toInt(row[12] ?? ''),
-      totalBeds:     toInt(row[13] ?? ''),
-      kings:         safeInt(row[14] ?? ''),
-      queens:        safeInt(row[15] ?? ''),
-      twins:         safeInt(row[16] ?? ''),
-      hasKitchen:    parseKitchen(row[17] ?? ''),
-      hasBalcony:    parseBalcony(row[18] ?? ''),
-      photoQuality,
-      status:        inferStatus(notesStr, photoQuality ?? ''),
-      score:         toNum(row[21] ?? ''),
-      notes:         notesStr || null,
-      buildingId,
-      ownerUniqueId: ownerLink,
+    if (!ownerSet.has(ownerUniqueId)) {
+      skippedOwner++
+      console.log(`  ⚠  Owner not in DB — unit ${unitId}: owner ${ownerUniqueId}`)
+      continue
     }
 
     try {
-      const existing = await db.unit.findUnique({ where: { id }, select: { id: true } })
-      if (existing) {
-        await db.unit.update({ where: { id }, data })
-        updated++
+      await db.unit.update({
+        where: { id: unitId },
+        data:  { ownerUniqueId },
+      })
+      linked++
+    } catch (err: unknown) {
+      if (
+        typeof err === 'object' && err !== null &&
+        'code' in err && (err as { code: string }).code === 'P2025'
+      ) {
+        skippedUnit++
+        console.log(`  ✗  Unit not found in DB: ${unitId}`)
       } else {
-        await db.unit.create({ data: { id, ...data } })
-        created++
+        throw err
       }
-      if ((created + updated) % 50 === 0) {
-        process.stdout.write(`  ... ${created + updated} processed\n`)
-      }
-    } catch (e) {
-      console.error(`  ❌ ${number} (${id}) @ ${buildingId}: ${(e as Error).message}`)
-      failed++
     }
   }
 
-  const total = await db.unit.count()
   console.log('\n─────────────────────────────────')
-  console.log(`✅ Created   : ${created}`)
-  console.log(`🔄 Updated   : ${updated}`)
-  console.log(`⚠️  No owner  : ${noOwner} (ownerUniqueId not found — run owners import first)`)
-  console.log(`❌ Failed    : ${failed}`)
-  console.log(`📊 Total DB  : ${total}`)
-  console.log('─────────────────────────────────')
+  console.log(`  ✅ Linked         : ${linked}`)
+  console.log(`  ⚠  Owner missing  : ${skippedOwner}`)
+  console.log(`  ─  No owner in CSV: ${skippedEmpty}`)
+  console.log(`  ✗  Unit not in DB : ${skippedUnit}`)
+  console.log('─────────────────────────────────\n')
 }
 
 main()
-  .catch((e) => { console.error('\n❌ Import failed:', e); process.exit(1) })
+  .catch((e) => { console.error(e); process.exit(1) })
   .finally(() => db.$disconnect())

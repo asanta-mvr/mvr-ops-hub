@@ -8,7 +8,7 @@ import UnitForm from '@/components/modules/data-master/UnitForm'
 export const metadata: Metadata = { title: 'Edit Unit' }
 
 export default async function EditUnitPage({ params }: { params: { id: string } }) {
-  const [unit, buildings, owners] = await Promise.all([
+  const [unit, buildings, owners, allOptions] = await Promise.all([
     db.unit.findUnique({ where: { id: params.id } }),
     db.building.findMany({
       select:  { id: true, name: true },
@@ -19,6 +19,9 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
       where:   { status: 'active' },
       orderBy: { nickname: 'asc' },
     }),
+    db.unitFieldOption.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    }),
   ])
 
   if (!unit) notFound()
@@ -28,30 +31,43 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
     select: { name: true },
   })
 
+  const typeOptions     = allOptions.filter(o => o.field === 'type')
+  const viewOptions     = allOptions.filter(o => o.field === 'view')
+  const featureOptions  = allOptions.filter(o => o.field === 'feature')
+  const bathTypeOptions = allOptions.filter(o => o.field === 'bath_type')
+  const statusOptions   = allOptions.filter(o => o.field === 'status')
+
+  // Merge boolean fields into features array for the form
+  const features: string[] = [...(unit.features ?? [])]
+  if (unit.hasKitchen && !features.includes('kitchen')) features.unshift('kitchen')
+  if (unit.hasBalcony && !features.includes('balcony')) features.unshift('balcony')
+
   const defaultValues = {
-    number:        unit.number,
-    type:          unit.type ?? '',
-    status:        unit.status as 'active' | 'inactive' | 'renovation' | 'onboarding',
-    floor:         unit.floor  != null ? String(unit.floor)  : '',
-    line:          unit.line          ?? '',
-    view:          unit.view          ?? '',
-    buildingId:    unit.buildingId,
-    ownerUniqueId: unit.ownerUniqueId ?? '',
-    sqft:          unit.sqft   != null ? String(unit.sqft)   : '',
-    mt2:           unit.mt2    != null ? String(Number(unit.mt2))  : '',
-    bedrooms:      unit.bedrooms != null ? String(unit.bedrooms) : '',
-    bathrooms:     unit.bathrooms != null ? String(Number(unit.bathrooms)) : '',
-    capacity:      unit.capacity != null ? String(unit.capacity) : '',
-    kings:         String(unit.kings),
-    queens:        String(unit.queens),
-    twins:         String(unit.twins),
-    totalBeds:     unit.totalBeds != null ? String(unit.totalBeds) : '',
-    otherBeds:     unit.otherBeds  ?? '',
-    hasKitchen:    unit.hasKitchen,
-    hasBalcony:    unit.hasBalcony,
-    photoUrls:     unit.photoUrls,
-    score:         unit.score != null ? String(Number(unit.score)) : '',
-    notes:         unit.notes ?? '',
+    number:         unit.number,
+    type:           unit.type          ?? '',
+    status:         unit.status,
+    floor:          unit.floor  != null ? String(unit.floor)  : '',
+    line:           unit.line          ?? '',
+    view:           unit.view          ?? '',
+    buildingId:     unit.buildingId,
+    ownerUniqueId:  unit.ownerUniqueId ?? '',
+    sqft:           unit.sqft   != null ? String(unit.sqft)   : '',
+    mt2:            unit.mt2    != null ? String(Number(unit.mt2))  : '',
+    bedrooms:       unit.bedrooms  != null ? String(unit.bedrooms)  : '',
+    bathrooms:      unit.bathrooms != null ? String(Number(unit.bathrooms)) : '',
+    bathType:       unit.bathType      ?? '',
+    capacity:       unit.capacity  != null ? String(unit.capacity)  : '',
+    amenityCap:     unit.amenityCap != null ? String(unit.amenityCap) : '',
+    kings:          String(unit.kings),
+    queens:         String(unit.queens),
+    twins:          String(unit.twins),
+    totalBeds:      unit.totalBeds != null ? String(unit.totalBeds) : '0',
+    otherBeds:      unit.otherBeds         ?? '',
+    features,
+    photoUrls:      unit.photoUrls,
+    driveFolderUrl: unit.driveFolderUrl    ?? '',
+    photoQuality:   (unit.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
+    notes:          unit.notes             ?? '',
   }
 
   return (
@@ -76,6 +92,12 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
         buildings={buildings}
         owners={owners}
         defaultValues={defaultValues}
+        currentScore={unit.score != null ? String(Number(unit.score)) : undefined}
+        typeOptions={typeOptions}
+        viewOptions={viewOptions}
+        featureOptions={featureOptions}
+        bathTypeOptions={bathTypeOptions}
+        statusOptions={statusOptions}
       />
     </div>
   )

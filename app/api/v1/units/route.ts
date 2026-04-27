@@ -16,21 +16,21 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status')
     const search = searchParams.get('search')
 
+    const where = {
+      ...(buildingId ? { buildingId } : {}),
+      ...(status ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              { number: { contains: search, mode: 'insensitive' as const } },
+              { notes: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    } as Prisma.UnitWhereInput
+
     const units = await db.unit.findMany({
-      where: {
-        ...(buildingId ? { buildingId } : {}),
-        ...(status
-          ? { status: status as 'active' | 'inactive' | 'renovation' | 'onboarding' }
-          : {}),
-        ...(search
-          ? {
-              OR: [
-                { number: { contains: search, mode: 'insensitive' } },
-                { notes: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
+      where,
       include: {
         building: { select: { id: true, name: true } },
         owner: { select: { id: true, nickname: true, uniqueId: true } },
@@ -65,7 +65,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const unit = await db.unit.create({ data: validated.data })
+    const unit = await db.unit.create({
+      data: validated.data as Parameters<typeof db.unit.create>[0]['data'],
+    })
 
     await db.auditLog.create({
       data: {
