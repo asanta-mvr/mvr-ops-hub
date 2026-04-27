@@ -3,11 +3,12 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import {
   ChevronRight, Pencil, Home, BedDouble, Bath,
-  Maximize2, Users, User, Phone, Mail,
+  ExternalLink, User, Phone, Mail,
 } from 'lucide-react'
 import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
-import { TYPE_LABELS } from '@/components/modules/data-master/UnitsTableView'
+import { TYPE_LABELS } from '@/lib/constants/units'
+import PhotoGallery from '@/components/modules/data-master/PhotoGallery'
 
 export const metadata: Metadata = { title: 'Unit Detail' }
 
@@ -255,22 +256,27 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
             </div>
           )}
 
-          {/* Photos grid */}
-          {unit.photoUrls.length > 1 && (
+          {/* Photo gallery */}
+          {unit.photoUrls.length > 0 && (
             <div className="bg-white rounded-xl border p-5 space-y-3">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">Photos</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {unit.photoUrls.map((url, i) => {
-                  const resolved = resolveImageUrl(url)
-                  return resolved ? (
-                    <div
-                      key={i}
-                      className="aspect-video rounded-lg bg-cover bg-center bg-mvr-neutral"
-                      style={{ backgroundImage: `url(${resolved})` }}
-                    />
-                  ) : null
-                })}
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">Photos</h2>
+                {unit.photoQuality && (
+                  <span className={[
+                    'text-xs px-2 py-0.5 rounded-full border font-medium',
+                    unit.photoQuality === 'pro'
+                      ? 'bg-mvr-success-light text-mvr-success border-mvr-success'
+                      : unit.photoQuality === 'preliminary'
+                      ? 'bg-mvr-warning-light text-mvr-warning border-mvr-warning'
+                      : 'bg-mvr-neutral text-muted-foreground border-[#ccc]',
+                  ].join(' ')}>
+                    {unit.photoQuality === 'pro' ? 'Pro' : unit.photoQuality === 'preliminary' ? 'Preliminary' : 'Low Quality'}
+                  </span>
+                )}
               </div>
+              <PhotoGallery
+                urls={unit.photoUrls.map(u => resolveImageUrl(u)).filter((u): u is string => !!u)}
+              />
             </div>
           )}
         </div>
@@ -287,11 +293,32 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
               {unit.hasBalcony && (
                 <span className="px-3 py-1 bg-mvr-neutral rounded-full text-xs text-muted-foreground border">Balcony</span>
               )}
-              {!unit.hasKitchen && !unit.hasBalcony && (
+              {unit.features.map(f => (
+                <span key={f} className="px-3 py-1 bg-mvr-neutral rounded-full text-xs text-muted-foreground border capitalize">
+                  {f.replace(/_/g, ' ')}
+                </span>
+              ))}
+              {!unit.hasKitchen && !unit.hasBalcony && unit.features.length === 0 && (
                 <p className="text-sm text-muted-foreground">No features recorded</p>
               )}
             </div>
           </div>
+
+          {/* Google Drive folder */}
+          {unit.driveFolderUrl && (
+            <div className="bg-white rounded-xl border p-5">
+              <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary mb-2">Drive Folder</h2>
+              <a
+                href={unit.driveFolderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-mvr-primary hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open unit folder
+              </a>
+            </div>
+          )}
 
           {/* Owner */}
           {unit.owner ? (

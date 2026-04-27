@@ -61,19 +61,7 @@ type SortDir = 'asc' | 'desc'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-export const TYPE_LABELS: Record<string, string> = {
-  // Current portfolio types
-  single:    'Single',
-  share:     'Share',
-  // Legacy enum values (backward compat)
-  studio:    'Studio',
-  one_br:    '1 Bedroom',
-  two_br:    '2 Bedrooms',
-  three_br:  '3 Bedrooms',
-  four_br:   '4 Bedrooms',
-  penthouse: 'Penthouse',
-  other:     'Other',
-}
+import { TYPE_LABELS } from '@/lib/constants/units'
 
 const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
