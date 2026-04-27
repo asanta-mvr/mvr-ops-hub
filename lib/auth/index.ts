@@ -61,8 +61,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as { role?: string }).role ?? 'read_only'
-        token.id = user.id
+        // On first sign-in, look up the role from the DB so Google OAuth
+        // users get their assigned role instead of defaulting to read_only.
+        const dbUser = await db.user.upsert({
+          where:  { email: user.email! },
+          update: { lastLoginAt: new Date(), name: user.name ?? undefined, image: user.image ?? undefined },
+          create: {
+            email: user.email!,
+            name:  user.name,
+            image: user.image,
+            role:  'read_only',
+          },
+        })
+        token.role = dbUser.role
+        token.id   = dbUser.id
       }
       return token
     },
