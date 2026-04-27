@@ -367,7 +367,7 @@ export function OwnersTableView({ owners }: Props) {
   const [statusFilter,  setStatusFilter]  = useState<string>('')
   const [activeLetter,  setActiveLetter]  = useState<string>('All')
   const [selectedId,    setSelectedId]    = useState<string | null>(null)
-  const [deleting,      setDeleting]      = useState<string | null>(null)
+  const [_deleting,     setDeleting]      = useState<string | null>(null)
 
   // Letters that have at least one owner
   const occupiedLetters = useMemo(() => {

@@ -7,7 +7,7 @@ import {
   Pencil, Trash2, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
   BedDouble, Bath, Maximize2, Users, Star, Layers,
-  Eye, Hash, MessageSquare, Plus,
+  Eye, Hash, Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -91,11 +91,11 @@ const STATUS_DOT: Record<string, string> = {
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
-function capitalize(s: string) {
+function _capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function bedsLabel(u: UnitFull): string {
+function _bedsLabel(u: UnitFull): string {
   const parts: string[] = []
   if (u.kings  > 0) parts.push(`${u.kings}K`)
   if (u.queens > 0) parts.push(`${u.queens}Q`)
