@@ -24,7 +24,7 @@
  *   b6625228 → Natiivo
  */
 
-import { PrismaClient, UnitStatus } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 
 const db = new PrismaClient()
 
@@ -100,13 +100,13 @@ function inferType(br: number | null): string | null {
   return null
 }
 
-function inferStatus(notes: string, photoQuality: string): UnitStatus {
+function inferStatus(notes: string, photoQuality: string): string {
   const n = notes.toLowerCase()
-  if (n.includes('renovaci')) return UnitStatus.renovation
-  if (n.includes('ya no lo manejamos') || n.includes('van a vender')) return UnitStatus.inactive
+  if (n.includes('renovaci')) return 'renovation'
+  if (n.includes('ya no lo manejamos') || n.includes('van a vender')) return 'inactive'
   const p = photoQuality.toLowerCase()
-  if (p === 'preliminary' || p === 'no photos') return UnitStatus.onboarding
-  return UnitStatus.active
+  if (p === 'preliminary' || p === 'no photos') return 'onboarding'
+  return 'active'
 }
 
 // ─── Source CSV (27 columns) ──────────────────────────────────────────────────
