@@ -37,7 +37,7 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
     googleUrl:     building.googleUrl ?? '',
     website:       building.website ?? '',
     imageUrl:      building.imageUrl ?? '',
-    floorplanUrls: building.floorplanUrls,
+    driveFolderUrl: building.floorplanUrls[0] ?? '',
     frontdeskPhone:    building.frontdeskPhone ?? '',
     frontdeskEmail:    building.frontdeskEmail ?? '',
     checkinHours:      building.checkinHours ?? '',

@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { updatePropertyManagerSchema } from '@/lib/validations/property-manager'
+import { syncEmergencyContacts } from '@/lib/utils/sync-contacts'
 
 const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'owner_relations']
 
@@ -53,6 +54,8 @@ export async function PATCH(
       },
     })
 
+    syncEmergencyContacts(params.id).catch((e) => console.error('[sync-contacts PATCH]', e))
+
     return NextResponse.json({ data: manager })
   } catch (error) {
     console.error('[PATCH /api/v1/buildings/:id/property-managers/:pmId]', error)
@@ -89,6 +92,8 @@ export async function DELETE(
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
     })
+
+    syncEmergencyContacts(params.id).catch((e) => console.error('[sync-contacts DELETE]', e))
 
     return NextResponse.json({ data: { deleted: true } })
   } catch (error) {

@@ -68,9 +68,12 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
       {/* Hero image */}
       <div className="relative h-52 shrink-0">
         {building.imageUrl ? (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${building.imageUrl})` }}
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={building.imageUrl}
+            alt={building.name}
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 bg-mvr-primary/10 flex items-center justify-center">

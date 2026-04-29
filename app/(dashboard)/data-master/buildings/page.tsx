@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { db } from '@/lib/db'
+import { getSignedImageUrl } from '@/lib/storage/gcs'
 import { Button } from '@/components/ui/button'
 import BuildingsMapView from '@/components/modules/data-master/BuildingsMapView'
 import type { BuildingFull } from '@/components/modules/data-master/BuildingsMapView'
@@ -18,7 +19,9 @@ async function getBuildings(): Promise<BuildingFull[]> {
     orderBy: { name: 'asc' },
   })
 
-  return buildings.map((b) => ({
+  const signedUrls = await Promise.all(buildings.map((b) => getSignedImageUrl(b.imageUrl)))
+
+  return buildings.map((b, i) => ({
     id:             b.id,
     name:           b.name,
     nickname:       b.nickname,
@@ -30,7 +33,7 @@ async function getBuildings(): Promise<BuildingFull[]> {
     zipcode:        b.zipcode,
     googleUrl:      b.googleUrl,
     website:        b.website,
-    imageUrl:       b.imageUrl,
+    imageUrl:       signedUrls[i],
     frontdeskPhone: b.frontdeskPhone,
     frontdeskEmail: b.frontdeskEmail,
     frontdeskHours: b.frontdeskHours,

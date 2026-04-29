@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { createPropertyManagerSchema } from '@/lib/validations/property-manager'
+import { syncEmergencyContacts } from '@/lib/utils/sync-contacts'
 
 const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'owner_relations']
 
@@ -68,6 +69,8 @@ export async function POST(
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
     })
+
+    syncEmergencyContacts(params.id).catch((e) => console.error('[sync-contacts POST]', e))
 
     return NextResponse.json({ data: manager }, { status: 201 })
   } catch (error) {

@@ -57,16 +57,14 @@ const navigation = [
 
 function CrownLogo() {
   return (
-    <svg width="28" height="24" viewBox="0 0 28 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M14 2L18.5 10L24 4L22 20H6L4 4L9.5 10L14 2Z"
-        fill="#CEC4B6"
-        stroke="#A2B4C0"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <rect x="5" y="20" width="18" height="2.5" rx="1" fill="#A2B4C0" />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/mvr-crown-logo.png"
+      alt="MVR crown logo"
+      width={26}
+      height={26}
+      className="rounded-sm shrink-0"
+    />
   )
 }
 

@@ -3,7 +3,6 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, Controller } from 'react-hook-form'
-import { FileUploader } from '@/components/ui/file-uploader'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -21,7 +20,7 @@ const formSchema = z.object({
   googleUrl:      z.string().optional(),
   website:        z.string().optional(),
   imageUrl:       z.string().optional(),
-  floorplanUrls:  z.array(z.string()),
+  driveFolderUrl: z.string().optional(),
   frontdeskPhone: z.string().max(30).optional(),
   frontdeskEmail: z.string().optional(),
   checkinHours:   z.string().max(100).optional(),
@@ -327,7 +326,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       amenities:     [] as string[],
       rules:         '',
       knowledgeBase: '',
-      floorplanUrls: [] as string[],
+      driveFolderUrl: '',
       ...defaultValues,
     },
   })
@@ -337,12 +336,12 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
   async function onSubmit(values: FormValues) {
     setServerError('')
 
-    const { amenities, floorplanUrls, lat, long, ...rest } = values
+    const { amenities, driveFolderUrl, lat, long, ...rest } = values
 
     const payload = {
       ...rest,
       amenities,
-      floorplanUrls,
+      floorplanUrls: driveFolderUrl ? [driveFolderUrl] : [],
       lat:            lat  ? parseFloat(lat)  : undefined,
       long:           long ? parseFloat(long) : undefined,
       googleUrl:      rest.googleUrl      || undefined,
@@ -486,19 +485,18 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
 
       {/* ── Documents & Media ── */}
       <SectionCard title="Documents & Media">
-        <Controller
-          control={control}
-          name="floorplanUrls"
-          render={({ field }) => (
-            <FileUploader
-              value={field.value}
-              onChange={field.onChange}
-              folder="buildings"
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
-              label="Floorplans & building documents"
-            />
-          )}
-        />
+        <p className="text-xs text-muted-foreground -mt-2 mb-3">
+          Paste the Google Drive folder link where floorplans and building documents are stored. Anyone with the link will be able to view the files.
+        </p>
+        <div>
+          <Label>Google Drive Folder URL</Label>
+          <Input
+            {...register('driveFolderUrl')}
+            placeholder="https://drive.google.com/drive/folders/…"
+            type="url"
+          />
+          <FieldError message={errors.driveFolderUrl?.message} />
+        </div>
       </SectionCard>
 
       {/* ── Front Desk ── */}

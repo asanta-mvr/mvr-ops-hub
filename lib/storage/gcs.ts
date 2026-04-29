@@ -1,4 +1,5 @@
 import { Storage } from '@google-cloud/storage'
+import { toDriveImageUrl } from '@/lib/image-utils'
 
 function createStorageClient(): Storage {
   const keyBase64 = process.env.GCS_SERVICE_ACCOUNT_KEY
@@ -48,4 +49,26 @@ export function getGcsPath(
   filename: string
 ): string {
   return `${type}/${id}/${filename}`
+}
+
+/**
+ * Returns a 1-hour signed URL for a GCS object path.
+ * Pass a relative path (e.g. "Buildings_Images/xxx.jpg") — full GCS/Drive/http URLs are
+ * returned unchanged so callers don't need to pre-filter.
+ */
+export async function getSignedImageUrl(path: string | null | undefined): Promise<string | null> {
+  if (!path) return null
+  if (path.includes('drive.google.com')) return toDriveImageUrl(path)
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+
+  try {
+    const bucket = getBucket()
+    const [signedUrl] = await bucket.file(path).getSignedUrl({
+      action:  'read',
+      expires: Date.now() + 60 * 60 * 1000,
+    })
+    return signedUrl
+  } catch {
+    return null
+  }
 }
