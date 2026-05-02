@@ -200,13 +200,6 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             checkoutHours={building.checkoutHours ?? null}
           />
 
-          {/* Rules & Knowledge Base */}
-          <HouseRulesPanel
-            buildingId={building.id}
-            buildingName={building.name}
-            knowledgeBase={building.knowledgeBase ?? null}
-          />
-
           {/* Google Drive documents folder */}
           {driveUrl && (
             <div className="bg-white rounded-xl border p-4">
@@ -224,6 +217,13 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
               <p className="text-[11px] text-muted-foreground mt-2">Floorplans, contracts, and building documents on Google Drive.</p>
             </div>
           )}
+
+          {/* Rules & Knowledge Base */}
+          <HouseRulesPanel
+            buildingId={building.id}
+            buildingName={building.name}
+            knowledgeBase={building.knowledgeBase ?? null}
+          />
         </div>
       </div>
     </div>
