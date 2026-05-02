@@ -12,7 +12,6 @@ export const createBuildingSchema = z.object({
   googleUrl: z.string().url().optional().or(z.literal('')),
   website: z.string().url().optional().or(z.literal('')),
   imageUrl: z.string().optional(),
-  photos: z.array(z.string()).default([]),
   floorplanUrls: z.array(z.string()).default([]),
   amenities: z.array(z.string()).default([]),
   checkinHours: z.string().max(100).optional(),
