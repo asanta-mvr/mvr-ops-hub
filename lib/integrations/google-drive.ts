@@ -144,11 +144,17 @@ export async function listFolderImages(folderId: string): Promise<string[]> {
     spaces: 'drive',
     orderBy: 'name',
     pageSize: 30,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   })
 
-  const urls = (res.data.files ?? [])
+  const files = res.data.files ?? []
+  console.log(`[drive] folder=${folderId} found ${files.length} images`)
+
+  // Serve through our proxy so the browser doesn't need its own Google auth
+  const urls = files
     .filter((f) => f.id)
-    .map((f) => `https://drive.google.com/thumbnail?id=${f.id}&sz=w1920`)
+    .map((f) => `/api/v1/drive/image/${f.id}`)
 
   folderImageCache.set(folderId, { urls, expires: Date.now() + 10 * 60 * 1000 })
   return urls
