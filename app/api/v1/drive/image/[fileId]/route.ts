@@ -21,23 +21,35 @@ export async function GET(
       credentials,
       scopes: ['https://www.googleapis.com/auth/drive.readonly'],
     })
-    const drive = google.drive({ version: 'v3', auth: authClient })
 
-    // Fetch metadata to get mime type
-    const meta = await drive.files.get({ fileId, fields: 'mimeType' })
-    const mimeType = meta.data.mimeType ?? 'image/jpeg'
+    // Get a short-lived access token and fetch the file directly.
+    // Using fetch (not googleapis binary download) avoids the arraybuffer
+    // type confusion in googleapis — this is the reliable path for Node.js.
+    const tokenRes = await authClient.getAccessToken()
+    // getAccessToken returns string | GetAccessTokenResponse depending on version
+    const token: string | null | undefined =
+      typeof tokenRes === 'string'
+        ? tokenRes
+        : (tokenRes as unknown as { token?: string | null })?.token
+    if (!token) throw new Error('Failed to obtain access token')
 
-    // Fetch file content as buffer
-    const fileRes = await drive.files.get(
-      { fileId, alt: 'media' },
-      { responseType: 'arraybuffer' }
+    const driveRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { Authorization: `Bearer ${token}` } }
     )
-    const buffer = Buffer.from(fileRes.data as ArrayBuffer)
+
+    if (!driveRes.ok) {
+      console.error('[drive-image] fileId=%s status=%d', fileId, driveRes.status)
+      return new NextResponse('Image not found', { status: driveRes.status })
+    }
+
+    const contentType = driveRes.headers.get('content-type') ?? 'image/jpeg'
+    const buffer = Buffer.from(await driveRes.arrayBuffer())
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
-        'Content-Type': mimeType,
+        'Content-Type': contentType,
         'Cache-Control': 'private, max-age=3600, stale-while-revalidate=600',
         'Content-Length': String(buffer.length),
       },
