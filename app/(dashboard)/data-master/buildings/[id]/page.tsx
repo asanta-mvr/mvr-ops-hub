@@ -1,12 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, Pencil, MapPin, Building2, ExternalLink, Globe, FolderOpen } from 'lucide-react'
+import { ChevronRight, MapPin, ExternalLink, Globe, FolderOpen } from 'lucide-react'
 import { db } from '@/lib/db'
-import { Button } from '@/components/ui/button'
 import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
 import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
-import PhotoGallery from '@/components/modules/data-master/PhotoGallery'
+import BuildingHeroGallery from '@/components/modules/data-master/BuildingHeroGallery'
 import { getSignedImageUrl } from '@/lib/storage/gcs'
 import { isDriveFolderUrl, getDriveFolderId } from '@/lib/image-utils'
 import { listFolderImages } from '@/lib/integrations/google-drive'
@@ -48,14 +47,13 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
   const isFolder = rawUrl ? isDriveFolderUrl(rawUrl) : false
   const folderId = rawUrl ? getDriveFolderId(rawUrl) : null
 
-  let imageUrl: string | null = null
   let galleryUrls: string[] = []
 
   if (isFolder && folderId) {
     galleryUrls = await listFolderImages(folderId).catch(() => [])
-    imageUrl = galleryUrls[0] ?? null
   } else {
-    imageUrl = await getSignedImageUrl(rawUrl)
+    const single = await getSignedImageUrl(rawUrl)
+    if (single) galleryUrls = [single]
   }
 
   const driveUrl = building.floorplanUrls[0] ?? null
@@ -82,67 +80,17 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
         {/* ── LEFT column (2/3) ── */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Hero card — shorter than before */}
+          {/* Hero card */}
           <div className="bg-white rounded-2xl border overflow-hidden shadow-card">
-            {imageUrl ? (
-              <div className="h-44 md:h-52 w-full relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt={building.name}
-                  referrerPolicy="no-referrer"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-mvr-primary/60 via-transparent to-transparent" />
-                <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusStyles[building.status] ?? statusStyles.inactive}`}>
-                        {building.status}
-                      </span>
-                      {building.zone && (
-                        <span className="text-white/80 text-xs bg-white/15 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                          {building.zone}
-                        </span>
-                      )}
-                    </div>
-                    <h1 className="font-display text-2xl font-bold text-white drop-shadow">{building.name}</h1>
-                    {building.nickname && (
-                      <p className="text-white/70 text-sm mt-0.5">{building.nickname}</p>
-                    )}
-                  </div>
-                  <Link href={`/data-master/buildings/${params.id}/edit`}>
-                    <Button size="sm" variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm">
-                      <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="h-24 bg-mvr-primary/8 flex items-center justify-between px-5">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusStyles[building.status] ?? statusStyles.inactive}`}>
-                      {building.status}
-                    </span>
-                  </div>
-                  <h1 className="font-display text-xl font-bold text-mvr-primary">{building.name}</h1>
-                  {building.nickname && (
-                    <p className="text-muted-foreground text-sm">{building.nickname}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <Building2 className="w-10 h-10 text-mvr-primary/20" />
-                  <Link href={`/data-master/buildings/${params.id}/edit`}>
-                    <Button variant="outline" size="sm">
-                      <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                      Edit
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            )}
+            <BuildingHeroGallery
+              urls={galleryUrls}
+              buildingName={building.name}
+              nickname={building.nickname ?? null}
+              status={building.status}
+              zone={building.zone ?? null}
+              buildingId={params.id}
+              statusClass={statusStyles[building.status] ?? statusStyles.inactive}
+            />
 
             {/* Address / links bar */}
             <div className="px-5 py-2.5 border-t border-[#E0DBD4] flex items-center justify-between flex-wrap gap-2">
@@ -222,21 +170,6 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
               </table>
             )}
           </div>
-
-          {/* Photo gallery — shown when imageUrl is a Drive folder */}
-          {galleryUrls.length > 0 && (
-            <div className="bg-white rounded-xl border p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
-                  Photos ({galleryUrls.length})
-                </h2>
-                <Link href={`/data-master/buildings/${params.id}/edit`} className="text-xs text-mvr-primary hover:underline">
-                  Edit
-                </Link>
-              </div>
-              <PhotoGallery urls={galleryUrls} />
-            </div>
-          )}
 
           {/* Amenities */}
           {building.amenities.length > 0 && (
