@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, Phone, Mail, Clock, Globe, ExternalLink,
-  Pencil, Trash2, X, Building2, ChevronRight,
-  ChevronUp, ChevronDown, ChevronsUpDown,
+  Pencil, Trash2, X, Building2, ChevronRight, ChevronLeft,
+  ChevronUp, ChevronDown, ChevronsUpDown, Images,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { BuildingMapItem } from './BuildingsMap'
@@ -63,31 +63,110 @@ function SortIndicator({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortK
 function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose: () => void }) {
   const location = [building.address, building.zipcode].filter(Boolean).join(', ')
 
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([])
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxIdx, setLightboxIdx]   = useState(0)
+  const stripRef = useRef<HTMLDivElement>(null)
+
+  // Fetch gallery URLs whenever the selected building changes
+  useEffect(() => {
+    setGalleryUrls([])
+    setLightboxOpen(false)
+    let cancelled = false
+    fetch(`/api/v1/buildings/${building.id}/gallery`)
+      .then((r) => r.json())
+      .then((data: { urls?: string[] }) => {
+        if (!cancelled) setGalleryUrls(data.urls ?? [])
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [building.id])
+
+  const openAt = (i: number) => { setLightboxIdx(i); setLightboxOpen(true) }
+  const closeLightbox = useCallback(() => setLightboxOpen(false), [])
+  const prev = useCallback(() => setLightboxIdx(i => (i - 1 + galleryUrls.length) % galleryUrls.length), [galleryUrls.length])
+  const next = useCallback(() => setLightboxIdx(i => (i + 1) % galleryUrls.length), [galleryUrls.length])
+
+  // Keyboard navigation in lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft')  prev()
+      if (e.key === 'ArrowRight') next()
+      if (e.key === 'Escape')     closeLightbox()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [lightboxOpen, prev, next, closeLightbox])
+
+  // Scroll active thumbnail into view
+  useEffect(() => {
+    if (!lightboxOpen || !stripRef.current) return
+    const thumb = stripRef.current.children[lightboxIdx] as HTMLElement | undefined
+    thumb?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [lightboxIdx, lightboxOpen])
+
+  // Touch swipe inside lightbox
+  const touchStartX = useRef<number | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX }
+  const onTouchEnd   = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    if (delta < -50) next()
+    if (delta >  50) prev()
+    touchStartX.current = null
+  }
+
+  const hasPhotos = galleryUrls.length > 0
+
   return (
+    <>
     <div className="flex flex-col h-full bg-white rounded-xl border overflow-hidden shadow-panel">
-      {/* Hero image — folder URLs are not embeddable, show placeholder */}
+      {/* Hero image */}
       <div className="relative h-52 shrink-0">
-        {building.imageUrl && !building.imageUrl.includes('/drive/folders/') ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={building.imageUrl}
-            alt={building.name}
-            referrerPolicy="no-referrer"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+        {hasPhotos ? (
+          <button
+            type="button"
+            onClick={() => openAt(0)}
+            className="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none"
+            aria-label="View building photos"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={galleryUrls[0]}
+              alt={building.name}
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </button>
         ) : (
           <div className="absolute inset-0 bg-mvr-primary/10 flex items-center justify-center">
             <Building2 className="w-14 h-14 text-mvr-primary/20" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-mvr-primary/80 via-mvr-primary/20 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-mvr-primary/80 via-mvr-primary/20 to-transparent pointer-events-none" />
+
+        {/* Close panel button */}
         <button
           onClick={onClose}
           className="absolute top-2 right-2 bg-white/90 hover:bg-white rounded-full p-1 shadow transition-colors z-10"
         >
           <X className="w-4 h-4 text-foreground" />
         </button>
-        <div className="absolute bottom-3 left-4 right-10 z-10">
+
+        {/* Photo count badge */}
+        {galleryUrls.length > 1 && (
+          <button
+            type="button"
+            onClick={() => openAt(0)}
+            className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-black/50 hover:bg-black/70 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm transition-colors"
+          >
+            <Images className="w-3 h-3" />
+            {galleryUrls.length}
+          </button>
+        )}
+
+        <div className="absolute bottom-3 left-4 right-10 z-10 pointer-events-none">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border mb-1 ${STATUS_STYLES[building.status] ?? STATUS_STYLES.inactive}`}>
             {capitalize(building.status)}
           </span>
@@ -213,6 +292,102 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
         </Link>
       </div>
     </div>
+
+    {/* Lightbox */}
+    {lightboxOpen && (
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col select-none">
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <p className="text-white/60 text-sm truncate max-w-[50%]">{building.name}</p>
+          <span className="text-white text-sm font-medium tabular-nums">
+            {lightboxIdx + 1} / {galleryUrls.length}
+          </span>
+          <button
+            type="button"
+            onClick={closeLightbox}
+            className="text-white/60 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
+            aria-label="Close"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Main image */}
+        <div
+          className="flex-1 relative flex items-center justify-center min-h-0 px-14"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          {galleryUrls.length > 1 && (
+            <button
+              type="button"
+              onClick={prev}
+              className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/25 active:bg-white/40 text-white rounded-full p-2.5 transition-colors z-10"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={galleryUrls[lightboxIdx]}
+            src={galleryUrls[lightboxIdx]}
+            alt={`${building.name} — photo ${lightboxIdx + 1}`}
+            referrerPolicy="no-referrer"
+            className="max-h-full max-w-full object-contain rounded-lg"
+            draggable={false}
+          />
+
+          {galleryUrls.length > 1 && (
+            <button
+              type="button"
+              onClick={next}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/25 active:bg-white/40 text-white rounded-full p-2.5 transition-colors z-10"
+              aria-label="Next photo"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+        </div>
+
+        {/* Thumbnail strip */}
+        {galleryUrls.length > 1 && (
+          <div className="shrink-0 py-3 px-4">
+            <div
+              ref={stripRef}
+              className="flex gap-2 overflow-x-auto justify-center pb-1"
+              style={{ scrollbarWidth: 'none' }}
+            >
+              {galleryUrls.map((url, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setLightboxIdx(i)}
+                  aria-label={`Photo ${i + 1}`}
+                  className={[
+                    'shrink-0 w-16 h-12 rounded-md overflow-hidden transition-all',
+                    i === lightboxIdx
+                      ? 'ring-2 ring-white opacity-100 scale-105'
+                      : 'opacity-40 hover:opacity-75',
+                  ].join(' ')}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`Thumbnail ${i + 1}`}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+    </>
   )
 }
 
