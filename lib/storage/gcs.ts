@@ -1,5 +1,5 @@
 import { Storage } from '@google-cloud/storage'
-import { toDriveImageUrl } from '@/lib/image-utils'
+import { toDriveImageUrl, isDriveFolderUrl } from '@/lib/image-utils'
 
 function createStorageClient(): Storage {
   const keyBase64 = process.env.GCS_SERVICE_ACCOUNT_KEY
@@ -58,6 +58,7 @@ export function getGcsPath(
  */
 export async function getSignedImageUrl(path: string | null | undefined): Promise<string | null> {
   if (!path) return null
+  if (isDriveFolderUrl(path)) return null          // folder URLs handled separately via listFolderImages()
   if (path.includes('drive.google.com')) return toDriveImageUrl(path)
   if (path.startsWith('http://') || path.startsWith('https://')) return path
 

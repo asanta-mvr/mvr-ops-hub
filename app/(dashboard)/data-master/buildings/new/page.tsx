@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { db } from '@/lib/db'
 import BuildingForm from '@/components/modules/data-master/BuildingForm'
+import { getDriveServiceAccountEmail } from '@/lib/integrations/google-drive'
 
 export const metadata: Metadata = { title: 'New Building' }
 
@@ -17,7 +18,10 @@ async function getZones(): Promise<string[]> {
 }
 
 export default async function NewBuildingPage() {
-  const zones = await getZones()
+  const [zones, serviceAccountEmail] = await Promise.all([
+    getZones(),
+    Promise.resolve(getDriveServiceAccountEmail()),
+  ])
 
   return (
     <div className="space-y-6">
@@ -31,7 +35,7 @@ export default async function NewBuildingPage() {
         <p className="text-muted-foreground text-sm mt-1">Add a new property to the portfolio</p>
       </div>
 
-      <BuildingForm zones={zones} />
+      <BuildingForm zones={zones} serviceAccountEmail={serviceAccountEmail} />
     </div>
   )
 }

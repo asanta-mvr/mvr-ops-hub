@@ -123,3 +123,45 @@ export async function deleteFromDrive(fileId: string): Promise<void> {
 export function getDriveFileViewLink(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`
 }
+
+// In-memory cache for folder image listings (10-minute TTL per folder)
+const folderImageCache = new Map<string, { urls: string[]; expires: number }>()
+
+/**
+ * Lists image files inside a Google Drive folder and returns thumbnail URLs.
+ * The folder must be shared with the service account (GCS_SERVICE_ACCOUNT_KEY).
+ * Results are cached for 10 minutes to avoid repeated API calls.
+ */
+export async function listFolderImages(folderId: string): Promise<string[]> {
+  const cached = folderImageCache.get(folderId)
+  if (cached && cached.expires > Date.now()) return cached.urls
+
+  const drive = createDriveClient()
+
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+    fields: 'files(id,name)',
+    spaces: 'drive',
+    orderBy: 'name',
+    pageSize: 30,
+  })
+
+  const urls = (res.data.files ?? [])
+    .filter((f) => f.id)
+    .map((f) => `https://drive.google.com/thumbnail?id=${f.id}&sz=w1920`)
+
+  folderImageCache.set(folderId, { urls, expires: Date.now() + 10 * 60 * 1000 })
+  return urls
+}
+
+/** Returns the service account email used for Drive access, for sharing instructions. */
+export function getDriveServiceAccountEmail(): string | null {
+  try {
+    const key = process.env.GCS_SERVICE_ACCOUNT_KEY
+    if (!key) return null
+    const creds = JSON.parse(Buffer.from(key, 'base64').toString()) as { client_email?: string }
+    return creds.client_email ?? null
+  } catch {
+    return null
+  }
+}

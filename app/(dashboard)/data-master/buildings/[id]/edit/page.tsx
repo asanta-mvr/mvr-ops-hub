@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { db } from '@/lib/db'
 import BuildingForm from '@/components/modules/data-master/BuildingForm'
+import { getDriveServiceAccountEmail } from '@/lib/integrations/google-drive'
 
 export const metadata: Metadata = { title: 'Edit Building' }
 
@@ -22,6 +23,7 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
     db.building.findUnique({ where: { id: params.id } }),
     getZones(),
   ])
+  const serviceAccountEmail = getDriveServiceAccountEmail()
 
   if (!building) notFound()
 
@@ -67,7 +69,7 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
         <p className="text-muted-foreground text-sm mt-1">{building.name}</p>
       </div>
 
-      <BuildingForm buildingId={params.id} defaultValues={defaultValues} zones={zones} />
+      <BuildingForm buildingId={params.id} defaultValues={defaultValues} zones={zones} serviceAccountEmail={serviceAccountEmail} />
     </div>
   )
 }

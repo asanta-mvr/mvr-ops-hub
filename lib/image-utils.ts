@@ -45,9 +45,20 @@ export function toDriveImageUrl(url: string): string {
   return url
 }
 
+/** Returns true when url points to a Google Drive folder (not an individual file). */
+export function isDriveFolderUrl(url: string): boolean {
+  return /\/drive\/folders\//.test(url)
+}
+
+/** Extracts the folder ID from a Google Drive folder URL. Returns null if not a folder URL. */
+export function getDriveFolderId(url: string): string | null {
+  return /\/drive\/folders\/([^/?#]+)/.exec(url)?.[1] ?? null
+}
+
 /** Resolves any stored building/unit image URL to an embeddable URL. */
 export function resolveImageUrl(url: string | null | undefined): string | null {
   if (!url) return null
+  if (isDriveFolderUrl(url)) return null           // folder URLs are not embeddable as <img>
   if (url.includes('drive.google.com')) return toDriveImageUrl(url)
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   return `https://storage.googleapis.com/mvr-ops-hub-assets/${url}`

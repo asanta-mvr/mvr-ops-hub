@@ -65,9 +65,9 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
 
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border overflow-hidden shadow-panel">
-      {/* Hero image */}
+      {/* Hero image — folder URLs are not embeddable, show placeholder */}
       <div className="relative h-52 shrink-0">
-        {building.imageUrl ? (
+        {building.imageUrl && !building.imageUrl.includes('/drive/folders/') ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={building.imageUrl}

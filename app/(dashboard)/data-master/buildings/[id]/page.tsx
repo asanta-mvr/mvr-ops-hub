@@ -6,7 +6,10 @@ import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
 import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
+import PhotoGallery from '@/components/modules/data-master/PhotoGallery'
 import { getSignedImageUrl } from '@/lib/storage/gcs'
+import { isDriveFolderUrl, getDriveFolderId } from '@/lib/image-utils'
+import { listFolderImages } from '@/lib/integrations/google-drive'
 
 export const metadata: Metadata = { title: 'Building Detail' }
 
@@ -37,7 +40,24 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
   if (!building) notFound()
 
   const ownerCount = new Set(building.units.map((u) => u.ownerUniqueId).filter(Boolean)).size
-  const imageUrl = await getSignedImageUrl(building.imageUrl)
+
+  // Resolve hero image and gallery photos.
+  // If imageUrl is a Drive folder, list all images from it via the API.
+  // Otherwise treat it as a single file URL (GCS signed or Drive thumbnail).
+  const rawUrl = building.imageUrl
+  const isFolder = rawUrl ? isDriveFolderUrl(rawUrl) : false
+  const folderId = rawUrl ? getDriveFolderId(rawUrl) : null
+
+  let imageUrl: string | null = null
+  let galleryUrls: string[] = []
+
+  if (isFolder && folderId) {
+    galleryUrls = await listFolderImages(folderId).catch(() => [])
+    imageUrl = galleryUrls[0] ?? null
+  } else {
+    imageUrl = await getSignedImageUrl(rawUrl)
+  }
+
   const driveUrl = building.floorplanUrls[0] ?? null
 
   const stats = [
@@ -202,6 +222,21 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
               </table>
             )}
           </div>
+
+          {/* Photo gallery — shown when imageUrl is a Drive folder */}
+          {galleryUrls.length > 0 && (
+            <div className="bg-white rounded-xl border p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
+                  Photos ({galleryUrls.length})
+                </h2>
+                <Link href={`/data-master/buildings/${params.id}/edit`} className="text-xs text-mvr-primary hover:underline">
+                  Edit
+                </Link>
+              </div>
+              <PhotoGallery urls={galleryUrls} />
+            </div>
+          )}
 
           {/* Amenities */}
           {building.amenities.length > 0 && (

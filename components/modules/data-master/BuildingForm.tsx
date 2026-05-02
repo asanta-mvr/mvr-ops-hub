@@ -34,9 +34,10 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 interface BuildingFormProps {
-  buildingId?:    string
-  defaultValues?: Partial<FormValues>
-  zones?:         string[]
+  buildingId?:          string
+  defaultValues?:       Partial<FormValues>
+  zones?:               string[]
+  serviceAccountEmail?: string | null
 }
 
 // ── Shared micro-components ────────────────────────────────────────────────
@@ -291,7 +292,7 @@ function AmenitiesTagPicker({
 
 // ── Main form ──────────────────────────────────────────────────────────────
 
-export default function BuildingForm({ buildingId, defaultValues, zones = [] }: BuildingFormProps) {
+export default function BuildingForm({ buildingId, defaultValues, zones = [], serviceAccountEmail }: BuildingFormProps) {
   const router    = useRouter()
   const [serverError, setServerError] = useState('')
   const isEdit    = !!buildingId
@@ -428,15 +429,31 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
           </div>
         </div>
         <div>
-          <Label>Building Photo URL</Label>
+          <Label>Building Photos — Google Drive Folder</Label>
           <Input
             {...register('imageUrl')}
-            placeholder="https://drive.google.com/file/d/…/view?usp=sharing"
+            placeholder="https://drive.google.com/drive/folders/…"
           />
-          <p className="text-xs text-muted-foreground mt-1">
-            En Google Drive: clic derecho en la foto → &ldquo;Share&rdquo; → &ldquo;Anyone with the link&rdquo; → copiar enlace.
-            Pega el enlace aquí. Esta foto aparece en el mapa y en el detalle del edificio.
-          </p>
+          <div className="mt-2 rounded-lg bg-mvr-sand-light border border-[#E0DBD4] px-3 py-2.5 space-y-1.5">
+            <p className="text-xs font-medium text-mvr-olive">Cómo configurar la carpeta de fotos:</p>
+            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+              <li>Crea una carpeta en Google Drive para este edificio y sube las fotos.</li>
+              <li>Clic derecho en la carpeta → <strong>Share</strong> → agrega este email como <strong>Viewer</strong>:</li>
+              {serviceAccountEmail ? (
+                <li className="list-none ml-4">
+                  <code className="bg-white border rounded px-1.5 py-0.5 text-[11px] text-mvr-primary font-mono select-all break-all">
+                    {serviceAccountEmail}
+                  </code>
+                </li>
+              ) : (
+                <li className="list-none ml-4 text-mvr-danger">Service account email not configured.</li>
+              )}
+              <li>Copia el enlace de la carpeta y pégalo arriba.</li>
+            </ol>
+            <p className="text-xs text-muted-foreground pt-0.5">
+              Las fotos aparecerán automáticamente en la galería del detalle del edificio. La primera foto se usa como imagen principal en el mapa.
+            </p>
+          </div>
         </div>
       </SectionCard>
 
