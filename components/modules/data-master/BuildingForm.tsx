@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X, ImagePlus, ExternalLink } from 'lucide-react'
 
 const formSchema = z.object({
   name:           z.string().min(1, 'Building name is required').max(200),
@@ -19,7 +19,7 @@ const formSchema = z.object({
   long:           z.string().optional(),
   googleUrl:      z.string().optional(),
   website:        z.string().optional(),
-  imageUrl:       z.string().optional(),
+  photos:         z.array(z.object({ value: z.string() })),
   driveFolderUrl: z.string().optional(),
   frontdeskPhone: z.string().max(30).optional(),
   frontdeskEmail: z.string().optional(),
@@ -317,7 +317,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
       long:          '',
       googleUrl:     '',
       website:       '',
-      imageUrl:      '',
+      photos:        [] as { value: string }[],
       frontdeskPhone: '',
       frontdeskEmail: '',
       checkinHours:  '',
@@ -333,20 +333,28 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
 
   const zoneValue = watch('zone') ?? ''
 
+  const { fields: photoFields, append: appendPhoto, remove: removePhoto } = useFieldArray({
+    control,
+    name: 'photos',
+  })
+
   async function onSubmit(values: FormValues) {
     setServerError('')
 
-    const { amenities, driveFolderUrl, lat, long, ...rest } = values
+    const { photos: photoItems, amenities, driveFolderUrl, lat, long, ...rest } = values
+
+    const photoUrls = photoItems.map((p) => p.value).filter((u) => u.trim() !== '')
 
     const payload = {
       ...rest,
       amenities,
-      floorplanUrls: driveFolderUrl ? [driveFolderUrl] : [],
+      photos:         photoUrls,
+      imageUrl:       photoUrls[0] || undefined,
+      floorplanUrls:  driveFolderUrl ? [driveFolderUrl] : [],
       lat:            lat  ? parseFloat(lat)  : undefined,
       long:           long ? parseFloat(long) : undefined,
       googleUrl:      rest.googleUrl      || undefined,
       website:        rest.website        || undefined,
-      imageUrl:       rest.imageUrl       || undefined,
       frontdeskPhone: rest.frontdeskPhone || undefined,
       frontdeskEmail: rest.frontdeskEmail || undefined,
       checkinHours:   rest.checkinHours   || undefined,
@@ -427,11 +435,54 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [] }: 
             <FieldError message={errors.zone?.message} />
           </div>
         </div>
-        <div>
-          <Label>Building Photo URL</Label>
-          <Input {...register('imageUrl')} placeholder="https://…/photo.jpg" />
-          <p className="text-xs text-muted-foreground mt-1">Main photo shown on the building card and detail page.</p>
+      </SectionCard>
+
+      {/* ── Building Photos ── */}
+      <SectionCard title="Building Photos">
+        <p className="text-xs text-muted-foreground -mt-2 mb-3">
+          Sube las fotos a Google Drive y compártelas como &ldquo;Anyone with the link can view&rdquo;. Pega el enlace de cada foto aquí.
+          La primera foto se usará como imagen principal en el mapa y la lista.
+        </p>
+
+        <div className="space-y-2">
+          {photoFields.map((field, i) => (
+            <div key={field.id} className="flex gap-2 items-start">
+              <div className="flex-1 space-y-1">
+                <Input
+                  {...register(`photos.${i}.value`)}
+                  placeholder="https://drive.google.com/file/d/…/view"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removePhoto(i)}
+                className="mt-0 px-2.5 py-2 border rounded-lg text-sm hover:bg-mvr-danger-light hover:text-mvr-danger hover:border-mvr-danger transition-colors shrink-0"
+                aria-label="Remove photo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
         </div>
+
+        <button
+          type="button"
+          onClick={() => appendPhoto({ value: '' })}
+          className="mt-3 flex items-center gap-1.5 text-sm text-mvr-primary hover:text-mvr-primary/80 transition-colors font-medium"
+        >
+          <ImagePlus className="w-4 h-4" />
+          Add photo link
+        </button>
+
+        <a
+          href="https://drive.google.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-mvr-primary transition-colors"
+        >
+          <ExternalLink className="w-3 h-3" />
+          Open Google Drive
+        </a>
       </SectionCard>
 
       {/* ── Location ── */}

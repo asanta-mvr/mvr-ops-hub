@@ -1,26 +1,47 @@
-const DRIVE_FILE_RE = /\/file\/d\/([^/?#]+)/
-const DRIVE_UC_RE   = /[?&]id=([^&#]+)/
+const DRIVE_FILE_RE      = /\/file\/d\/([^/?#]+)/
+const DRIVE_UC_RE        = /[?&]id=([^&#]+)/
+const DRIVE_OPEN_RE      = /\/open\?id=([^&#]+)/
+const DRIVE_USERCONTENT_RE = /\/download\?id=([^&#]+)/
 
 /**
- * Converts a Google Drive viewer URL to a direct CDN URL embeddable as
- * <img src> or CSS background-image without authentication cookies.
+ * Converts any Google Drive URL to an embeddable thumbnail URL.
  *
- * Uses lh3.googleusercontent.com/d/{id} — Google's Drive CDN endpoint —
- * which serves the raw image for files shared as "Anyone with the link".
+ * Uses drive.google.com/thumbnail?id={id}&sz=w1920 — the official Drive
+ * thumbnail endpoint that works for files shared as "Anyone with the link"
+ * without requiring authentication. Reliable across all browsers.
  *
  * Handles:
- *   https://drive.google.com/file/d/{id}/view   (webViewLink)
- *   https://drive.google.com/uc?id={id}          (webContentLink)
+ *   https://drive.google.com/file/d/{id}/view         (webViewLink)
+ *   https://drive.google.com/file/d/{id}/edit
+ *   https://drive.google.com/open?id={id}
+ *   https://drive.google.com/uc?id={id}               (webContentLink)
+ *   https://drive.usercontent.google.com/download?id={id}
  */
 export function toDriveImageUrl(url: string): string {
+  let fileId: string | undefined
+
   const fileMatch = DRIVE_FILE_RE.exec(url)
-  if (fileMatch) {
-    return `https://lh3.googleusercontent.com/d/${fileMatch[1]}`
+  if (fileMatch) fileId = fileMatch[1]
+
+  if (!fileId) {
+    const openMatch = DRIVE_OPEN_RE.exec(url)
+    if (openMatch) fileId = openMatch[1]
   }
-  const ucMatch = DRIVE_UC_RE.exec(url)
-  if (ucMatch) {
-    return `https://lh3.googleusercontent.com/d/${ucMatch[1]}`
+
+  if (!fileId) {
+    const ucMatch = DRIVE_UC_RE.exec(url)
+    if (ucMatch) fileId = ucMatch[1]
   }
+
+  if (!fileId) {
+    const ucontentMatch = DRIVE_USERCONTENT_RE.exec(url)
+    if (ucontentMatch) fileId = ucontentMatch[1]
+  }
+
+  if (fileId) {
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1920`
+  }
+
   return url
 }
 

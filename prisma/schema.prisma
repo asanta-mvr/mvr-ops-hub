@@ -166,6 +166,7 @@ model Building {
   googleUrl         String?
   website           String?
   imageUrl          String?
+  photos            String[]
   floorplanUrls     String[]
   amenities         String[]
   checkinHours      String?

@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
 import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
+import PhotoGallery from '@/components/modules/data-master/PhotoGallery'
 import { getSignedImageUrl } from '@/lib/storage/gcs'
 
 export const metadata: Metadata = { title: 'Building Detail' }
@@ -37,7 +38,18 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
   if (!building) notFound()
 
   const ownerCount = new Set(building.units.map((u) => u.ownerUniqueId).filter(Boolean)).size
-  const imageUrl = await getSignedImageUrl(building.imageUrl)
+
+  // Resolve all photo URLs (Drive thumbnails + GCS signed URLs)
+  const buildingPhotos = (building as unknown as { photos: string[] }).photos ?? []
+  const allPhotoSources = buildingPhotos.length > 0
+    ? buildingPhotos
+    : building.imageUrl ? [building.imageUrl] : []
+
+  const [imageUrl, ...extraPhotos] = await Promise.all(
+    allPhotoSources.map((p) => getSignedImageUrl(p))
+  )
+  const galleryUrls = [imageUrl, ...extraPhotos].filter((u): u is string => !!u)
+
   const driveUrl = building.floorplanUrls[0] ?? null
 
   const stats = [
@@ -202,6 +214,21 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
               </table>
             )}
           </div>
+
+          {/* Photo gallery */}
+          {galleryUrls.length > 0 && (
+            <div className="bg-white rounded-xl border p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
+                  Photos ({galleryUrls.length})
+                </h2>
+                <Link href={`/data-master/buildings/${params.id}/edit`} className="text-xs text-mvr-primary hover:underline">
+                  Edit
+                </Link>
+              </div>
+              <PhotoGallery urls={galleryUrls} />
+            </div>
+          )}
 
           {/* Amenities */}
           {building.amenities.length > 0 && (

@@ -36,7 +36,15 @@ export default async function EditBuildingPage({ params }: { params: { id: strin
     long:          building.long ? String(Number(building.long)) : '',
     googleUrl:     building.googleUrl ?? '',
     website:       building.website ?? '',
-    imageUrl:      building.imageUrl ?? '',
+    // Populate photos from stored photos array, falling back to imageUrl for
+    // buildings that were saved before the photos field was added.
+    photos: (
+      (building as unknown as { photos: string[] }).photos?.length > 0
+        ? (building as unknown as { photos: string[] }).photos
+        : building.imageUrl
+          ? [building.imageUrl]
+          : []
+    ).map((url: string) => ({ value: url })),
     driveFolderUrl: building.floorplanUrls[0] ?? '',
     frontdeskPhone:    building.frontdeskPhone ?? '',
     frontdeskEmail:    building.frontdeskEmail ?? '',
