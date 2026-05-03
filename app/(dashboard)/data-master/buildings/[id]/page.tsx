@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, MapPin, ExternalLink, Globe, FolderOpen } from 'lucide-react'
+import { ChevronRight, MapPin, ExternalLink, Globe, FolderOpen, Building2, KeyRound, FileText, Users } from 'lucide-react'
 import { db } from '@/lib/db'
 import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
 import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
@@ -70,10 +70,10 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
   const { unitCount, keyCount } = computeUnitAndKeyCount(building.units.map(u => u.number))
 
   const stats = [
-    { label: 'Units',      value: unitCount },
-    { label: 'Keys',       value: keyCount },
-    { label: 'Contracts',  value: building._count.contracts },
-    { label: 'Owners',     value: ownerCount },
+    { label: 'Units',     value: unitCount,                 icon: Building2  },
+    { label: 'Keys',      value: keyCount,                  icon: KeyRound   },
+    { label: 'Contracts', value: building._count.contracts, icon: FileText   },
+    { label: 'Owners',    value: ownerCount,                icon: Users      },
   ]
 
   return (
@@ -133,9 +133,10 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
           {/* Stats — compact inline row */}
           <div className="grid grid-cols-4 gap-3">
             {stats.map((stat) => (
-              <div key={stat.label} className="bg-white rounded-xl border px-3 py-3 text-center">
-                <p className="text-xl font-bold text-mvr-primary">{stat.value}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{stat.label}</p>
+              <div key={stat.label} className="bg-white rounded-xl border px-3 py-3 text-center flex flex-col items-center gap-1">
+                <stat.icon className="w-4 h-4 text-mvr-sand" />
+                <p className="text-xl font-bold text-mvr-primary leading-none">{stat.value}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">{stat.label}</p>
               </div>
             ))}
           </div>
