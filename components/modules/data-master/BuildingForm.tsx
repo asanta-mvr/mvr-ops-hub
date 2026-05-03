@@ -6,7 +6,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Plus, Check, X } from 'lucide-react'
+import { Plus, Check, X, Info } from 'lucide-react'
 
 const formSchema = z.object({
   name:           z.string().min(1, 'Building name is required').max(200),
@@ -429,31 +429,39 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
           </div>
         </div>
         <div>
-          <Label>Building Photos — Google Drive Folder</Label>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Label>Building Photos — Google Drive Folder</Label>
+            <div className="relative group">
+              <Info className="w-3.5 h-3.5 text-muted-foreground/60 hover:text-mvr-primary cursor-default transition-colors" />
+              {/* Tooltip */}
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 hidden group-hover:block w-80 pointer-events-none">
+                <div className="bg-mvr-olive text-white rounded-xl shadow-panel px-4 py-3 space-y-2 text-[11px] leading-relaxed">
+                  <p className="font-semibold text-white/90">Cómo configurar la carpeta de fotos:</p>
+                  <ol className="space-y-1.5 list-decimal list-inside text-white/80">
+                    <li>Crea una carpeta en Google Drive para este edificio y sube las fotos.</li>
+                    <li>
+                      Clic derecho en la carpeta → <span className="text-white font-medium">Share</span> → agrega este email como <span className="text-white font-medium">Viewer</span>:
+                      <div className="mt-1 ml-3">
+                        <code className="bg-white/15 rounded px-1.5 py-0.5 font-mono text-[10px] text-white break-all select-all">
+                          {serviceAccountEmail ?? 'mvr-app-service@miami-vr-data.iam.gserviceaccount.com'}
+                        </code>
+                      </div>
+                    </li>
+                    <li>Copia el enlace de la carpeta y pégalo arriba.</li>
+                  </ol>
+                  <p className="text-white/70 border-t border-white/20 pt-2">
+                    Las fotos aparecerán automáticamente en la galería del detalle del edificio. La primera foto se usa como imagen principal en el mapa.
+                  </p>
+                </div>
+                {/* Arrow */}
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-mvr-olive" />
+              </div>
+            </div>
+          </div>
           <Input
             {...register('imageUrl')}
             placeholder="https://drive.google.com/drive/folders/…"
           />
-          <div className="mt-2 rounded-lg bg-mvr-sand-light border border-[#E0DBD4] px-3 py-2.5 space-y-1.5">
-            <p className="text-xs font-medium text-mvr-olive">Cómo configurar la carpeta de fotos:</p>
-            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Crea una carpeta en Google Drive para este edificio y sube las fotos.</li>
-              <li>Clic derecho en la carpeta → <strong>Share</strong> → agrega este email como <strong>Viewer</strong>:</li>
-              {serviceAccountEmail ? (
-                <li className="list-none ml-4">
-                  <code className="bg-white border rounded px-1.5 py-0.5 text-[11px] text-mvr-primary font-mono select-all break-all">
-                    {serviceAccountEmail}
-                  </code>
-                </li>
-              ) : (
-                <li className="list-none ml-4 text-mvr-danger">Service account email not configured.</li>
-              )}
-              <li>Copia el enlace de la carpeta y pégalo arriba.</li>
-            </ol>
-            <p className="text-xs text-muted-foreground pt-0.5">
-              Las fotos aparecerán automáticamente en la galería del detalle del edificio. La primera foto se usa como imagen principal en el mapa.
-            </p>
-          </div>
         </div>
       </SectionCard>
 
