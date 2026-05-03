@@ -28,7 +28,6 @@ export interface UnitFull {
   line: string | null
   view: string | null
   type: string | null
-  unitType: string | null
   bedrooms: number | null
   bathrooms: string | null
   bathType:  string | null
@@ -57,12 +56,12 @@ export interface UnitFull {
   createdAt:      string
 }
 
-type SortKey = 'number' | 'ownerNickname' | 'sqft' | 'status' | 'listingCount'
+type SortKey = 'number' | 'ownerNickname' | 'sqft' | 'capacity'
 type SortDir = 'asc' | 'desc'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-import { TYPE_LABELS, UNIT_TYPE_LABELS } from '@/lib/constants/units'
+import { TYPE_LABELS } from '@/lib/constants/units'
 
 const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
@@ -257,13 +256,12 @@ function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuild
 // Single <table> with floor-group separator rows so all columns stay aligned.
 
 const COLS: { key: SortKey; label: string }[] = [
-  { key: 'number',        label: 'Unit #'    },
-  { key: 'ownerNickname', label: 'Owner'     },
-  { key: 'sqft',          label: 'Sqft'      },
-  { key: 'status',        label: 'Status'    },
-  { key: 'listingCount',  label: 'Listings'  },
+  { key: 'number',        label: 'Unit #'   },
+  { key: 'ownerNickname', label: 'Owner'    },
+  { key: 'sqft',          label: 'Sqft'     },
+  { key: 'capacity',      label: 'Capacity' },
 ]
-// COLS (5) + UnitType + View + Line + Score + chevron = 10 columns total
+// COLS (4) + Type + Line + View + Score + chevron = 9 columns total
 
 interface UnifiedFloorTableProps {
   floorGroups: { label: string; units: UnitFull[] }[]
@@ -291,7 +289,8 @@ function UnifiedFloorTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-mvr-cream">
-              {COLS.map(({ key, label }) => (
+              {/* Unit # — first 2 COLS are sortable (number, owner) */}
+              {COLS.slice(0, 2).map(({ key, label }) => (
                 <th
                   key={key}
                   onClick={() => onSort(key)}
@@ -301,9 +300,20 @@ function UnifiedFloorTable({
                   <SortIndicator col={key} sortKey={sortKey} sortDir={sortDir} />
                 </th>
               ))}
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Unit Type</th>
-              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Type</th>
+              {/* Sqft + Capacity sortable */}
+              {COLS.slice(2).map(({ key, label }) => (
+                <th
+                  key={key}
+                  onClick={() => onSort(key)}
+                  className="text-left px-4 py-2.5 font-medium text-muted-foreground cursor-pointer hover:text-mvr-primary select-none whitespace-nowrap"
+                >
+                  {label}
+                  <SortIndicator col={key} sortKey={sortKey} sortDir={sortDir} />
+                </th>
+              ))}
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
               <th className="px-4 py-2.5 w-6" />
             </tr>
@@ -313,7 +323,7 @@ function UnifiedFloorTable({
               <React.Fragment key={label}>
                 {/* Floor separator row */}
                 <tr className="border-y border-[#E0DBD4]">
-                  <td colSpan={10} className="px-5 py-2 bg-mvr-neutral">
+                  <td colSpan={9} className="px-5 py-2 bg-mvr-neutral">
                     <div className="flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-mvr-primary/50 shrink-0" />
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -331,26 +341,25 @@ function UnifiedFloorTable({
                       selectedId === u.id ? 'bg-mvr-primary-light' : 'hover:bg-mvr-neutral/50'
                     }`}
                   >
+                    {/* Unit # + status dot */}
                     <td className="px-4 py-2.5">
-                      <span className="font-medium text-mvr-primary">{u.number}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[u.status] ?? 'bg-[#ccc]'}`} title={statusLabel(u.status)} />
+                        <span className="font-medium text-mvr-primary">{u.number}</span>
+                      </div>
                     </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{u.ownerNickname ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{u.ownerNickname ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {u.type ? (TYPE_LABELS[u.type] ?? u.type) : '—'}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                      {u.unitType ? (UNIT_TYPE_LABELS[u.unitType] ?? u.unitType) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">
                       {u.sqft ? u.sqft.toLocaleString() : '—'}
                     </td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                        STATUS_STYLES[u.status] ?? STATUS_STYLES.inactive
-                      }`}>
-                        {statusLabel(u.status)}
-                      </span>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      {u.capacity ?? '—'}
                     </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{u.listingCount}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.view ?? '—'}</td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.line ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.view ?? '—'}</td>
                     <td className="px-4 py-2.5">
                       {u.score ? (
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreStyle(u.score)}`}>
@@ -835,8 +844,7 @@ export default function UnitsTableView({ units, initialBuildingId }: UnitsTableV
         case 'number':        aVal = a.number;               bVal = b.number;               break
         case 'ownerNickname': aVal = a.ownerNickname ?? '';  bVal = b.ownerNickname ?? '';  break
         case 'sqft':          aVal = a.sqft ?? 0;            bVal = b.sqft ?? 0;            break
-        case 'status':        aVal = a.status;               bVal = b.status;               break
-        case 'listingCount':  aVal = a.listingCount;         bVal = b.listingCount;         break
+        case 'capacity':      aVal = a.capacity ?? 0;        bVal = b.capacity ?? 0;        break
         default:              aVal = a.number;               bVal = b.number
       }
       const dir = sortDir === 'asc' ? 1 : -1
