@@ -10,6 +10,7 @@ import { getSignedImageUrl } from '@/lib/storage/gcs'
 import { isDriveFolderUrl, getDriveFolderId } from '@/lib/image-utils'
 import { listFolderImages } from '@/lib/integrations/google-drive'
 import { computeUnitAndKeyCount } from '@/lib/utils/unit-counts'
+import { TYPE_LABELS } from '@/lib/constants/units'
 
 export const metadata: Metadata = { title: 'Building Detail' }
 
@@ -26,12 +27,19 @@ const unitStatusStyles: Record<string, string> = {
   renovation: 'bg-blue-50 text-blue-600',
 }
 
+const unitStatusDot: Record<string, string> = {
+  active:     'bg-mvr-success',
+  onboarding: 'bg-mvr-warning',
+  renovation: 'bg-blue-400',
+  inactive:   'bg-[#ccc]',
+}
+
 export default async function BuildingDetailPage({ params }: { params: { id: string } }) {
   const building = await db.building.findUnique({
     where: { id: params.id },
     include: {
       city: { include: { state: { include: { country: true } } } },
-      units: { orderBy: { number: 'asc' } },
+      units: { orderBy: { number: 'asc' }, include: { owner: { select: { nickname: true } } } },
       propertyManagers: { orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }] },
       _count: { select: { units: true, contracts: true } },
     },
@@ -145,32 +153,59 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             {building.units.length === 0 ? (
               <p className="text-sm text-muted-foreground p-5">No units yet.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-mvr-neutral border-b">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Unit</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Beds</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {building.units.map((unit) => (
-                    <tr key={unit.id} className="hover:bg-mvr-neutral/50 transition-colors">
-                      <td className="px-4 py-2.5 font-medium">{unit.number}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground capitalize">
-                        {unit.type?.replace('_', ' ') ?? '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{unit.bedrooms ?? '—'}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${unitStatusStyles[unit.status] ?? unitStatusStyles.inactive}`}>
-                          {unit.status}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-mvr-cream border-b">
+                    <tr>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Unit #</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Owner</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Type</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Sqft</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Capacity</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[#E0DBD4]">
+                    {building.units.map((unit) => {
+                      const score = unit.score ? Number(unit.score) : null
+                      const scoreClass = score === null
+                        ? ''
+                        : score >= 8 ? 'bg-mvr-success-light text-mvr-success border border-mvr-success'
+                        : score >= 5 ? 'bg-mvr-warning-light text-mvr-warning border border-mvr-warning'
+                        : 'bg-mvr-danger-light text-mvr-danger border border-mvr-danger'
+                      return (
+                        <tr key={unit.id} className="hover:bg-mvr-neutral/50 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${unitStatusDot[unit.status] ?? 'bg-[#ccc]'}`} />
+                              <span className="font-medium text-mvr-primary">{unit.number}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.owner?.nickname ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                            {unit.type ? (TYPE_LABELS[unit.type] ?? unit.type) : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.sqft ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.capacity ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.line ?? '—'}</td>
+                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.view ?? '—'}</td>
+                          <td className="px-4 py-2.5">
+                            {score !== null ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreClass}`}>
+                                {unit.score?.toString()}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
