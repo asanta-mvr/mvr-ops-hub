@@ -6,6 +6,7 @@ import { getSignedImageUrl } from '@/lib/storage/gcs'
 import { Button } from '@/components/ui/button'
 import BuildingsMapView from '@/components/modules/data-master/BuildingsMapView'
 import type { BuildingFull } from '@/components/modules/data-master/BuildingsMapView'
+import { computeUnitAndKeyCount } from '@/lib/utils/unit-counts'
 
 export const metadata: Metadata = { title: 'Buildings' }
 
@@ -14,7 +15,7 @@ async function getBuildings(): Promise<BuildingFull[]> {
     include: {
       city:   { include: { state: true } },
       _count: { select: { units: true } },
-      units:  { select: { ownerUniqueId: true, _count: { select: { listings: true } } } },
+      units:  { select: { number: true, ownerUniqueId: true } },
     },
     orderBy: { name: 'asc' },
   })
@@ -40,8 +41,7 @@ async function getBuildings(): Promise<BuildingFull[]> {
     checkinHours:   b.checkinHours,
     checkoutHours:  b.checkoutHours,
     amenities:      b.amenities,
-    unitCount:      b._count.units,
-    keyCount:       b.units.reduce((sum, u) => sum + u._count.listings, 0),
+    ...computeUnitAndKeyCount(b.units.map(u => u.number)),
     ownerCount:     new Set(b.units.map((u) => u.ownerUniqueId).filter(Boolean)).size,
     createdAt:      b.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     city:           b.city,
