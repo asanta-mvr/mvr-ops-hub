@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useForm } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
@@ -187,6 +188,7 @@ export function OwnerForm({ ownerId, defaultValues }: OwnerFormProps) {
 
     const data = await res.json()
     const targetId = isEdit ? ownerId : (data as { data: { id: string } }).data.id
+    toast.success(isEdit ? 'Owner updated successfully' : 'Owner created successfully')
     router.push(`/data-master/owners/${targetId}`)
     router.refresh()
   }

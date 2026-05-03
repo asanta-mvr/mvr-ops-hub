@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
@@ -536,6 +537,7 @@ export default function UnitForm({
 
     const data = await res.json()
     const targetId = isEdit ? unitId : (data.data as { id: string }).id
+    toast.success(isEdit ? 'Unit updated successfully' : 'Unit created successfully')
     router.push(`/data-master/units/${targetId}`)
     router.refresh()
   }

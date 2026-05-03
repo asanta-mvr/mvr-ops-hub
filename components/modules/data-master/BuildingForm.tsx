@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
@@ -385,6 +386,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
     }
 
     const data = await res.json()
+    toast.success(isEdit ? 'Building updated successfully' : 'Building created successfully')
     router.push(`/data-master/buildings/${data.data.id}`)
     router.refresh()
   }
