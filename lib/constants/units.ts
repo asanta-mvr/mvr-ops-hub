@@ -9,3 +9,11 @@ export const TYPE_LABELS: Record<string, string> = {
   penthouse: 'Penthouse',
   other:     'Other',
 }
+
+export const UNIT_TYPE_LABELS: Record<string, string> = {
+  room:          'Room',
+  studio:        'Studio',
+  one_bedroom:   '1 Bedroom',
+  two_bedroom:   '2 Bedroom',
+  three_bedroom: '3 Bedroom',
+}

@@ -22,6 +22,7 @@ async function getUnits(): Promise<UnitFull[]> {
     line:             u.line,
     view:             u.view,
     type:             u.type ?? null,
+    unitType:         u.unitType ?? null,
     bedrooms:         u.bedrooms,
     bathrooms:        u.bathrooms ? String(u.bathrooms) : null,
     bathType:         u.bathType ?? null,

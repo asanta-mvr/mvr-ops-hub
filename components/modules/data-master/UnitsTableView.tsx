@@ -28,6 +28,7 @@ export interface UnitFull {
   line: string | null
   view: string | null
   type: string | null
+  unitType: string | null
   bedrooms: number | null
   bathrooms: string | null
   bathType:  string | null
@@ -61,7 +62,7 @@ type SortDir = 'asc' | 'desc'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-import { TYPE_LABELS } from '@/lib/constants/units'
+import { TYPE_LABELS, UNIT_TYPE_LABELS } from '@/lib/constants/units'
 
 const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
@@ -256,13 +257,13 @@ function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuild
 // Single <table> with floor-group separator rows so all columns stay aligned.
 
 const COLS: { key: SortKey; label: string }[] = [
-  { key: 'number',        label: 'Unit #'   },
-  { key: 'ownerNickname', label: 'Owner'    },
-  { key: 'sqft',          label: 'Sqft'     },
-  { key: 'status',        label: 'Status'   },
-  { key: 'listingCount',  label: 'Listings' },
+  { key: 'number',        label: 'Unit #'    },
+  { key: 'ownerNickname', label: 'Owner'     },
+  { key: 'sqft',          label: 'Sqft'      },
+  { key: 'status',        label: 'Status'    },
+  { key: 'listingCount',  label: 'Listings'  },
 ]
-// COLS (5) + View + Line + Score + chevron = 9 columns total
+// COLS (5) + UnitType + View + Line + Score + chevron = 10 columns total
 
 interface UnifiedFloorTableProps {
   floorGroups: { label: string; units: UnitFull[] }[]
@@ -300,6 +301,7 @@ function UnifiedFloorTable({
                   <SortIndicator col={key} sortKey={sortKey} sortDir={sortDir} />
                 </th>
               ))}
+              <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Unit Type</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
               <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
@@ -311,7 +313,7 @@ function UnifiedFloorTable({
               <React.Fragment key={label}>
                 {/* Floor separator row */}
                 <tr className="border-y border-[#E0DBD4]">
-                  <td colSpan={9} className="px-5 py-2 bg-mvr-neutral">
+                  <td colSpan={10} className="px-5 py-2 bg-mvr-neutral">
                     <div className="flex items-center gap-2">
                       <Building2 className="w-3.5 h-3.5 text-mvr-primary/50 shrink-0" />
                       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -333,6 +335,9 @@ function UnifiedFloorTable({
                       <span className="font-medium text-mvr-primary">{u.number}</span>
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{u.ownerNickname ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                      {u.unitType ? (UNIT_TYPE_LABELS[u.unitType] ?? u.unitType) : '—'}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
                       {u.sqft ? u.sqft.toLocaleString() : '—'}
                     </td>

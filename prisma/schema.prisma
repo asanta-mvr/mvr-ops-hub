@@ -288,6 +288,14 @@ model UnitFieldOption {
   @@map("unit_field_options")
 }
 
+enum UnitType {
+  room
+  studio
+  one_bedroom
+  two_bedroom
+  three_bedroom
+}
+
 model Unit {
   id             String     @id @default(cuid())
   number         String
@@ -295,6 +303,7 @@ model Unit {
   line           String?
   view           String?
   type           String?
+  unitType       UnitType?
   bedrooms       Int?
   bathrooms      Decimal?   @db.Decimal(3, 1)
   bathType       String?

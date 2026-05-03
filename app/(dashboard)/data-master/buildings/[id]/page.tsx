@@ -9,6 +9,7 @@ import BuildingHeroGallery from '@/components/modules/data-master/BuildingHeroGa
 import { getSignedImageUrl } from '@/lib/storage/gcs'
 import { isDriveFolderUrl, getDriveFolderId } from '@/lib/image-utils'
 import { listFolderImages } from '@/lib/integrations/google-drive'
+import { UNIT_TYPE_LABELS } from '@/lib/constants/units'
 
 export const metadata: Metadata = { title: 'Building Detail' }
 
@@ -147,6 +148,7 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Unit</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Type</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Unit Type</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Beds</th>
                     <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Status</th>
                   </tr>
@@ -157,6 +159,9 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
                       <td className="px-4 py-2.5 font-medium">{unit.number}</td>
                       <td className="px-4 py-2.5 text-muted-foreground capitalize">
                         {unit.type?.replace('_', ' ') ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                        {unit.unitType ? (UNIT_TYPE_LABELS[unit.unitType] ?? unit.unitType) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">{unit.bedrooms ?? '—'}</td>
                       <td className="px-4 py-2.5">
