@@ -7,6 +7,7 @@ import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Plus, Check, X, Info } from 'lucide-react'
+import HouseRulesFormEditor from './HouseRulesFormEditor'
 
 const formSchema = z.object({
   name:           z.string().min(1, 'Building name is required').max(200),
@@ -571,14 +572,17 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
 
       {/* ── House Rules & KB ── */}
       <SectionCard title="House Rules & Knowledge Base">
-        <div>
-          <Label>House Rules</Label>
-          <Textarea {...register('rules')} rows={4} placeholder="No parties, quiet hours after 10pm…" />
-        </div>
-        <div>
-          <Label>Knowledge Base</Label>
-          <Textarea {...register('knowledgeBase')} rows={4} placeholder="Building-specific notes for the team…" />
-        </div>
+        <Controller
+          control={control}
+          name="knowledgeBase"
+          render={({ field }) => (
+            <HouseRulesFormEditor
+              value={field.value ?? ''}
+              onChange={field.onChange}
+              buildingName={watch('name') || 'Building'}
+            />
+          )}
+        />
       </SectionCard>
 
       <div className="flex items-center gap-3 pt-2">
