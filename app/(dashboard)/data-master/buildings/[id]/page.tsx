@@ -20,13 +20,6 @@ const statusStyles: Record<string, string> = {
   inactive:   'bg-mvr-neutral text-[#888] border-[#ccc]',
 }
 
-const unitStatusStyles: Record<string, string> = {
-  active:     'bg-mvr-success-light text-mvr-success',
-  onboarding: 'bg-mvr-warning-light text-mvr-warning',
-  inactive:   'bg-mvr-neutral text-[#888]',
-  renovation: 'bg-blue-50 text-blue-600',
-}
-
 const unitStatusDot: Record<string, string> = {
   active:     'bg-mvr-success',
   onboarding: 'bg-mvr-warning',
