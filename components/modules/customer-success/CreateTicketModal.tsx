@@ -12,9 +12,7 @@ const schema = z.object({
   source:           z.enum(['airbnb', 'booking', 'vrbo', 'expedia', 'vacasa', 'other']),
   subject:          z.string().min(1, 'Required'),
   body:             z.string().min(1, 'Required'),
-  fromEmail:        z.string().email('Enter a valid email'),
   guestName:        z.string().optional(),
-  guestPhone:       z.string().optional(),
   confirmationCode: z.string().optional(),
   checkinDate:      z.string().optional(),
   checkoutDate:     z.string().optional(),
@@ -88,11 +86,12 @@ export function CreateTicketModal({ buildings, agents: _agents, units, onClose }
       }
       const d = json.data
       setValue('confirmationCode', lookupCode.trim())
-      if (d.source)       setValue('source',      d.source)
-      if (d.guestName)    setValue('guestName',   d.guestName)
-      if (d.guestPhone)   setValue('guestPhone',  d.guestPhone)
+      if (d.source)       setValue('source',       d.source)
+      if (d.guestName)    setValue('guestName',    d.guestName)
       if (d.checkinDate)  setValue('checkinDate',  d.checkinDate.slice(0, 10))
       if (d.checkoutDate) setValue('checkoutDate', d.checkoutDate.slice(0, 10))
+      if (d.buildingId)   setValue('buildingId',   d.buildingId)
+      if (d.unitId)       setValue('unitId',       d.unitId)
       setLookupLabel(d.property ? { property: d.property, unit: d.unit ?? '' } : null)
       setLookupState('found')
       setAutoFilled(true)
@@ -182,31 +181,33 @@ export function CreateTicketModal({ buildings, agents: _agents, units, onClose }
 
           <hr className="border-[#E0DBD4]" />
 
-          {/* 2. Guest Name | Phone */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">Guest Name</label>
-              <input
-                {...register('guestName')}
-                type="text"
-                placeholder="John Doe"
-                readOnly={autoFilled && !!watch('guestName')}
-                className={autoFilled && watch('guestName') ? readonlyInput : inputBase}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">Phone</label>
-              <input
-                {...register('guestPhone')}
-                type="text"
-                placeholder="+1 (305) 000-0000"
-                readOnly={autoFilled && !!watch('guestPhone')}
-                className={autoFilled && watch('guestPhone') ? readonlyInput : inputBase}
-              />
-            </div>
+          {/* 2. Guest Name */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">Guest Name</label>
+            <input
+              {...register('guestName')}
+              type="text"
+              placeholder="John Doe"
+              readOnly={autoFilled && !!watch('guestName')}
+              className={autoFilled && watch('guestName') ? readonlyInput : inputBase}
+            />
           </div>
 
-          {/* 3. Check-in | Check-out */}
+          {/* 3. OTA Source */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-600">OTA Source *</label>
+            <select
+              {...register('source')}
+              disabled={autoFilled}
+              className={autoFilled ? readonlyInput : inputBase}
+            >
+              {OTA_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. Check-in | Check-out */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Check-in</label>
@@ -225,27 +226,6 @@ export function CreateTicketModal({ buildings, agents: _agents, units, onClose }
                 readOnly={autoFilled && !!watch('checkoutDate')}
                 className={autoFilled && watch('checkoutDate') ? readonlyInput : inputBase}
               />
-            </div>
-          </div>
-
-          {/* 4. Contact Email * | OTA Source */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">Contact Email *</label>
-              <input {...register('fromEmail')} type="email" placeholder="guest@example.com" className={inputBase} />
-              {errors.fromEmail && <p className="text-xs text-mvr-danger">{errors.fromEmail.message}</p>}
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-gray-600">OTA Source *</label>
-              <select
-                {...register('source')}
-                disabled={autoFilled}
-                className={autoFilled ? readonlyInput : inputBase}
-              >
-                {OTA_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
             </div>
           </div>
 
@@ -275,7 +255,7 @@ export function CreateTicketModal({ buildings, agents: _agents, units, onClose }
 
           <hr className="border-[#E0DBD4]" />
 
-          {/* 6. Category — select fijo */}
+          {/* 6. Category */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Category</label>
             <select {...register('category')} className={inputBase}>
@@ -286,7 +266,7 @@ export function CreateTicketModal({ buildings, agents: _agents, units, onClose }
             </select>
           </div>
 
-          {/* 7. Subcategory (stored as subject) — combobox */}
+          {/* 7. Subcategory (stored as subject) */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Subcategory *</label>
             <input

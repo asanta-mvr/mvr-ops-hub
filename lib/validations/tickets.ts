@@ -11,7 +11,7 @@ export const createTicketSchema = z.object({
   category: z.string().optional(),
   subject: z.string().min(1),
   body: z.string(),
-  fromEmail: z.string().email(),
+  fromEmail: z.string().email().optional(),
   listingId: z.string().optional(),
   unitId: z.string().optional(),
   buildingId: z.string().optional(),
