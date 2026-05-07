@@ -13,18 +13,25 @@ const bigquery = new BigQuery({
     : {}),
 })
 
-const OTA_MAP: Record<string, OtaSource> = {
-  airbnb:      'airbnb',
-  booking:     'booking',
-  'booking.com': 'booking',
-  vrbo:        'vrbo',
-  expedia:     'expedia',
-  vacasa:      'vacasa',
-}
+// Substring patterns mapped to OtaSource enum values.
+// Order matters: more specific patterns first.
+const OTA_PATTERNS: Array<[string, OtaSource]> = [
+  ['airbnb',   'airbnb'],
+  ['booking',  'booking'],
+  ['bkns',     'booking'],
+  ['homeaway', 'vrbo'],
+  ['vrbo',     'vrbo'],
+  ['expedia',  'expedia'],
+  ['vacasa',   'vacasa'],
+]
 
 function mapOta(raw: string | null | undefined): OtaSource {
   if (!raw) return 'other'
-  return OTA_MAP[raw.toLowerCase()] ?? 'other'
+  const lower = raw.toLowerCase()
+  for (const [pattern, value] of OTA_PATTERNS) {
+    if (lower.includes(pattern)) return value
+  }
+  return 'other'
 }
 
 export interface ReservationLookup {
@@ -39,7 +46,7 @@ export interface ReservationLookup {
 
 export async function lookupReservation(confirmationCode: string): Promise<ReservationLookup | null> {
   const query = `
-    SELECT ota, guest_name, guest_phone, property, unit, checkin, checkout
+    SELECT source, guest_full_name, building_name, listing_nickname, check_in_date_localized, check_out_date_localized
     FROM \`miami-vr-data.ops.ops_reservations\`
     WHERE UPPER(confirmation_code) = UPPER(@confirmationCode)
     LIMIT 1
@@ -53,13 +60,12 @@ export async function lookupReservation(confirmationCode: string): Promise<Reser
   if (!rows || rows.length === 0) return null
 
   const r = rows[0] as {
-    ota?: string
-    guest_name?: string
-    guest_phone?: string
-    property?: string
-    unit?: string
-    checkin?: { value: string } | string
-    checkout?: { value: string } | string
+    source?: string
+    guest_full_name?: string
+    building_name?: string
+    listing_nickname?: string
+    check_in_date_localized?: { value: string } | string
+    check_out_date_localized?: { value: string } | string
   }
 
   const toIso = (v: unknown): string | null => {
@@ -70,12 +76,12 @@ export async function lookupReservation(confirmationCode: string): Promise<Reser
   }
 
   return {
-    source:       mapOta(r.ota),
-    guestName:    r.guest_name ?? null,
-    guestPhone:   r.guest_phone ?? null,
-    property:     r.property ?? null,
-    unit:         r.unit ?? null,
-    checkinDate:  toIso(r.checkin),
-    checkoutDate: toIso(r.checkout),
+    source:       mapOta(r.source),
+    guestName:    r.guest_full_name ?? null,
+    guestPhone:   null,
+    property:     r.building_name ?? null,
+    unit:         r.listing_nickname ?? null,
+    checkinDate:  toIso(r.check_in_date_localized),
+    checkoutDate: toIso(r.check_out_date_localized),
   }
 }
