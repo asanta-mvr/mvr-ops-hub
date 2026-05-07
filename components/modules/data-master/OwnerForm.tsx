@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 // ── Form schema (strings for form controls, validated before submit) ──────────
 
 const formSchema = z.object({
-  uniqueId:       z.string().min(1, 'Unique ID is required').max(50),
+  id:       z.string().min(1, 'Unique ID is required').max(50),
   nickname:       z.string().min(1, 'Nickname is required').max(100),
   type:           z.enum(['individual', 'company']),
   status:         z.enum(['active', 'inactive', 'churned']),
@@ -113,7 +113,7 @@ export function OwnerForm({ ownerId, defaultValues }: OwnerFormProps) {
   } = useForm<FormValues>({
     resolver: standardSchemaResolver(formSchema),
     defaultValues: {
-      uniqueId:       '',
+      id:       '',
       nickname:       '',
       type:           'individual',
       status:         'active',
@@ -161,7 +161,7 @@ export function OwnerForm({ ownerId, defaultValues }: OwnerFormProps) {
     }
 
     if (!isEdit) {
-      payload.uniqueId = values.uniqueId
+      payload.id = values.id
     }
 
     const url    = isEdit ? `/api/v1/owners/${ownerId}` : '/api/v1/owners'
@@ -213,12 +213,12 @@ export function OwnerForm({ ownerId, defaultValues }: OwnerFormProps) {
             <Label required>Unique ID</Label>
             {isEdit ? (
               <div className="px-3 py-2 border rounded-lg bg-gray-50 text-sm text-muted-foreground font-mono">
-                {defaultValues?.uniqueId}
-                <input type="hidden" {...register('uniqueId')} />
+                {defaultValues?.id}
+                <input type="hidden" {...register('id')} />
               </div>
             ) : (
               <Input
-                {...register('uniqueId')}
+                {...register('id')}
                 placeholder="e.g. 4165f8ff"
                 className="font-mono"
               />
@@ -228,7 +228,7 @@ export function OwnerForm({ ownerId, defaultValues }: OwnerFormProps) {
                 Short ID used to link this owner to units. Cannot be changed after creation.
               </p>
             )}
-            <FieldError message={errors.uniqueId?.message} />
+            <FieldError message={errors.id?.message} />
           </div>
         </div>
 

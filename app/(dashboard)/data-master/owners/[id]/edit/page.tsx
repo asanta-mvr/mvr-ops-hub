@@ -11,7 +11,7 @@ export default async function EditOwnerPage({ params }: { params: { id: string }
   if (!owner) notFound()
 
   const defaultValues = {
-    uniqueId:       owner.uniqueId,
+    id:       owner.id,
     nickname:       owner.nickname,
     type:           owner.type,
     status:         owner.status,
@@ -49,7 +49,7 @@ export default async function EditOwnerPage({ params }: { params: { id: string }
         </nav>
         <h1 className="text-2xl font-display font-bold text-mvr-primary">Edit Owner</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          {owner.nickname} · <span className="font-mono text-xs">{owner.uniqueId}</span>
+          {owner.nickname} · <span className="font-mono text-xs">{owner.id}</span>
         </p>
       </div>
 

@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       where: { id: params.id },
       include: {
         building: { select: { id: true, name: true, nickname: true, imageUrl: true } },
-        owner: { select: { id: true, uniqueId: true, nickname: true, phone: true, email: true } },
+        owner: { select: { id: true, nickname: true, phone: true, email: true } },
         listings: { orderBy: { name: 'asc' } },
         _count: { select: { listings: true, contracts: true, inspections: true, tickets: true } },
       },

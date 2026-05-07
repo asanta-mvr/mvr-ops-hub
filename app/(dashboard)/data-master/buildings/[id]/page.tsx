@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronRight, MapPin, ExternalLink, Globe, FolderOpen, Building2, KeyRound, FileText, Users } from 'lucide-react'
+import { ChevronRight, MapPin, ExternalLink, Globe, FolderOpen, Building2, KeyRound, FileText, Users, User, Home, Maximize2, Layers, Eye, Star } from 'lucide-react'
 import { db } from '@/lib/db'
 import ContactTabsPanel from '@/components/modules/data-master/ContactTabsPanel'
 import HouseRulesPanel from '@/components/modules/data-master/HouseRulesPanel'
@@ -134,74 +134,141 @@ export default async function BuildingDetailPage({ params }: { params: { id: str
             ))}
           </div>
 
-          {/* Units table */}
-          <div className="bg-white rounded-xl border overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b">
-              <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
-                Units ({building.units.length})
-              </h2>
-              <Link href={`/data-master/units?buildingId=${params.id}`} className="text-xs text-mvr-primary hover:underline">
-                View all
-              </Link>
-            </div>
-            {building.units.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-5">No units yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-mvr-cream border-b">
-                    <tr>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Unit #</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Owner</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Type</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Sqft</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Capacity</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E0DBD4]">
-                    {building.units.map((unit) => {
-                      const score = unit.score ? Number(unit.score) : null
-                      const scoreClass = score === null
-                        ? ''
-                        : score >= 8 ? 'bg-mvr-success-light text-mvr-success border border-mvr-success'
-                        : score >= 5 ? 'bg-mvr-warning-light text-mvr-warning border border-mvr-warning'
-                        : 'bg-mvr-danger-light text-mvr-danger border border-mvr-danger'
-                      return (
-                        <tr key={unit.id} className="hover:bg-mvr-neutral/50 transition-colors">
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-2 h-2 rounded-full shrink-0 ${unitStatusDot[unit.status] ?? 'bg-[#ccc]'}`} />
-                              <span className="font-medium text-mvr-primary">{unit.number}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.owner?.nickname ?? '—'}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                            {unit.type ? (TYPE_LABELS[unit.type] ?? unit.type) : '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.sqft ?? '—'}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.capacity ?? '—'}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.line ?? '—'}</td>
-                          <td className="px-4 py-2.5 text-xs text-muted-foreground">{unit.view ?? '—'}</td>
-                          <td className="px-4 py-2.5">
-                            {score !== null ? (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreClass}`}>
-                                {unit.score?.toString()}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
+          {/* Units table — grouped by floor, mirrors /data-master/units layout */}
+          {(() => {
+            // Group units by floor
+            const floorMap = new Map<number | null, typeof building.units>()
+            for (const u of building.units) {
+              const key = u.floor ?? null
+              if (!floorMap.has(key)) floorMap.set(key, [])
+              floorMap.get(key)!.push(u)
+            }
+            const numberedFloors = Array.from(floorMap.entries())
+              .filter((e): e is [number, typeof building.units] => e[0] !== null)
+              .sort(([a], [b]) => a - b)
+            const noFloor = floorMap.get(null)
+            const floorGroups = [
+              ...numberedFloors.map(([floor, units]) => ({ label: `Floor ${floor}`, units })),
+              ...(noFloor?.length ? [{ label: 'No Floor', units: noFloor }] : []),
+            ]
+
+            return (
+              <div className="bg-white rounded-xl border overflow-hidden shadow-card">
+                <div className="flex items-center justify-between px-5 py-4 border-b">
+                  <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">
+                    Units ({building.units.length})
+                  </h2>
+                  <Link href={`/data-master/units?buildingId=${params.id}`} className="text-xs text-mvr-primary hover:underline">
+                    View all
+                  </Link>
+                </div>
+                {building.units.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-5">No units yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-mvr-cream">
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Unit #</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Owner</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Type</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Sqft</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Capacity</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Line</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">View</th>
+                          <th className="text-left px-4 py-2.5 font-medium text-muted-foreground whitespace-nowrap">Score</th>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {floorGroups.map(({ label, units }) => (
+                          <>
+                            {/* Floor separator row */}
+                            <tr key={`sep-${label}`} className="border-y border-[#E0DBD4]">
+                              <td colSpan={8} className="px-5 py-2 bg-mvr-neutral">
+                                <div className="flex items-center gap-2">
+                                  <Building2 className="w-3.5 h-3.5 text-mvr-primary/50 shrink-0" />
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {label}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                            {/* Unit rows */}
+                            {units.map((unit) => {
+                              const score = unit.score ? Number(unit.score) : null
+                              const scoreClass = score === null
+                                ? ''
+                                : score >= 8 ? 'bg-mvr-success-light text-mvr-success border border-mvr-success'
+                                : score >= 5 ? 'bg-mvr-warning-light text-mvr-warning border border-mvr-warning'
+                                : 'bg-mvr-danger-light text-mvr-danger border border-mvr-danger'
+                              return (
+                                <tr key={unit.id} className="border-b border-[#E0DBD4] last:border-0 hover:bg-mvr-neutral/50 transition-colors">
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full shrink-0 ${unitStatusDot[unit.status] ?? 'bg-[#ccc]'}`} title={unit.status} />
+                                      <span className="font-medium text-mvr-primary">{unit.number}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <User className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.owner?.nickname ?? '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1.5">
+                                      <Home className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.type ? (TYPE_LABELS[unit.type] ?? unit.type) : '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <Maximize2 className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.sqft ? unit.sqft.toLocaleString() : '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1.5">
+                                      <Users className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.capacity ?? '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1.5">
+                                      <Layers className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.line ?? '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-muted-foreground capitalize">
+                                    <div className="flex items-center gap-1.5">
+                                      <Eye className="w-3 h-3 shrink-0 opacity-40" />
+                                      {unit.view ?? '—'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    {score !== null ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <Star className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreClass}`}>
+                                          {unit.score?.toString()}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          })()}
 
           {/* Amenities */}
           {building.amenities.length > 0 && (

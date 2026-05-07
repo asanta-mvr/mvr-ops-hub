@@ -17,7 +17,7 @@ export default async function NewUnitPage({
       orderBy: { name: 'asc' },
     }),
     db.owner.findMany({
-      select:  { uniqueId: true, nickname: true },
+      select:  { id: true, nickname: true },
       where:   { status: 'active' },
       orderBy: { nickname: 'asc' },
     }),

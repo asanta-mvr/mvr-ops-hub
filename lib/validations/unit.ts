@@ -23,7 +23,6 @@ export const createUnitSchema = z.object({
   features:       z.array(z.string()).default([]),
   driveFolderUrl: z.string().url().optional().or(z.literal('')),
   photoQuality:   z.enum(['pro', 'preliminary', 'low_quality']).optional(),
-  photoUrls:      z.array(z.string()).default([]),
   status:         z.string().min(1).default('onboarding'),
   score:          z.number().min(0).max(10).optional(),
   notes:          z.string().optional(),

@@ -1,23 +1,15 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Pencil, Trash2, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
   BedDouble, Bath, Maximize2, Users, Star, Layers,
-  Eye, Hash, Plus,
+  Eye, Hash, Plus, Camera,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-
-const GCS_BASE = 'https://storage.googleapis.com/mvr-ops-hub-assets'
-
-function resolveImageUrl(url: string | null | undefined): string | null {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return `${GCS_BASE}/${url}`
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,10 +32,10 @@ export interface UnitFull {
   twins: number
   hasKitchen: boolean
   hasBalcony: boolean
-  photoUrls: string[]
   status: string
   score: string | null
   notes: string | null
+  driveFolderUrl: string | null
   buildingId: string
   buildingName: string
   buildingNickname: string | null
@@ -285,9 +277,9 @@ function UnifiedFloorTable({
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden shadow-card">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-10rem)]">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="border-b bg-mvr-cream">
               {/* Unit # — first 2 COLS are sortable (number, owner) */}
               {COLS.slice(0, 2).map(({ key, label }) => (
@@ -348,23 +340,50 @@ function UnifiedFloorTable({
                         <span className="font-medium text-mvr-primary">{u.number}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{u.ownerNickname ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <User className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.ownerNickname ?? '—'}
+                      </div>
+                    </td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                      {u.type ? (TYPE_LABELS[u.type] ?? u.type) : '—'}
+                      <div className="flex items-center gap-1.5">
+                        <Home className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.type ? (TYPE_LABELS[u.type] ?? u.type) : '—'}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                      {u.sqft ? u.sqft.toLocaleString() : '—'}
+                      <div className="flex items-center gap-1.5">
+                        <Maximize2 className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.sqft ? u.sqft.toLocaleString() : '—'}
+                      </div>
                     </td>
                     <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                      {u.capacity ?? '—'}
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.capacity ?? '—'}
+                      </div>
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.line ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{u.view ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.line ?? '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground capitalize">
+                      <div className="flex items-center gap-1.5">
+                        <Eye className="w-3 h-3 shrink-0 opacity-40" />
+                        {u.view ?? '—'}
+                      </div>
+                    </td>
                     <td className="px-4 py-2.5">
                       {u.score ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreStyle(u.score)}`}>
-                          {u.score}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <Star className="w-3 h-3 shrink-0 opacity-40 text-muted-foreground" />
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${scoreStyle(u.score)}`}>
+                            {u.score}
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -379,6 +398,118 @@ function UnifiedFloorTable({
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// ── Unit Panel Gallery ────────────────────────────────────────────────────
+
+function UnitPanelGallery({ unit }: { unit: UnitFull }) {
+  const [urls,    setUrls]    = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [current, setCurrent] = useState(0)
+  const thumbsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    setCurrent(0)
+    let cancelled = false
+    fetch(`/api/v1/units/${unit.id}/gallery`)
+      .then(r => r.json())
+      .then((d: { urls?: string[] }) => { if (!cancelled) { setUrls(d.urls ?? []); setCurrent(0) } })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [unit.id])
+
+  useEffect(() => {
+    if (!thumbsRef.current) return
+    const el = thumbsRef.current.children[current] as HTMLElement | undefined
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [current])
+
+  const prev = () => setCurrent(i => (i - 1 + urls.length) % urls.length)
+  const next = () => setCurrent(i => (i + 1) % urls.length)
+
+  const overlay = (
+    <>
+      {/* Status top-left */}
+      <div className="absolute top-2.5 left-2.5">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[unit.status] ?? STATUS_STYLES.inactive}`}>
+          {statusLabel(unit.status)}
+        </span>
+      </div>
+      {/* Score top-right */}
+      {unit.score && (
+        <div className="absolute top-2.5 right-2.5">
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${scoreStyle(unit.score)}`}>
+            <Star className="w-3 h-3" />{unit.score}
+          </span>
+        </div>
+      )}
+      {/* Unit info bottom */}
+      <div className="absolute bottom-0 left-0 right-0 px-3 py-2.5 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent">
+        <div className="min-w-0">
+          <p className="text-white font-bold text-sm leading-tight drop-shadow">Unit {unit.number}</p>
+          <p className="text-white/70 text-xs truncate">{unit.buildingName}</p>
+        </div>
+        {unit.sqft && (
+          <span className="text-white/80 text-xs shrink-0 ml-2">{unit.sqft.toLocaleString()} sqft</span>
+        )}
+      </div>
+    </>
+  )
+
+  if (loading) return (
+    <div className="relative aspect-video bg-mvr-neutral animate-pulse overflow-hidden">
+      <Camera className="absolute inset-0 m-auto w-8 h-8 text-muted-foreground/20" />
+      {overlay}
+    </div>
+  )
+
+  if (urls.length === 0) return (
+    <div className="relative aspect-video bg-gradient-to-br from-mvr-primary to-[#2a3f5a] overflow-hidden">
+      <Home className="absolute inset-0 m-auto w-10 h-10 text-white/10" />
+      {overlay}
+    </div>
+  )
+
+  return (
+    <div>
+      {/* Main image */}
+      <div className="relative aspect-video overflow-hidden group">
+        <img src={urls[current]} alt="Unit photo" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
+        {urls.length > 1 && (
+          <>
+            <button
+              onClick={prev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors"
+            ><ChevronLeft className="w-4 h-4" /></button>
+            <button
+              onClick={next}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors"
+            ><ChevronRight className="w-4 h-4" /></button>
+          </>
+        )}
+        {overlay}
+      </div>
+      {/* Thumbnail strip */}
+      {urls.length > 1 && (
+        <div ref={thumbsRef} className="flex gap-1.5 overflow-x-auto px-2 py-2 bg-mvr-neutral/60">
+          {urls.map((url, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrent(i)}
+              className={`shrink-0 w-11 h-11 rounded-lg overflow-hidden border-2 transition-all ${
+                i === current ? 'border-mvr-primary' : 'border-transparent opacity-50 hover:opacity-90'
+              }`}
+            >
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -403,10 +534,8 @@ function UnitDetailPanel({
   onClose, onPrev, onNext,
   confirmDelete, onConfirmDelete, onCancelDelete, onDelete,
 }: UnitDetailPanelProps) {
-  const heroUrl = resolveImageUrl(unit.photoUrls[0])
   const [commentText, setCommentText] = useState('')
   const [savedComments, setSavedComments] = useState<Array<{ id: string; text: string; date: string }>>([])
-  const [photoModalOpen, setPhotoModalOpen] = useState(false)
 
   function handleAddComment() {
     if (!commentText.trim()) return
@@ -420,43 +549,12 @@ function UnitDetailPanel({
 
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border overflow-hidden shadow-panel">
-      {/* Hero */}
-      <div className="relative h-60 shrink-0">
-        {heroUrl ? (
-          <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${heroUrl})` }} />
-        ) : (
-          <div className="absolute inset-0 bg-mvr-primary/10 flex items-center justify-center">
-            <Home className="w-12 h-12 text-mvr-primary/20" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-mvr-primary/80 via-mvr-primary/20 to-transparent" />
-        {unit.score && (
-          <div className="absolute top-3 right-3 z-10">
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm ${scoreStyle(unit.score)}`}>
-              <Star className="w-3 h-3" />{unit.score}
-            </span>
-          </div>
-        )}
-        <div className="absolute bottom-3 left-4 right-4 z-10 flex items-end justify-between gap-2">
-          <div className="min-w-0">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border mb-1 ${
-              STATUS_STYLES[unit.status] ?? STATUS_STYLES.inactive
-            }`}>
-              {statusLabel(unit.status)}
-            </span>
-            <h3 className="text-base font-bold text-white drop-shadow leading-tight">Unit {unit.number}</h3>
-            <p className="text-white/70 text-xs mt-0.5">{unit.buildingName}</p>
-          </div>
-          {unit.sqft && (
-            <div className="shrink-0 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1 flex items-center gap-1 text-xs font-semibold text-mvr-primary">
-              <Maximize2 className="w-3 h-3" />
-              {unit.sqft.toLocaleString()} sqft
-            </div>
-          )}
-        </div>
+      {/* Gallery hero */}
+      <div className="shrink-0 overflow-hidden rounded-t-xl">
+        <UnitPanelGallery unit={unit} />
       </div>
 
-      {/* Action header */}
+      {/* Action bar */}
       <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b bg-mvr-neutral/50">
         {/* Nav arrows + counter */}
         <div className="flex items-center gap-0.5">
@@ -549,7 +647,7 @@ function UnitDetailPanel({
               {unit.view && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="w-3.5 h-3.5 shrink-0 opacity-40" />
-                  <span>{unit.view}</span>
+                  <span className="capitalize">{unit.view}</span>
                 </div>
               )}
             </div>
@@ -610,26 +708,13 @@ function UnitDetailPanel({
                   <BedDouble className="w-3 h-3 shrink-0 opacity-40" />
                   <span>{unit.twins} Twin</span>
                 </div>
+                {unit.otherBeds && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <BedDouble className="w-3 h-3 shrink-0 opacity-40" />
+                    <span>{unit.otherBeds}</span>
+                  </div>
+                )}
               </div>
-            </div>
-            {/* Photos */}
-            <div className="space-y-1.5 pt-1">
-              <p className="text-xs font-medium text-muted-foreground">Photos</p>
-              {unit.photoUrls.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {unit.photoUrls.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPhotoModalOpen(true)}
-                      className="px-2 py-0.5 bg-mvr-neutral rounded-full text-xs text-muted-foreground border border-[#E0DBD4] hover:bg-mvr-steel-light transition-colors"
-                    >
-                      {i === 0 ? 'Preliminary' : `Photo ${i + 1}`}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground/40">No photos</p>
-              )}
             </div>
           </div>
         </div>
@@ -691,54 +776,6 @@ function UnitDetailPanel({
           </div>
         </div>
       </div>
-
-      {/* Photo lightbox modal */}
-      {photoModalOpen && (
-        <div
-          className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setPhotoModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-              <p className="text-sm font-semibold text-mvr-primary">
-                Photos · {unit.photoUrls.length}
-              </p>
-              <button
-                onClick={() => setPhotoModalOpen(false)}
-                className="p-1 rounded hover:bg-mvr-neutral transition-colors"
-              >
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
-            </div>
-            <div className="overflow-y-auto p-4 grid grid-cols-2 gap-3">
-              {unit.photoUrls.map((url, i) => {
-                const resolved = resolveImageUrl(url)
-                return (
-                  <a key={i} href={resolved ?? '#'} target="_blank" rel="noopener noreferrer" className="block">
-                    {resolved ? (
-                      <img
-                        src={resolved}
-                        alt={`Photo ${i + 1}`}
-                        className="w-full aspect-video object-cover rounded-xl hover:opacity-90 transition-opacity border border-[#E0DBD4]"
-                      />
-                    ) : (
-                      <div className="w-full aspect-video rounded-xl bg-mvr-neutral flex items-center justify-center border border-[#E0DBD4]">
-                        <Home className="w-6 h-6 text-muted-foreground/30" />
-                      </div>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-1 truncate px-0.5">
-                      {i === 0 ? 'Preliminary' : `Photo ${i + 1}`}
-                    </p>
-                  </a>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <div className="shrink-0 border-t p-3 space-y-2">
@@ -825,11 +862,19 @@ export default function UnitsTableView({ units, initialBuildingId }: UnitsTableV
       if (filterStatus   && u.status    !== filterStatus)   return false
       if (search) {
         const q = search.toLowerCase()
+        const typeLabel = u.type ? (TYPE_LABELS[u.type] ?? u.type) : ''
         const match =
           u.number.toLowerCase().includes(q) ||
           u.buildingName.toLowerCase().includes(q) ||
           (u.ownerNickname?.toLowerCase().includes(q) ?? false) ||
-          (u.view?.toLowerCase().includes(q) ?? false)
+          typeLabel.toLowerCase().includes(q) ||
+          (u.type?.toLowerCase().includes(q) ?? false) ||
+          (u.sqft ? String(u.sqft).includes(q) : false) ||
+          (u.capacity ? String(u.capacity).includes(q) : false) ||
+          (u.line?.toLowerCase().includes(q) ?? false) ||
+          (u.view?.toLowerCase().includes(q) ?? false) ||
+          (u.score ? u.score.includes(q) : false) ||
+          statusLabel(u.status).toLowerCase().includes(q)
         if (!match) return false
       }
       return true

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const createOwnerSchema = z.object({
-  uniqueId: z.string().min(1, 'Unique ID is required').max(50),
+  id: z.string().min(1, 'ID is required').max(50),
   nickname: z.string().min(1, 'Nickname is required').max(100),
   type: z.enum(['individual', 'company']).default('individual'),
   category: z.string().max(50).optional(),
@@ -22,7 +22,7 @@ export const createOwnerSchema = z.object({
   status: z.enum(['active', 'inactive', 'churned']).default('active'),
 })
 
-export const updateOwnerSchema = createOwnerSchema.partial().omit({ uniqueId: true })
+export const updateOwnerSchema = createOwnerSchema.partial().omit({ id: true })
 
 export type CreateOwnerInput = z.infer<typeof createOwnerSchema>
 export type UpdateOwnerInput = z.infer<typeof updateOwnerSchema>

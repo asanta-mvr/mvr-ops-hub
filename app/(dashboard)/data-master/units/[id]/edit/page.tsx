@@ -15,7 +15,7 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
       orderBy: { name: 'asc' },
     }),
     db.owner.findMany({
-      select:  { uniqueId: true, nickname: true },
+      select:  { id: true, nickname: true },
       where:   { status: 'active' },
       orderBy: { nickname: 'asc' },
     }),
@@ -64,7 +64,6 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
     totalBeds:      unit.totalBeds != null ? String(unit.totalBeds) : '0',
     otherBeds:      unit.otherBeds         ?? '',
     features,
-    photoUrls:      unit.photoUrls,
     driveFolderUrl: unit.driveFolderUrl    ?? '',
     photoQuality:   (unit.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
     notes:          unit.notes             ?? '',

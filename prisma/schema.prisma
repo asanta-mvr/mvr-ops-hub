@@ -225,8 +225,7 @@ enum OwnerType {
 }
 
 model Owner {
-  id             String      @id @default(cuid())
-  uniqueId       String      @unique
+  id             String      @id
   nickname       String
   type           OwnerType   @default(individual)
   category       String?
@@ -268,7 +267,7 @@ model GuestyOwner {
   addressField9   String?
   syncedAt        DateTime  @default(now())
 
-  owner Owner? @relation(fields: [ownerUniqueId], references: [uniqueId])
+  owner Owner? @relation(fields: [ownerUniqueId], references: [id])
 
   @@map("guesty_owners")
 }
@@ -288,14 +287,6 @@ model UnitFieldOption {
   @@map("unit_field_options")
 }
 
-enum UnitType {
-  room
-  studio
-  one_bedroom
-  two_bedroom
-  three_bedroom
-}
-
 model Unit {
   id             String     @id @default(cuid())
   number         String
@@ -303,7 +294,6 @@ model Unit {
   line           String?
   view           String?
   type           String?
-  unitType       UnitType?
   bedrooms       Int?
   bathrooms      Decimal?   @db.Decimal(3, 1)
   bathType       String?
@@ -320,7 +310,6 @@ model Unit {
   hasBalcony     Boolean    @default(false)
   features       String[]
   driveFolderUrl String?
-  photoUrls      String[]
   status         String     @default("onboarding")
   score          Decimal?   @db.Decimal(3, 1)
   photoQuality   String?
@@ -331,7 +320,7 @@ model Unit {
   updatedAt      DateTime   @updatedAt
 
   building    Building             @relation(fields: [buildingId], references: [id])
-  owner       Owner?               @relation(fields: [ownerUniqueId], references: [uniqueId])
+  owner       Owner?               @relation(fields: [ownerUniqueId], references: [id])
   listings    Listing[]
   contracts   OwnerContract[]
   inspections UnitInspection[]

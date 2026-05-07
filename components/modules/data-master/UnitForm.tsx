@@ -8,7 +8,6 @@ import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { FileUploader } from '@/components/ui/file-uploader'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,7 +41,6 @@ const formSchema = z.object({
   totalBeds:      z.string().optional(),
   otherBeds:      z.string().max(200).optional(),
   features:       z.array(z.string()),
-  photoUrls:      z.array(z.string()),
   driveFolderUrl: z.string().optional(),
   photoQuality:   z.enum(['pro', 'preliminary', 'low_quality']).optional(),
   notes:          z.string().optional(),
@@ -53,7 +51,7 @@ type FormValues = z.infer<typeof formSchema>
 interface UnitFormProps {
   unitId?:          string
   buildings:        { id: string; name: string }[]
-  owners:           { uniqueId: string; nickname: string }[]
+  owners:           { id: string; nickname: string }[]
   defaultValues?:   Partial<FormValues>
   currentScore?:    string
   typeOptions:      FieldOption[]
@@ -432,7 +430,6 @@ export default function UnitForm({
       totalBeds:      '0',
       otherBeds:      '',
       features:       [],
-      photoUrls:      [] as string[],
       driveFolderUrl: '',
       photoQuality:   undefined,
       notes:          '',
@@ -444,8 +441,6 @@ export default function UnitForm({
   const viewValue      = watch('view')           ?? ''
   const bathTypeValue  = watch('bathType')       ?? ''
   const statusValue    = watch('status')         ?? ''
-  const driveFolderUrl = watch('driveFolderUrl') ?? ''
-  const hasdriveFolder = driveFolderUrl.trim().length > 0
 
   // Auto-compute total beds from kings + queens + twins
   const kingsStr  = watch('kings')  ?? '0'
@@ -498,8 +493,7 @@ export default function UnitForm({
       otherBeds:      values.otherBeds      || undefined,
       hasKitchen:     features.includes('kitchen'),
       hasBalcony:     features.includes('balcony'),
-      features:       features.filter(f => f !== 'kitchen' && f !== 'balcony'),
-      photoUrls:      values.photoUrls ?? [],
+      features:       features,
       driveFolderUrl: values.driveFolderUrl || undefined,
       photoQuality:   values.photoQuality   || undefined,
       notes:          values.notes          || undefined,
@@ -629,7 +623,7 @@ export default function UnitForm({
             <NativeSelect {...register('ownerUniqueId')}>
               <option value="">Select owner…</option>
               {owners.map((o) => (
-                <option key={o.uniqueId} value={o.uniqueId}>{o.nickname}</option>
+                <option key={o.id} value={o.id}>{o.nickname}</option>
               ))}
             </NativeSelect>
             <FieldError message={errors.ownerUniqueId?.message} />
@@ -770,30 +764,7 @@ export default function UnitForm({
           </NativeSelect>
         </div>
 
-        {/* 3. Unit photos — gated behind Drive folder */}
-        <div>
-          <Controller
-            control={control}
-            name="photoUrls"
-            render={({ field }) => (
-              <FileUploader
-                value={field.value}
-                onChange={field.onChange}
-                folder="units"
-                accept="image/*"
-                label="Unit photos"
-                disabled={!hasdriveFolder}
-              />
-            )}
-          />
-          {!hasdriveFolder && (
-            <p className="text-xs text-amber-600 mt-1">
-              Set a Google Drive folder above to enable photo uploads.
-            </p>
-          )}
-        </div>
-
-        {/* 4. Score — read-only, calculated field */}
+        {/* 3. Score — read-only, calculated field */}
         <div>
           <Label>Score (calculated)</Label>
           <div className="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50 text-sm text-muted-foreground">

@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
               OR: [
                 { nickname: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
-                { uniqueId: { contains: search, mode: 'insensitive' } },
+                { id: { contains: search, mode: 'insensitive' } },
               ],
             }
           : {}),

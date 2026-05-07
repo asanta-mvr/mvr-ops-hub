@@ -21,8 +21,7 @@ export interface OwnerUnit {
 }
 
 export interface OwnerFull {
-  id:             string
-  uniqueId:       string
+  id:       string
   nickname:       string
   type:           'individual' | 'company'
   status:         'active' | 'inactive' | 'churned'
@@ -119,7 +118,7 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
             <h3 className="text-white font-bold text-lg leading-tight">
               {owner.nickname}
             </h3>
-            <p className="text-white/50 text-xs font-mono mt-1">{owner.uniqueId}</p>
+            <p className="text-white/50 text-xs font-mono mt-1">{owner.id}</p>
           </div>
 
           {/* Badges row */}
@@ -392,7 +391,7 @@ export function OwnersTableView({ owners }: Props) {
       list = list.filter(o =>
         o.nickname.toLowerCase().includes(q) ||
         (o.email ?? '').toLowerCase().includes(q) ||
-        o.uniqueId.toLowerCase().includes(q)
+        o.id.toLowerCase().includes(q)
       )
     } else if (activeLetter !== 'All') {
       list = list.filter(o =>
@@ -557,7 +556,7 @@ export function OwnersTableView({ owners }: Props) {
                           <p className={`font-medium ${selectedId === owner.id ? 'text-mvr-primary' : 'text-foreground'}`}>
                             {owner.nickname}
                           </p>
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{owner.uniqueId}</p>
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{owner.id}</p>
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[owner.status] ?? ''}`}>

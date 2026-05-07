@@ -89,7 +89,7 @@ export default async function OwnerDetailPage({ params }: { params: { id: string
             <div>
               <h1 className="text-2xl font-display font-bold text-mvr-primary">{owner.nickname}</h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs font-mono text-muted-foreground">{owner.uniqueId}</span>
+                <span className="text-xs font-mono text-muted-foreground">{owner.id}</span>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[owner.status] ?? ''}`}>
                   {owner.status}
                 </span>

@@ -19,8 +19,7 @@ async function getOwners(): Promise<OwnerFull[]> {
   })
 
   return owners.map((o) => ({
-    id:             o.id,
-    uniqueId:       o.uniqueId,
+    id:       o.id,
     nickname:       o.nickname,
     type:           o.type,
     status:         o.status,

@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         building: { select: { id: true, name: true } },
-        owner: { select: { id: true, nickname: true, uniqueId: true } },
+        owner: { select: { id: true, nickname: true } },
         _count: { select: { listings: true } },
       },
       orderBy: [{ buildingId: 'asc' }, { number: 'asc' }],
