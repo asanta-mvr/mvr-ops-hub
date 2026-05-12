@@ -13,7 +13,7 @@ import {
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { ChargeDetailRow, type ChargeDetailData } from './ChargeDetailRow'
 import { extractChargeMeta } from './charge-metadata'
-import { computeCases, type ChargeCase } from './charge-grouping'
+import { computeCases } from './charge-grouping'
 
 export type ExpandableCharge = ChargeDetailData
 

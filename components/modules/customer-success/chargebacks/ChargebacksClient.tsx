@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
-import { useMemo, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { PaymentsSummary, RefundsSummary, RiskSummary } from '@/lib/risk/queries'
 import { PeriodFilterBar } from './PeriodFilterBar'

@@ -177,7 +177,7 @@ export function ChargeDetailRow({ charge, channel, groupChargeIds }: Props) {
             )}
           </div>
           {sellerMsg && (
-            <div className="text-xs text-mvr-olive italic">"{sellerMsg}"</div>
+            <div className="text-xs text-mvr-olive italic">&ldquo;{sellerMsg}&rdquo;</div>
           )}
           {networkStatus && (
             <div className="text-[11px] text-muted-foreground">{networkStatus.replace(/_/g, ' ')}</div>
