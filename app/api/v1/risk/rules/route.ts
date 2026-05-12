@@ -4,6 +4,8 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { ALLOWED_RISK_ROLES, ruleInputSchema } from '@/lib/risk/schemas'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const session = await auth()

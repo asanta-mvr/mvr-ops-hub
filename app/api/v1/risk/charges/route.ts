@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { getChargesForTab } from '@/lib/risk/queries'
 import { ALLOWED_RISK_ROLES, chargeFiltersSchema } from '@/lib/risk/schemas'
 
+export const dynamic = 'force-dynamic'
+
 const RISK_LEVELS = new Set(['normal', 'elevated', 'highest'] as const)
 
 export async function GET(req: NextRequest) {

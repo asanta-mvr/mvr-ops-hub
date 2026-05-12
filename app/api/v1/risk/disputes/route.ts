@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { getRecentDisputes } from '@/lib/risk/queries'
 import { ALLOWED_RISK_ROLES, disputeFiltersSchema } from '@/lib/risk/schemas'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()

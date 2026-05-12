@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { getRiskSummary } from '@/lib/risk/queries'
 import { ALLOWED_RISK_ROLES, summaryFilterSchema } from '@/lib/risk/schemas'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
