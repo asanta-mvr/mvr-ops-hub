@@ -14,6 +14,7 @@ import {
   FileText,
   ChevronDown,
   Ticket,
+  ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -40,7 +41,8 @@ const navigation = [
     href: '/customer-success/tickets',
     icon: HeadphonesIcon,
     children: [
-      { label: 'OTA Tickets', href: '/customer-success/tickets', icon: Ticket },
+      { label: 'OTA Tickets',  href: '/customer-success/tickets',     icon: Ticket      },
+      { label: 'Chargebacks',  href: '/customer-success/chargebacks', icon: ShieldAlert },
     ],
   },
   {

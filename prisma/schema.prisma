@@ -32,11 +32,13 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts        Account[]
-  sessions        Session[]
-  auditLogs       AuditLog[]
-  assignedTickets SupportTicket[] @relation("AssignedTickets")
-  ticketComments  TicketComment[] @relation("TicketComments")
+  accounts          Account[]
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  assignedTickets   SupportTicket[]         @relation("AssignedTickets")
+  ticketComments    TicketComment[]         @relation("TicketComments")
+  notificationRules NotificationRule[]      @relation("NotificationRulesCreated")
+  watchlistEntries  NotificationWatchlist[] @relation("WatchlistEntriesCreated")
 
   @@map("users")
 }
@@ -276,7 +278,7 @@ model GuestyOwner {
 
 model UnitFieldOption {
   id        String   @id @default(cuid())
-  field     String   // "type" | "view" | "feature"
+  field     String // "type" | "view" | "feature"
   value     String
   label     String
   sortOrder Int      @default(0)
@@ -288,36 +290,36 @@ model UnitFieldOption {
 }
 
 model Unit {
-  id             String     @id @default(cuid())
+  id             String   @id @default(cuid())
   number         String
   floor          Int?
   line           String?
   view           String?
   type           String?
   bedrooms       Int?
-  bathrooms      Decimal?   @db.Decimal(3, 1)
+  bathrooms      Decimal? @db.Decimal(3, 1)
   bathType       String?
   sqft           Int?
-  mt2            Decimal?   @db.Decimal(8, 2)
+  mt2            Decimal? @db.Decimal(8, 2)
   capacity       Int?
   amenityCap     Int?
   totalBeds      Int?
-  kings          Int        @default(0)
-  queens         Int        @default(0)
-  twins          Int        @default(0)
+  kings          Int      @default(0)
+  queens         Int      @default(0)
+  twins          Int      @default(0)
   otherBeds      String?
-  hasKitchen     Boolean    @default(false)
-  hasBalcony     Boolean    @default(false)
+  hasKitchen     Boolean  @default(false)
+  hasBalcony     Boolean  @default(false)
   features       String[]
   driveFolderUrl String?
-  status         String     @default("onboarding")
-  score          Decimal?   @db.Decimal(3, 1)
+  status         String   @default("onboarding")
+  score          Decimal? @db.Decimal(3, 1)
   photoQuality   String?
-  notes          String?    @db.Text
+  notes          String?  @db.Text
   buildingId     String
   ownerUniqueId  String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   building    Building             @relation(fields: [buildingId], references: [id])
   owner       Owner?               @relation(fields: [ownerUniqueId], references: [id])
@@ -599,4 +601,44 @@ model TicketComment {
   createdAt DateTime @default(now())
 
   @@map("ticket_comments")
+}
+
+// ─── RISK / CHARGEBACKS (ops-hub-owned config) ───────────────────────────────
+// NOTE: The dispute/transaction data itself lives in the `risk_agent` Postgres
+// schema, written by n8n. Those tables are modeled in `prisma/risk.schema.prisma`
+// and consumed via the read-only `riskDb` client. The two tables below are the
+// only ops-hub-owned config: alert rules and a manual guest watchlist.
+
+model NotificationRule {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?  @db.Text
+  criteria    Json // { reason?, riskLevel?, minAmountCents?, status? }
+  channel     String // Slack channel id, e.g. "C098R8ZMZTL"
+  priority    String   @default("normal") // normal | high | p1
+  enabled     Boolean  @default(true)
+  createdById String
+  createdBy   User     @relation("NotificationRulesCreated", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([createdById])
+  @@index([priority, createdAt(sort: Desc)])
+  @@map("notification_rules")
+}
+
+model NotificationWatchlist {
+  id          String   @id @default(cuid())
+  email       String?
+  cardLast4   String?
+  lossUsd     Decimal? @db.Decimal(12, 2)
+  reason      String?  @db.Text
+  createdById String
+  createdBy   User     @relation("WatchlistEntriesCreated", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+  @@index([cardLast4])
+  @@map("notification_watchlist")
 }

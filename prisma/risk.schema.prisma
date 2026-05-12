@@ -1,0 +1,113 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// RISK / CHARGEBACKS — read-only Prisma schema for risk_agent.* tables.
+//
+// READ ONLY. NEVER run `prisma migrate` or `prisma db push` against this
+// schema. The tables are owned and written by the n8n workflow at
+// https://service.mvr-management.com/workflow/FC3vCAJZWDe5Ll2H.
+// The ops hub only consumes them via SELECT.
+//
+// Refresh from DB:   npx prisma db pull --schema=prisma/risk.schema.prisma
+// Regenerate client: npm run db:risk:generate
+// ═══════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../lib/generated/risk-client"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("RISK_DATABASE_URL")
+  schemas  = ["risk_agent"]
+}
+
+/// Stripe charge / payment intent mirror. Written by n8n.
+model RiskTransaction {
+  id            String          @id
+  paymentIntent String?         @map("payment_intent")
+  customerId    String?         @map("customer_id")
+  bookingId     String?         @map("booking_id")
+  amountCents   Int             @map("amount_cents")
+  currency      String
+  status        String // succeeded | failed | refunded
+  riskLevel     String?         @map("risk_level") // normal | elevated | highest
+  riskScore     Int?            @map("risk_score")
+  outcomeReason String?         @map("outcome_reason")
+  livemode      Boolean
+  createdAt     DateTime        @map("created_at") @db.Timestamptz(6)
+  ingestedAt    DateTime        @default(now()) @map("ingested_at") @db.Timestamptz(6)
+  raw           Json
+  disputes      RiskDispute[]
+
+  @@index([bookingId], map: "idx_transactions_booking")
+  @@index([createdAt(sort: Desc)], map: "idx_transactions_created_at")
+  @@index([customerId], map: "idx_transactions_customer")
+  @@map("transactions")
+  @@schema("risk_agent")
+}
+
+/// Stripe dispute / chargeback case. Written by n8n.
+model RiskDispute {
+  id             String           @id
+  chargeId       String?          @map("charge_id")
+  paymentIntent  String?          @map("payment_intent")
+  reason         String
+  amountCents    Int              @map("amount_cents")
+  currency       String
+  status         String // needs_response | under_review | won | lost | warning_closed
+  evidenceDueBy  DateTime?        @map("evidence_due_by") @db.Timestamptz(6)
+  recommendation String? // contest | accept | manual_review
+  confidence     String? // high | medium | low
+  ruleId         String?          @map("rule_id")
+  assignedTo    String?           @map("assigned_to")
+  livemode       Boolean
+  createdAt      DateTime         @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @default(now()) @map("updated_at") @db.Timestamptz(6)
+  raw            Json
+  transaction    RiskTransaction? @relation(fields: [chargeId], references: [id], onUpdate: NoAction)
+
+  @@index([chargeId], map: "idx_disputes_charge")
+  @@index([createdAt(sort: Desc)], map: "idx_disputes_created_at")
+  @@index([reason], map: "idx_disputes_reason")
+  @@index([status], map: "idx_disputes_status")
+  @@map("disputes")
+  @@schema("risk_agent")
+}
+
+/// Audit log of agent recommendations and operator acknowledgements. Written by n8n.
+model RiskAction {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subjectType      String    @map("subject_type") // transaction | dispute
+  subjectId        String    @map("subject_id")
+  ruleId           String    @map("rule_id")
+  action           String
+  payload          Json?
+  notifiedAt       DateTime? @map("notified_at") @db.Timestamptz(6)
+  notifiedChannel  String?   @map("notified_channel")
+  acknowledgedBy   String?   @map("acknowledged_by")
+  acknowledgedAt   DateTime? @map("acknowledged_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt(sort: Desc)], map: "idx_actions_created_at")
+  @@index([ruleId], map: "idx_actions_rule")
+  @@index([subjectType, subjectId], map: "idx_actions_subject")
+  @@map("actions")
+  @@schema("risk_agent")
+}
+
+/// Raw Stripe webhook event store (full payload). Written by n8n.
+model StripeEvent {
+  id          String    @id
+  type        String
+  apiVersion  String?   @map("api_version")
+  livemode    Boolean
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(6)
+  raw         Json
+
+  @@index([receivedAt(sort: Desc)], map: "idx_stripe_events_received_at")
+  @@index([type], map: "idx_stripe_events_type")
+  @@map("stripe_events")
+  @@schema("risk_agent")
+}

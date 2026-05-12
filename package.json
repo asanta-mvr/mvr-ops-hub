@@ -8,9 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:rules": "tsx prisma/seed-rules.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:import-buildings": "tsx prisma/import-buildings.ts"
+    "db:import-buildings": "tsx prisma/import-buildings.ts",
+    "db:risk:generate": "prisma generate --schema=prisma/risk.schema.prisma",
+    "db:risk:pull": "prisma db pull --schema=prisma/risk.schema.prisma",
+    "postinstall": "prisma generate && prisma generate --schema=prisma/risk.schema.prisma"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
