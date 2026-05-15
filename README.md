@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MVR Operations Hub
 
-## Getting Started
+Internal operational platform for **Miami Vacation Rentals** — the single source of truth for property, owner, building, and listing data across ~300 (→ 1,000) short-term rental units. Replaces the legacy Google Sheets + AppSheet workflow and connects N8N, Conduit, SuiteOp, and Breezeway into one system.
 
-First, run the development server:
+**Stack:** Next.js 14 (App Router) · TypeScript strict · Prisma · PostgreSQL (Cloud SQL) · NextAuth v5 · Tailwind + shadcn/ui · Vercel + GCP
+
+## Quick start (local dev)
 
 ```bash
+# Terminal 1 — Cloud SQL tunnel (keep running)
+cloud-sql-proxy miami-vr-data:us-east1:mvr-ops-hub-db
+
+# Terminal 2 — dev server
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App runs at `http://localhost:3000`.
+Dev login: `dev@miamivacationrentals.com` / `mvr-dev-2026`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Other useful scripts:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Purpose |
+|---|---|
+| `npm run db:studio` | Prisma Studio at `localhost:5555` |
+| `npm run db:seed` | Seed the 5 baseline buildings |
+| `npx tsc --noEmit` | TypeScript check (must pass before any commit) |
 
-## Learn More
+## Documentation
 
-To learn more about Next.js, take a look at the following resources:
+- **[CLAUDE.md](CLAUDE.md)** — master context: tech stack, design system, hard rules, known deviations, infrastructure. Read this before writing any code.
+- **[ROADMAP.md](ROADMAP.md)** — phase plan and current progress.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Repo conventions
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Local branch is `master`, remote is `main`. Push with `git push origin HEAD:main`.
+- Conventional Commits (`feat(owners): …`, `fix(auth): …`).
+- Never push to GitHub without explicit confirmation.
+- Two env files — see [CLAUDE.md → LOCAL DEV ENVIRONMENT](CLAUDE.md#local-dev-environment) for the `.env.local` vs `.env.risk.local` split.
