@@ -33,6 +33,32 @@ interface PageProps {
 const FILTER_KEYS: ReadonlyArray<keyof ReviewsSearchParams> = ['year', 'building', 'unit', 'ota', 'stars', 'q']
 
 export default async function ReviewsPage({ searchParams }: PageProps) {
+  try {
+    return await renderReviewsPage(searchParams)
+  } catch (err) {
+    // Next.js redirect() throws a special error whose digest starts with
+    // NEXT_REDIRECT. Let those propagate untouched so the redirect works.
+    const digest = (err as { digest?: string })?.digest
+    if (typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT')) {
+      throw err
+    }
+    // Same shape for notFound() / unauthorized handlers.
+    if (typeof digest === 'string' && digest.startsWith('NEXT_')) {
+      throw err
+    }
+    // Everything else is a real crash — surface the full error to Vercel
+    // runtime logs (digest is what the UI shows; this is what we read).
+    console.error('[ReviewsPage] runtime crash', {
+      message: err instanceof Error ? err.message : String(err),
+      name:    err instanceof Error ? err.name    : undefined,
+      stack:   err instanceof Error ? err.stack   : undefined,
+      digest,
+    })
+    throw err
+  }
+}
+
+async function renderReviewsPage(searchParams: ReviewsSearchParams) {
   const session = await auth()
   await requireView(session, 'customer_success.reviews', '/no-access')
 
