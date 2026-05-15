@@ -18,9 +18,27 @@ Web + PWA replacing Google Sheets and AppSheet as the single source of truth for
 **Deployment**: Vercel (frontend + API) + GCP (database + storage)  
 **Repo**: `asanta-mvr/mvr-ops-hub` — branch protection on `main`
 
+### Repo layout (top-level)
+
+| Path | Purpose |
+|---|---|
+| `app/` | Next.js App Router — pages, layouts, `/api/v1/*` route handlers |
+| `components/` | `ui/` (shadcn), `shared/` (cross-module), `modules/` (per-domain) |
+| `lib/` | `auth/`, `db/` (main + risk Prisma clients), `integrations/`, `risk/`, `storage/`, `validations/`, `utils/` |
+| `prisma/` | Two schemas: `schema.prisma` (main) and `risk.schema.prisma` (read-mostly mirror of n8n's risk_agent) |
+| `scripts/` | Risk-agent maintenance scripts (sourced from `.env.risk.local`) |
+| `public/` | Static assets — incl. `icons/ota-*` (OTA channel icons) and `mvr-crown*.png` |
+| `brand_assets/` | Brand refresh source PNGs — design archive, not imported by code (see `brand_assets/README.md`) |
+| `svg_files/` | Source files for OTA channel icons — production uses `public/icons/` (see `svg_files/README.md`) |
+| `web_apps_examples/` | Untracked design-inspiration mockups (see `web_apps_examples/README.md`) |
+| `n8n/`, `n8n-snapshots/` | n8n workflow exports and local snapshots (snapshots are gitignored) |
+| `ROADMAP.md` | Phase plan and current progress — lives separately from this file |
+
 ---
 
 ## LIVE INFRASTRUCTURE
+
+> Quick-reference table. The **live values** for these resources are stored in `.env.local` and `.env.risk.local`. If those disagree with the table below, the `.env*` files win — update the table.
 
 | Resource | Value |
 |---|---|
@@ -302,4 +320,4 @@ Two separate env files coexist by design. They are NOT redundant — each target
 
 ---
 
-*MVR Operations Hub — CLAUDE.md v1.3 — Updated 2026-04-20 — Brand Refresh applied*
+*MVR Operations Hub — CLAUDE.md v1.4 — Updated 2026-05-15 — Repo layout map, env split, ROADMAP extracted*
