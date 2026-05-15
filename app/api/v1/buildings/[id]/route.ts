@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { updateBuildingSchema } from '@/lib/validations/building'
-
-const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'owner_relations']
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -35,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!ALLOWED_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, "data_master.buildings"))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -82,7 +81,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!ALLOWED_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, "data_master.buildings"))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

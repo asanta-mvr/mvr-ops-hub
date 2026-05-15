@@ -3,18 +3,15 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { auth } from '@/lib/auth'
+import { requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { ALLOWED_RISK_ROLES } from '@/lib/risk/schemas'
 import { RulesClient, type RuleRow } from '@/components/modules/customer-success/chargebacks/RulesClient'
 
 export const metadata: Metadata = { title: 'Risk · Alert Rules' }
 
 export default async function RulesPage() {
   const session = await auth()
-  if (!session?.user) redirect('/login')
-  if (!ALLOWED_RISK_ROLES.includes(session.user.role)) {
-    redirect('/dashboard')
-  }
+  await requireView(session, 'customer_success.chargebacks_rules', '/no-access')
 
   const rules = await db.notificationRule.findMany({
     orderBy: [{ enabled: 'desc' }, { createdAt: 'desc' }],

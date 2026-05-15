@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { createOwnerSchema } from '@/lib/validations/owner'
-
-const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'owner_relations']
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +43,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!ALLOWED_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, "data_master.owners"))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

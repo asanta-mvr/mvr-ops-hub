@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth, validateApiKey } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { createTicketSchema } from '@/lib/validations/tickets'
-
-const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'cx_agent']
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!(await canView(session, 'customer_success.tickets'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { searchParams } = req.nextUrl
     const status = searchParams.get('status')
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (session?.user && !ALLOWED_ROLES.includes(session.user.role)) {
+    if (session?.user && !(await canEdit(session, 'customer_success.tickets'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

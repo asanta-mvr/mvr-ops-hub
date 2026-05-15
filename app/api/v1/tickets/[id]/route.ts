@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth, validateApiKey } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { updateTicketSchema } from '@/lib/validations/tickets'
-
-const ALLOWED_ROLES = ['super_admin', 'operations_manager', 'cx_agent']
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!(await canView(session, 'customer_success.tickets'))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const ticket = await db.supportTicket.findUnique({
       where: { id: params.id },
@@ -43,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (session?.user && !ALLOWED_ROLES.includes(session.user.role)) {
+    if (session?.user && !(await canEdit(session, 'customer_success.tickets'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -106,7 +108,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (session?.user && !ALLOWED_ROLES.includes(session.user.role)) {
+    if (session?.user && !(await canEdit(session, 'customer_success.tickets'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

@@ -39,6 +39,8 @@ model User {
   ticketComments    TicketComment[]         @relation("TicketComments")
   notificationRules NotificationRule[]      @relation("NotificationRulesCreated")
   watchlistEntries  NotificationWatchlist[] @relation("WatchlistEntriesCreated")
+  permissions       UserPermission[]
+  workspaceCred     GoogleWorkspaceCredential?
 
   @@map("users")
 }
@@ -641,4 +643,57 @@ model NotificationWatchlist {
   @@index([email])
   @@index([cardLast4])
   @@map("notification_watchlist")
+}
+
+// ─── USER MANAGEMENT (RBAC + INVITATIONS) ────────────────────────────────────
+// Catalog of resource keys lives in `lib/auth/resources.ts`. Each user holds
+// a set of UserPermission rows (resource × view|edit). super_admin role
+// bypasses the matrix and always has full access.
+
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  resource  String // e.g. "data_master.buildings", "customer_success.chargebacks"
+  level     String // "view" | "edit"
+  createdAt DateTime @default(now())
+  createdBy String // userId of the admin who granted it
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, resource])
+  @@index([userId])
+  @@index([resource])
+  @@map("user_permissions")
+}
+
+model UserInvitation {
+  id          String    @id @default(cuid())
+  email       String
+  name        String?
+  token       String    @unique // url-safe random
+  permissions Json // [{ resource, level }]
+  invitedBy   String // userId
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  acceptedBy  String? // userId after sign-in
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@index([acceptedAt])
+  @@map("user_invitations")
+}
+
+model GoogleWorkspaceCredential {
+  id           String   @id @default(cuid())
+  userId       String   @unique // admin who connected
+  email        String // sender mailbox
+  refreshToken String // AES-256-GCM ciphertext, base64
+  scope        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_workspace_credentials")
 }
