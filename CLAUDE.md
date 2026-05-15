@@ -182,23 +182,7 @@ Status badge pattern: `active` → success colors · `onboarding` → warning ·
 
 ## PHASE EXECUTION PLAN
 
-### ✅ PHASE 0 — Setup (COMPLETE)
-Next.js 14 + TypeScript strict · shadcn/ui + MVR tokens · Prisma on Cloud SQL · NextAuth (Google + dev creds) · Dashboard layout + protected routes · PWA manifest · Sentry · Deployed to Vercel
-
-### 🔄 PHASE 1 — Data Master (IN PROGRESS)
-**Last worked on: 2026-04-20**
-
-- [x] **Buildings** — full CRUD + API + seed (5 AppSheet buildings)
-- [ ] **Property Managers** — CRUD nested under Building detail
-- [ ] **Owners** — `/data-master/owners` full CRUD
-- [ ] **Units** — `/data-master/units`, nested under Building
-- [ ] **Listings** — nested under Unit
-- [ ] **Owner Contracts + Docs + Utilities**
-- [ ] **Onboarding Checklist flow**
-- [ ] **Unit Inspection form** (mobile-optimized)
-
-### Phase 2+ (future)
-Customer Success · Guesty · Operations module · Breezeway + SuiteOp + Conduit · Brivo · Stripe
+**Current phase: 1 — Data Master.** See [ROADMAP.md](ROADMAP.md) for the live checklist, completed sub-tasks, and Phase 2+ sequencing. This file no longer tracks per-task status — update `ROADMAP.md` instead so progress edits don't churn the master context.
 
 ---
 
