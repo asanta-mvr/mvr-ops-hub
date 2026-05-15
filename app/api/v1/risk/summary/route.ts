@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { canEdit, canView } from '@/lib/auth/permissions'
+import { canView } from '@/lib/auth/permissions'
 import { getRiskSummary } from '@/lib/risk/queries'
 import { summaryFilterSchema } from '@/lib/risk/schemas'
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
-import { canEdit, canView } from '@/lib/auth/permissions'
+import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { updatePropertyManagerSchema } from '@/lib/validations/property-manager'
 import { syncEmergencyContacts } from '@/lib/utils/sync-contacts'

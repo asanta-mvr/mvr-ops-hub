@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
-import { canEdit, canView } from '@/lib/auth/permissions'
+import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 
 const VALID_FIELDS = ['type', 'view', 'feature', 'bath_type', 'status'] as const

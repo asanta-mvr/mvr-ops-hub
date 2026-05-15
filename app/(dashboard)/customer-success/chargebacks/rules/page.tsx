@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { requireView } from '@/lib/auth/permissions'

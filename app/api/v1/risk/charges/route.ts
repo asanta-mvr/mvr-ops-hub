@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { canEdit, canView } from '@/lib/auth/permissions'
+import { canView } from '@/lib/auth/permissions'
 import { getChargesForTab } from '@/lib/risk/queries'
 import { chargeFiltersSchema } from '@/lib/risk/schemas'
 
