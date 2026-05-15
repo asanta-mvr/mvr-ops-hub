@@ -226,6 +226,17 @@ App runs at `http://localhost:3000`
 
 **`.env.local`** is already configured for local dev. Never commit it.
 
+### Environment files — `.env.local` vs `.env.risk.local`
+
+Two separate env files coexist by design. They are NOT redundant — each targets a different DB user and schema. Both are gitignored. Templates: `.env.example` and `.env.risk.example`.
+
+| File | Consumed by | DB user | Schema | When you need it |
+|---|---|---|---|---|
+| `.env.local` | Next.js app (`app/`, `lib/db/index.ts`), NextAuth, all `/api/v1/*` routes, Prisma main schema | `mvr_app_user` | `public` | Default — running the app, building features, anything outside the risk agent |
+| `.env.risk.local` | `lib/db/risk.ts`, scripts in `scripts/*` (verify-2026-totals, check-risk-freshness, inspect-stripe-events, reprocess-stripe-events, …), `prisma/risk.schema.prisma` | `risk_agent_writer` | `risk_agent` | Risk-agent maintenance scripts and the read-mostly `risk_agent` schema populated by n8n |
+
+**Do not consolidate** — different DB roles enforce least-privilege. Mixing them risks scripts writing to the wrong schema. If you add a new script that queries risk data, source `.env.risk.local`, not `.env.local`.
+
 ---
 
 ## SESSION STARTUP
