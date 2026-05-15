@@ -25,6 +25,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# tool artifacts (MCP session logs, etc.)
+*.log
+
 # local env files
 .env
 .env*.local
@@ -41,3 +44,7 @@ next-env.d.ts
 
 # n8n workflow JSON snapshots — local-only safety backups
 /n8n-snapshots
+
+# Design-inspiration mockups — only the README is versioned
+/web_apps_examples/*
+!/web_apps_examples/README.md
