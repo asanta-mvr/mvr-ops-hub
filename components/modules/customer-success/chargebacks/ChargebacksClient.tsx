@@ -3,13 +3,19 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { PaymentsSummary, RefundsSummary, RiskSummary } from '@/lib/risk/queries'
+import type {
+  ChargeTypeByBuildingRow,
+  PaymentsSummary,
+  RefundsSummary,
+  RiskLevelFilter,
+  RiskSummary,
+} from '@/lib/risk/queries'
 import { PeriodFilterBar } from './PeriodFilterBar'
 import { PaymentsKpiStrip } from './PaymentsKpiStrip'
 import { MonthlyVolumeChart } from './MonthlyVolumeChart'
-import { RiskDistributionDonut } from './RiskDistributionDonut'
 import { ClickableDeclineReasons } from './ClickableDeclineReasons'
 import { ExpandableChargesTable, type ExpandableCharge } from './ExpandableChargesTable'
+import { ChargeTypeByBuildingChart } from './ChargeTypeByBuildingChart'
 import { useChargesQuery } from './use-charges-query'
 import { RefundsKpiStrip } from './RefundsKpiStrip'
 import { RefundsMonthlyChart } from './RefundsMonthlyChart'
@@ -22,30 +28,59 @@ import { TopReasonsByAmount } from './TopReasonsByAmount'
 import { ReasonWinRateBars } from './ReasonWinRateBars'
 import { RecentDisputesTable, type RecentDispute } from './RecentDisputesTable'
 import { WatchlistPanel, type WatchlistRow } from './WatchlistPanel'
+import { X } from 'lucide-react'
 
 interface Props {
   summary: RiskSummary
   recentDisputes: RecentDispute[]
   paymentsSummary: PaymentsSummary
+  /** Always-full-year monthly series for the volume chart. May equal
+   *  paymentsSummary.monthly when no month filter is applied. */
+  monthlyForChart: PaymentsSummary['monthly']
+  chargeTypeByBuilding: ChargeTypeByBuildingRow[]
   highRiskCharges: ExpandableCharge[]
   refundsSummary: RefundsSummary
   recentRefunds: RefundRow[]
   years: number[]
+  /** Months (1-12) with data for the selected year; empty when no year is selected. */
+  availableMonths: number[]
+  buildingOptions: string[]
+  chargeTypeOptions: string[]
   initialYear?: number
   initialMonth?: number
+  initialBuildings: string[]
+  initialChargeTypes: string[]
+  initialRiskLevels: RiskLevelFilter[]
+  initialStatuses: string[]
   watchlist: WatchlistRow[]
 }
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
+type ScopeKey = 'year' | 'month' | 'building' | 'chargeType' | 'riskLevel' | 'status'
 
 export function ChargebacksClient({
   summary,
   recentDisputes,
   paymentsSummary,
+  monthlyForChart,
+  chargeTypeByBuilding,
   highRiskCharges,
   refundsSummary,
   recentRefunds,
   years,
+  availableMonths,
+  buildingOptions,
+  chargeTypeOptions,
   initialYear,
   initialMonth,
+  initialBuildings,
+  initialChargeTypes,
+  initialRiskLevels,
+  initialStatuses,
   watchlist,
 }: Props) {
   const router = useRouter()
@@ -61,37 +96,84 @@ export function ChargebacksClient({
     selectedReasons: selectedDeclineReasons,
     year: initialYear,
     month: initialMonth,
+    buildings: initialBuildings,
+    chargeTypes: initialChargeTypes,
+    riskLevels: initialRiskLevels,
+    statuses: initialStatuses,
   })
 
-  function setFilter(key: 'year' | 'month', value: string) {
+  function pushScope(updates: Partial<Record<ScopeKey, string>>) {
     const params = new URLSearchParams()
-    if (initialYear) params.set('year', String(initialYear))
-    if (initialMonth) params.set('month', String(initialMonth))
-    if (value) params.set(key, value)
-    else params.delete(key)
-    if (key === 'year' && !value) params.delete('month')
+    const next: Record<ScopeKey, string | undefined> = {
+      year: initialYear ? String(initialYear) : undefined,
+      month: initialMonth ? String(initialMonth) : undefined,
+      building: initialBuildings.length > 0 ? initialBuildings.join(',') : undefined,
+      chargeType: initialChargeTypes.length > 0 ? initialChargeTypes.join(',') : undefined,
+      riskLevel: initialRiskLevels.length > 0 ? initialRiskLevels.join(',') : undefined,
+      status: initialStatuses.length > 0 ? initialStatuses.join(',') : undefined,
+      ...Object.fromEntries(
+        Object.entries(updates).map(([k, v]) => [k, v === '' ? undefined : v])
+      ),
+    }
+    // Clearing year also clears month (year is required for month to make sense).
+    if (!next.year) next.month = undefined
+    for (const [k, v] of Object.entries(next)) {
+      if (v) params.set(k, v)
+    }
     const qs = params.toString()
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname))
+  }
+
+  // Helper for multi-select callbacks — joins array to CSV (or undefined when empty)
+  // and pushes it through the same pushScope flow as single-value filters.
+  function pushArrayScope(key: 'building' | 'chargeType' | 'riskLevel', values: string[]) {
+    pushScope({ [key]: values.length > 0 ? values.join(',') : '' })
   }
 
   function clearFilters() {
     startTransition(() => router.push(pathname))
   }
 
-  const hasFilter = initialYear !== undefined || initialMonth !== undefined
+  const hasFilter =
+    initialYear !== undefined ||
+    initialMonth !== undefined ||
+    initialBuildings.length > 0 ||
+    initialChargeTypes.length > 0 ||
+    initialRiskLevels.length > 0 ||
+    initialStatuses.length > 0
 
   const filter = (
     <PeriodFilterBar
       years={years}
       year={initialYear}
       month={initialMonth}
+      availableMonths={availableMonths}
+      buildings={buildingOptions}
+      selectedBuildings={initialBuildings}
+      chargeTypes={chargeTypeOptions}
+      selectedChargeTypes={initialChargeTypes}
+      selectedRiskLevels={initialRiskLevels}
       isPending={isPending}
       hasFilter={hasFilter}
-      onYearChange={(v) => setFilter('year', v)}
-      onMonthChange={(v) => setFilter('month', v)}
+      onYearChange={(v) => pushScope({ year: v })}
+      onMonthChange={(v) => pushScope({ month: v })}
+      onBuildingsChange={(v) => pushArrayScope('building', v)}
+      onChargeTypesChange={(v) => pushArrayScope('chargeType', v)}
+      onRiskLevelsChange={(v) => pushArrayScope('riskLevel', v)}
       onClear={clearFilters}
     />
   )
+
+  // Click a bar in the volume chart → filter the whole report to that month.
+  // Year must be set first; if not, default to the latest available year.
+  function handleSelectMonth(month: number | undefined) {
+    const yearToUse = initialYear ?? years[0]
+    if (!yearToUse) return
+    pushScope({
+      year: String(yearToUse),
+      month: month === undefined ? '' : String(month),
+    })
+  }
 
   return (
     <Tabs
@@ -113,20 +195,47 @@ export function ChargebacksClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 bg-white rounded-xl border border-[#E0DBD4] shadow-card p-5">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-mvr-primary mb-1">
-              Monthly
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-mvr-primary mb-1">
+                  Monthly
+                </div>
+                <h3 className="font-display text-lg text-mvr-primary">
+                  Volume + Fail rate
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Click a month to filter the whole report.
+                </p>
+              </div>
+              {initialMonth && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectMonth(undefined)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-mvr-primary text-white text-xs font-medium hover:bg-mvr-primary/90 transition-colors shrink-0"
+                  aria-label={`Clear month filter (${MONTH_NAMES[initialMonth - 1]})`}
+                >
+                  {MONTH_NAMES[initialMonth - 1]}
+                  {initialYear ? ` ${initialYear}` : ''}
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
-            <h3 className="font-display text-lg text-mvr-primary mb-3">
-              Volume + Fail rate
-            </h3>
-            <MonthlyVolumeChart data={paymentsSummary.monthly} />
+            <MonthlyVolumeChart
+              data={monthlyForChart}
+              selectedMonth={initialMonth}
+              year={initialYear}
+              onSelectMonth={handleSelectMonth}
+            />
           </div>
           <div className="bg-white rounded-xl border border-[#E0DBD4] shadow-card p-5">
             <div className="text-[10px] uppercase tracking-widest font-semibold text-mvr-primary mb-1">
-              Risk
+              Charge type
             </div>
-            <h3 className="font-display text-lg text-mvr-primary mb-3">Distribution</h3>
-            <RiskDistributionDonut data={paymentsSummary.riskDistribution} />
+            <h3 className="font-display text-lg text-mvr-primary mb-1">By building</h3>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Mix of charge types per building. Use the Charge Type scope filter to narrow.
+            </p>
+            <ChargeTypeByBuildingChart data={chargeTypeByBuilding} />
           </div>
         </div>
 

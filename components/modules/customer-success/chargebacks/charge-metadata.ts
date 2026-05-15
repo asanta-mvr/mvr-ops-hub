@@ -1,6 +1,9 @@
 // Helpers to extract human-readable fields from the Stripe `raw` JSON.
 // Used by both the table row and the expanded detail row so they stay in sync.
 
+import { extractBuilding } from '@/lib/risk/building'
+export { extractBuilding }
+
 function get(raw: unknown, path: string[]): unknown {
   let cur: unknown = raw
   for (const k of path) {
@@ -22,6 +25,8 @@ export interface ChargeMeta {
   email: string | null
   confirmationCode: string | null
   property: string | null
+  /** Building prefix parsed from `property` (e.g. "Icon 3901" → "Icon"). */
+  building: string | null
   chargeType: string | null
   cardBrand: string | null
   cardLast4: string | null
@@ -30,6 +35,7 @@ export interface ChargeMeta {
   sellerMessage: string | null
   networkStatus: string | null
 }
+
 
 export function extractChargeMeta(raw: unknown): ChargeMeta {
   const metadata = (get(raw, ['metadata']) as Record<string, unknown> | undefined) ?? {}
@@ -61,6 +67,7 @@ export function extractChargeMeta(raw: unknown): ChargeMeta {
     email: str(billing.email),
     confirmationCode,
     property,
+    building: extractBuilding(property),
     chargeType,
     cardBrand: str(card.brand),
     cardLast4: str(card.last4),

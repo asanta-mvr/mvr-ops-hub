@@ -39,7 +39,10 @@ export const chargeFiltersSchema = z.object({
   month: z.coerce.number().int().min(1).max(12).optional(),
   reasons: z.string().optional(), // comma-separated
   riskLevel: z.string().optional(), // comma-separated, subset of normal|elevated|highest
-  limit: z.coerce.number().int().min(1).max(200).default(50),
+  status: z.string().optional(), // comma-separated (e.g. succeeded,failed,refunded,partially_refunded)
+  building: z.string().max(500).optional(), // comma-separated canonical building names
+  chargeType: z.string().max(500).optional(), // comma-separated charge types
+  limit: z.coerce.number().int().min(1).max(500).default(50),
 })
 
 export const refundFiltersSchema = z.object({

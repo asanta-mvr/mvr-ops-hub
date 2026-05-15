@@ -8,6 +8,10 @@ interface Args {
   selectedReasons: string[]
   year?: number
   month?: number
+  buildings: string[]
+  chargeTypes: string[]
+  riskLevels: string[]
+  statuses: string[]
 }
 
 interface Result {
@@ -16,18 +20,35 @@ interface Result {
   error: string | null
 }
 
-// Fetches charges from /api/v1/risk/charges when reasons are selected; otherwise returns the
-// server-rendered initial high-risk list. Shared by RepeatAttemptsPanel + ExpandableChargesTable
-// so both views always see the same dataset.
-export function useChargesQuery({ initial, selectedReasons, year, month }: Args): Result {
+// All scope filters (year/month/building/chargeType/riskLevel/status) live in
+// the URL, which means the server re-renders `initial` whenever they change.
+// We only refetch from the API when the client-only `selectedReasons` filter
+// is non-empty — in that case the request carries the full scope so the
+// server can apply reasons-on-top filtering.
+export function useChargesQuery({
+  initial,
+  selectedReasons,
+  year,
+  month,
+  buildings,
+  chargeTypes,
+  riskLevels,
+  statuses,
+}: Args): Result {
   const [charges, setCharges] = useState<ExpandableCharge[]>(initial)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const filterKey = `${year ?? 'all'}-${month ?? 'all'}-${[...selectedReasons].sort().join(',')}`
+  const buildingsKey = [...buildings].sort().join(',')
+  const chargeTypesKey = [...chargeTypes].sort().join(',')
+  const riskLevelsKey = [...riskLevels].sort().join(',')
+  const statusesKey = [...statuses].sort().join(',')
+  const filterKey = `${year ?? 'all'}-${month ?? 'all'}-${buildingsKey}-${chargeTypesKey}-${riskLevelsKey}-${statusesKey}-${[...selectedReasons].sort().join(',')}`
 
   useEffect(() => {
-    if (selectedReasons.length === 0) {
+    const hasReasons = selectedReasons.length > 0
+    if (!hasReasons) {
+      // No client-only filter — `initial` already reflects the current scope.
       setCharges(initial)
       setError(null)
       setLoading(false)
@@ -39,8 +60,12 @@ export function useChargesQuery({ initial, selectedReasons, year, month }: Args)
     const params = new URLSearchParams()
     if (year) params.set('year', String(year))
     if (month) params.set('month', String(month))
+    if (buildings.length > 0) params.set('building', buildings.join(','))
+    if (chargeTypes.length > 0) params.set('chargeType', chargeTypes.join(','))
+    if (riskLevels.length > 0) params.set('riskLevel', riskLevels.join(','))
+    if (statuses.length > 0) params.set('status', statuses.join(','))
     params.set('reasons', selectedReasons.join(','))
-    params.set('limit', '200')
+    params.set('limit', '500')
     fetch(`/api/v1/risk/charges?${params.toString()}`)
       .then((r) => r.json())
       .then((json) => {
@@ -70,7 +95,7 @@ export function useChargesQuery({ initial, selectedReasons, year, month }: Args)
     return () => {
       cancelled = true
     }
-    // filterKey covers year, month, and selectedReasons
+    // filterKey covers all dependencies
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterKey])
 

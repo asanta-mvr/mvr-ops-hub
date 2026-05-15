@@ -1,4 +1,5 @@
 import { riskDb } from '@/lib/db/risk'
+import { buildingSources, extractBuilding } from '@/lib/risk/building'
 import type { DisputeFilters } from '@/lib/risk/schemas'
 
 // ── time helpers ───────────────────────────────────────────────────────────
@@ -13,6 +14,75 @@ function periodRange(year?: number, month?: number): { gte?: Date; lt?: Date } {
     gte: new Date(Date.UTC(year, 0, 1)),
     lt: new Date(Date.UTC(year + 1, 0, 1)),
   }
+}
+
+// ── global filters (building / chargeType / riskLevel) ────────────────────
+// These flow from the page's URL params down to every query so the whole
+// dashboard reflects the same scope. All three accept arrays for multi-select.
+export type RiskLevelFilter = 'normal' | 'elevated' | 'highest'
+export type GlobalFilters = {
+  buildings?: string[]
+  chargeTypes?: string[]
+  riskLevels?: RiskLevelFilter[]
+  /** Transaction status filter (e.g. ['succeeded'], ['failed']). Powered by
+   *  KPI card clicks plus any other future status filter. */
+  statuses?: string[]
+}
+
+// riskLevel is a top-level column on RiskTransaction; this is the shared
+// `where` fragment that callers spread into their query.
+function txRiskLevelWhere(globals: GlobalFilters): Record<string, unknown> {
+  if (!globals.riskLevels || globals.riskLevels.length === 0) return {}
+  if (globals.riskLevels.length === 1) return { riskLevel: globals.riskLevels[0] }
+  return { riskLevel: { in: globals.riskLevels } }
+}
+
+// status is also a top-level column on RiskTransaction.
+function txStatusWhere(globals: GlobalFilters): Record<string, unknown> {
+  if (!globals.statuses || globals.statuses.length === 0) return {}
+  if (globals.statuses.length === 1) return { status: globals.statuses[0] }
+  return { status: { in: globals.statuses } }
+}
+
+// Build Prisma `AND` conditions that filter risk_transaction.raw by metadata.
+// Property and chargeType live under various keys, so we OR across them. With
+// multi-select, "match ANY selected building" is one OR clause and "match ANY
+// selected chargeType" is another.
+function txMetadataConditions(filters: GlobalFilters): unknown[] {
+  const out: unknown[] = []
+
+  const buildings = (filters.buildings ?? []).map((b) => b.trim()).filter(Boolean)
+  if (buildings.length > 0) {
+    // Each canonical building expands to its known prefix variants (aliases).
+    // Combined OR matches any selected building × any of its source prefixes
+    // × any of the three property metadata keys.
+    const keys = ['Property Nickname', 'property', 'Property Name'] as const
+    const subClauses: unknown[] = []
+    for (const canonical of buildings) {
+      for (const source of buildingSources(canonical)) {
+        for (const key of keys) {
+          subClauses.push({
+            raw: { path: ['metadata', key], string_starts_with: source },
+          })
+        }
+      }
+    }
+    out.push({ OR: subClauses })
+  }
+
+  const chargeTypes = (filters.chargeTypes ?? []).map((t) => t.trim()).filter(Boolean)
+  if (chargeTypes.length > 0) {
+    const keys = ['Charge Type', 'charge_type', 'type'] as const
+    const subClauses: unknown[] = []
+    for (const t of chargeTypes) {
+      for (const key of keys) {
+        subClauses.push({ raw: { path: ['metadata', key], equals: t } })
+      }
+    }
+    out.push({ OR: subClauses })
+  }
+
+  return out
 }
 
 function bucketStatus(s: string): 'won' | 'lost' | 'pending' {
@@ -45,11 +115,21 @@ export type RiskSummary = {
   reasonsByWinRate: Array<{ reason: string; won: number; lost: number; winRate: number }>
 }
 
-export async function getRiskSummary(year?: number, month?: number): Promise<RiskSummary> {
+export async function getRiskSummary(
+  year?: number,
+  month?: number,
+  globals: GlobalFilters = {}
+): Promise<RiskSummary> {
   const range = periodRange(year, month)
+  const txConds = txMetadataConditions(globals)
+  const txClause: Record<string, unknown> = { ...txRiskLevelWhere(globals) }
+  if (txConds.length > 0) txClause.AND = txConds as never
 
   const disputes = await riskDb.riskDispute.findMany({
-    where: range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : undefined,
+    where: {
+      ...(range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}),
+      ...(Object.keys(txClause).length > 0 ? { transaction: txClause } : {}),
+    },
     select: {
       id: true,
       amountCents: true,
@@ -165,14 +245,28 @@ export async function getRiskSummary(year?: number, month?: number): Promise<Ris
   }
 }
 
-export async function getRecentDisputes(filters: DisputeFilters) {
+export async function getRecentDisputes(
+  filters: DisputeFilters,
+  globals: GlobalFilters = {}
+) {
   const range = periodRange(filters.year, filters.month)
+  const txConds = txMetadataConditions(globals)
+  // Combine risk-level (filter or global) + metadata under one transaction clause.
+  // Per-call `filters.riskLevel` (DisputeFilters takes a single one) overrides
+  // the global multi-select when present.
+  const txClause: Record<string, unknown> = {}
+  if (filters.riskLevel) {
+    txClause.riskLevel = filters.riskLevel
+  } else {
+    Object.assign(txClause, txRiskLevelWhere(globals))
+  }
+  if (txConds.length > 0) txClause.AND = txConds as never
   return riskDb.riskDispute.findMany({
     where: {
       ...(range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.reason ? { reason: filters.reason } : {}),
-      ...(filters.riskLevel ? { transaction: { riskLevel: filters.riskLevel } } : {}),
+      ...(Object.keys(txClause).length > 0 ? { transaction: txClause } : {}),
     },
     include: {
       transaction: {
@@ -216,6 +310,158 @@ export async function getIngestFreshness(): Promise<IngestFreshness> {
   }
 }
 
+// Per-building charge-type breakdown. Honors `chargeTypes` and `riskLevels`
+// so the chart reflects the active scope, but intentionally ignores
+// `buildings` so the chart always serves as a cross-building comparison
+// (filtering to one building would collapse it to a single bar). Buildings
+// with zero matching transactions are omitted.
+export type ChargeTypeByBuildingRow = {
+  building: string
+  /** Count keyed by raw charge type label (e.g. "Charge", "Deposit"). NULL
+   *  metadata values are bucketed under "(unknown)". */
+  counts: Record<string, number>
+  total: number
+}
+
+export async function getChargeTypeByBuilding(
+  year?: number,
+  month?: number,
+  chargeTypes?: string[],
+  riskLevels?: RiskLevelFilter[],
+  statuses?: string[]
+): Promise<ChargeTypeByBuildingRow[]> {
+  const range = periodRange(year, month)
+  const txConds = txMetadataConditions({ chargeTypes })
+
+  const txs = await riskDb.riskTransaction.findMany({
+    where: {
+      ...(range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}),
+      ...txRiskLevelWhere({ riskLevels }),
+      ...txStatusWhere({ statuses }),
+      ...(txConds.length > 0 ? { AND: txConds as never } : {}),
+    },
+    select: { raw: true },
+  })
+
+  const map = new Map<string, ChargeTypeByBuildingRow>()
+  for (const t of txs) {
+    const raw = t.raw as Record<string, unknown> | null
+    const metadata = (raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw.metadata as Record<string, unknown> | undefined)
+      : undefined) ?? {}
+    const property =
+      (typeof metadata['Property Nickname'] === 'string' ? metadata['Property Nickname'] : null) ??
+      (typeof metadata['property'] === 'string' ? metadata['property'] : null) ??
+      (typeof metadata['Property Name'] === 'string' ? metadata['Property Name'] : null)
+    const building = extractBuilding(property)
+    if (!building) continue
+
+    const chargeType =
+      (typeof metadata['Charge Type'] === 'string' && metadata['Charge Type'].trim() !== ''
+        ? (metadata['Charge Type'] as string).trim()
+        : null) ??
+      (typeof metadata['charge_type'] === 'string' && metadata['charge_type'].trim() !== ''
+        ? (metadata['charge_type'] as string).trim()
+        : null) ??
+      (typeof metadata['type'] === 'string' && metadata['type'].trim() !== ''
+        ? (metadata['type'] as string).trim()
+        : null) ??
+      '(unknown)'
+
+    let row = map.get(building)
+    if (!row) {
+      row = { building, counts: {}, total: 0 }
+      map.set(building, row)
+    }
+    row.counts[chargeType] = (row.counts[chargeType] ?? 0) + 1
+    row.total++
+  }
+  return Array.from(map.values())
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total)
+}
+
+export async function getAvailableBuildings(
+  year?: number,
+  month?: number
+): Promise<string[]> {
+  const range = periodRange(year, month)
+  type Row = { prop: string | null }
+  // COALESCE the three known property keys; DISTINCT in SQL, parse + dedupe in JS.
+  const rows: Row[] = range.gte
+    ? await riskDb.$queryRaw<Row[]>`
+        SELECT DISTINCT COALESCE(
+          raw->'metadata'->>'Property Nickname',
+          raw->'metadata'->>'property',
+          raw->'metadata'->>'Property Name'
+        ) AS prop
+        FROM risk_agent.transactions
+        WHERE created_at >= ${range.gte} AND created_at < ${range.lt}
+      `
+    : await riskDb.$queryRaw<Row[]>`
+        SELECT DISTINCT COALESCE(
+          raw->'metadata'->>'Property Nickname',
+          raw->'metadata'->>'property',
+          raw->'metadata'->>'Property Name'
+        ) AS prop
+        FROM risk_agent.transactions
+        WHERE created_at >= NOW() - INTERVAL '180 days'
+      `
+  const set = new Set<string>()
+  for (const r of rows) {
+    const b = extractBuilding(r.prop)
+    if (b) set.add(b)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
+export async function getAvailableChargeTypes(
+  year?: number,
+  month?: number
+): Promise<string[]> {
+  const range = periodRange(year, month)
+  type Row = { kind: string | null }
+  const rows: Row[] = range.gte
+    ? await riskDb.$queryRaw<Row[]>`
+        SELECT DISTINCT COALESCE(
+          raw->'metadata'->>'Charge Type',
+          raw->'metadata'->>'charge_type',
+          raw->'metadata'->>'type'
+        ) AS kind
+        FROM risk_agent.transactions
+        WHERE created_at >= ${range.gte} AND created_at < ${range.lt}
+      `
+    : await riskDb.$queryRaw<Row[]>`
+        SELECT DISTINCT COALESCE(
+          raw->'metadata'->>'Charge Type',
+          raw->'metadata'->>'charge_type',
+          raw->'metadata'->>'type'
+        ) AS kind
+        FROM risk_agent.transactions
+        WHERE created_at >= NOW() - INTERVAL '180 days'
+      `
+  return rows
+    .map((r) => r.kind?.trim())
+    .filter((v): v is string => Boolean(v && v.length > 0))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+// Months (1-12) with at least one transaction in the given year. Used to
+// constrain the Month scope dropdown so users can't pick empty periods.
+export async function getAvailableMonths(year: number): Promise<number[]> {
+  const start = new Date(Date.UTC(year, 0, 1))
+  const end = new Date(Date.UTC(year + 1, 0, 1))
+  const rows = await riskDb.$queryRaw<Array<{ m: number }>>`
+    SELECT DISTINCT EXTRACT(MONTH FROM created_at AT TIME ZONE 'UTC')::int AS m
+    FROM risk_agent.transactions
+    WHERE created_at >= ${start} AND created_at < ${end}
+    ORDER BY m
+  `
+  return rows
+    .map((r) => Number(r.m))
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 12)
+}
+
 export async function getAvailableYears(): Promise<number[]> {
   const [oldestDispute, oldestTx] = await Promise.all([
     riskDb.riskDispute.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
@@ -254,19 +500,36 @@ export type PaymentsSummary = {
     failRatePct: number
   }>
   riskDistribution: Array<{ level: 'normal' | 'elevated' | 'highest'; count: number }>
-  declineReasons: Array<{ reason: string; count: number }>
+  declineReasons: Array<{
+    reason: string
+    count: number
+    /** For the synthetic '(other)' bucket, the list of underlying reason codes
+     *  it aggregates. Used by the UI to expand the bucket into individual
+     *  filter values when the user clicks it. */
+    members?: string[]
+  }>
 }
 
 export async function getPaymentsSummary(
   year?: number,
-  month?: number
+  month?: number,
+  globals: GlobalFilters = {}
 ): Promise<PaymentsSummary> {
   const range = periodRange(year, month)
-  const dateWhere = range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}
+  const dateWhere: Record<string, unknown> = range.gte
+    ? { createdAt: { gte: range.gte, lt: range.lt } }
+    : {}
+  const txConds = txMetadataConditions(globals)
+  const baseWhere: Record<string, unknown> = {
+    ...dateWhere,
+    ...txRiskLevelWhere(globals),
+    ...txStatusWhere(globals),
+    ...(txConds.length > 0 ? { AND: txConds as never } : {}),
+  }
 
   const [txs, refundedAgg] = await Promise.all([
     riskDb.riskTransaction.findMany({
-      where: dateWhere,
+      where: baseWhere,
       select: {
         amountCents: true,
         status: true,
@@ -276,7 +539,10 @@ export async function getPaymentsSummary(
       },
     }),
     riskDb.riskTransaction.aggregate({
-      where: { ...dateWhere, raw: { path: ['refunded'], equals: true } },
+      where: {
+        ...baseWhere,
+        raw: { path: ['refunded'], equals: true },
+      },
       _count: { _all: true },
       _sum: { amountCents: true },
     }),
@@ -328,8 +594,13 @@ export async function getPaymentsSummary(
     if (t.status === 'succeeded') m.succeeded++
     else if (t.status === 'failed') m.failed++
 
-    if (t.status === 'failed' && t.outcomeReason) {
-      reasonMap.set(t.outcomeReason, (reasonMap.get(t.outcomeReason) ?? 0) + 1)
+    // Bucket every failed charge so totals match `failedCount`: missing reasons
+    // (typically payment_intent.payment_failed events) go to "(unknown)".
+    if (t.status === 'failed') {
+      const key = t.outcomeReason && t.outcomeReason.trim() !== ''
+        ? t.outcomeReason
+        : '(unknown)'
+      reasonMap.set(key, (reasonMap.get(key) ?? 0) + 1)
     }
   }
 
@@ -361,11 +632,32 @@ export async function getPaymentsSummary(
       { level: 'elevated', count: riskMap.elevated },
       { level: 'highest', count: riskMap.highest },
     ],
-    declineReasons: Array.from(reasonMap.entries())
-      .map(([reason, count]) => ({ reason, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8),
+    declineReasons: collapseDeclineReasons(
+      Array.from(reasonMap.entries()).map(([reason, count]) => ({ reason, count }))
+    ),
   }
+}
+
+// Returns the top reasons by count, collapsing the long tail into "(other)" so
+// the segments always sum to `failedCount`. Empty list stays empty.
+function collapseDeclineReasons(
+  reasons: Array<{ reason: string; count: number }>
+): Array<{ reason: string; count: number; members?: string[] }> {
+  const TOP = 8
+  const sorted = [...reasons].sort((a, b) => b.count - a.count)
+  if (sorted.length <= TOP) return sorted
+  const head = sorted.slice(0, TOP - 1) // leave the last slot for the tail bucket
+  const tail = sorted.slice(TOP - 1)
+  const otherCount = tail.reduce((s, r) => s + r.count, 0)
+  if (otherCount === 0) return head
+  return [
+    ...head,
+    {
+      reason: '(other)',
+      count: otherCount,
+      members: tail.map((r) => r.reason).filter((r) => r !== '(unknown)'),
+    },
+  ]
 }
 
 // Returns charges with `raw` included so the front can render an expandable detail row.
@@ -374,21 +666,42 @@ export async function getChargesForTab(filters: {
   year?: number
   month?: number
   reasons?: string[]
+  /** Used for the local KPI/click filter; overrides `globalRiskLevels` when set. */
   riskLevels?: Array<'normal' | 'elevated' | 'highest'>
+  /** Risk levels from the global scope filter (multi-select). */
+  globalRiskLevels?: RiskLevelFilter[]
+  statuses?: string[]
   limit?: number
+  buildings?: string[]
+  chargeTypes?: string[]
 }) {
   const range = periodRange(filters.year, filters.month)
-  const limit = Math.min(filters.limit ?? 50, 200)
+  const limit = Math.min(filters.limit ?? 50, 500)
+  const txConds = txMetadataConditions({
+    buildings: filters.buildings,
+    chargeTypes: filters.chargeTypes,
+  })
 
+  // All filters compose with AND. When none is provided we return ALL transactions
+  // (including risk_level NULL rows from payment_intent.payment_failed events).
   const where: Record<string, unknown> = {
     ...(range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}),
+    ...(txConds.length > 0 ? { AND: txConds as never } : {}),
   }
   if (filters.reasons && filters.reasons.length > 0) {
     where.outcomeReason = { in: filters.reasons }
-  } else if (filters.riskLevels && filters.riskLevels.length > 0) {
+  }
+  // Local riskLevels (KPI click) take precedence over the global ones.
+  if (filters.riskLevels && filters.riskLevels.length > 0) {
     where.riskLevel = { in: filters.riskLevels }
-  } else {
-    where.riskLevel = { in: ['elevated', 'highest'] }
+  } else if (filters.globalRiskLevels && filters.globalRiskLevels.length > 0) {
+    where.riskLevel =
+      filters.globalRiskLevels.length === 1
+        ? filters.globalRiskLevels[0]
+        : { in: filters.globalRiskLevels }
+  }
+  if (filters.statuses && filters.statuses.length > 0) {
+    where.status = { in: filters.statuses }
   }
 
   return riskDb.riskTransaction.findMany({
@@ -447,18 +760,31 @@ type StripeRefund = {
   status?: string
 }
 
-export async function getRefundsSummary(year?: number, month?: number): Promise<RefundsSummary> {
+export async function getRefundsSummary(
+  year?: number,
+  month?: number,
+  globals: GlobalFilters = {}
+): Promise<RefundsSummary> {
   const range = periodRange(year, month)
-  const dateWhere = range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}
+  const dateWhere: Record<string, unknown> = range.gte
+    ? { createdAt: { gte: range.gte, lt: range.lt } }
+    : {}
+  const txConds = txMetadataConditions(globals)
+  const baseWhere: Record<string, unknown> = {
+    ...dateWhere,
+    ...txRiskLevelWhere(globals),
+    ...txStatusWhere(globals),
+    ...(txConds.length > 0 ? { AND: txConds as never } : {}),
+  }
 
   // Only refunded transactions, ordered newest first. raw needed for refunds.data[].
   const [txs, succeededAgg] = await Promise.all([
     riskDb.riskTransaction.findMany({
-      where: { ...dateWhere, raw: { path: ['refunded'], equals: true } },
+      where: { ...baseWhere, raw: { path: ['refunded'], equals: true } },
       select: { createdAt: true, raw: true, amountCents: true },
     }),
     riskDb.riskTransaction.aggregate({
-      where: { ...dateWhere, status: 'succeeded' },
+      where: { ...baseWhere, status: 'succeeded' },
       _count: { _all: true },
     }),
   ])
@@ -548,13 +874,23 @@ export async function getRecentRefunds(filters: {
   month?: number
   reasons?: string[]
   limit?: number
+  buildings?: string[]
+  chargeTypes?: string[]
+  riskLevels?: RiskLevelFilter[]
 }) {
   const range = periodRange(filters.year, filters.month)
   const limit = Math.min(filters.limit ?? 50, 200)
+  const txConds = txMetadataConditions({
+    buildings: filters.buildings,
+    chargeTypes: filters.chargeTypes,
+  })
+  const riskWhere = txRiskLevelWhere({ riskLevels: filters.riskLevels })
 
   const txs = await riskDb.riskTransaction.findMany({
     where: {
       ...(range.gte ? { createdAt: { gte: range.gte, lt: range.lt } } : {}),
+      ...riskWhere,
+      ...(txConds.length > 0 ? { AND: txConds as never } : {}),
       raw: { path: ['refunded'], equals: true },
     },
     select: {

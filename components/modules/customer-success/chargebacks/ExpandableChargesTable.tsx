@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   X,
   AlertTriangle,
+  Search,
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { ChargeDetailRow, type ChargeDetailData } from './ChargeDetailRow'
@@ -58,8 +59,10 @@ export function ExpandableChargesTable({
   onChannelChange,
 }: Props) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
-  const [chargeTypeFilter, setChargeTypeFilter] = useState<string>('')
+  // Building and Charge Type live in the top-level scope filter now; here we
+  // keep only fine-grained selectors: Units (within the building) and search.
   const [propertyFilter, setPropertyFilter] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(1)
@@ -72,8 +75,8 @@ export function ExpandableChargesTable({
   useEffect(() => {
     setExpandedKey(null)
     setPage(1)
-    setChargeTypeFilter('')
     setPropertyFilter('')
+    setSearchQuery('')
   }, [datasetKey])
 
   // Build cases (each row = one case; singletons + groups together).
@@ -89,26 +92,38 @@ export function ExpandableChargesTable({
     [cases]
   )
 
-  const { chargeTypes, properties } = useMemo(() => {
-    const types = new Set<string>()
+  const properties = useMemo(() => {
     const props = new Set<string>()
     for (const { meta } of decorated) {
-      if (meta.chargeType) types.add(meta.chargeType)
       if (meta.property) props.add(meta.property)
     }
-    return {
-      chargeTypes: Array.from(types).sort(),
-      properties: Array.from(props).sort(),
-    }
+    return Array.from(props).sort()
   }, [decorated])
 
+  // Smart search: case-insensitive substring across guest name, confirmation
+  // code, property, email, and charge id.
+  const normalizedSearch = searchQuery.trim().toLowerCase()
   const filtered = useMemo(() => {
-    return decorated.filter(({ meta }) => {
-      if (chargeTypeFilter && meta.chargeType !== chargeTypeFilter) return false
+    return decorated.filter(({ cs, meta }) => {
       if (propertyFilter && meta.property !== propertyFilter) return false
+      if (normalizedSearch) {
+        const hay = [
+          cs.guestName,
+          meta.guestName,
+          meta.confirmationCode,
+          cs.primary.bookingId,
+          meta.property,
+          meta.email,
+          cs.primary.id,
+          cs.primary.paymentIntent,
+        ]
+          .filter((v): v is string => typeof v === 'string' && v.length > 0)
+          .map((v) => v.toLowerCase())
+        if (!hay.some((v) => v.includes(normalizedSearch))) return false
+      }
       return true
     })
-  }, [decorated, chargeTypeFilter, propertyFilter])
+  }, [decorated, propertyFilter, normalizedSearch])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -141,7 +156,7 @@ export function ExpandableChargesTable({
   useEffect(() => {
     setPage(1)
     setExpandedKey(null)
-  }, [chargeTypeFilter, propertyFilter, sortKey, sortDir])
+  }, [propertyFilter, normalizedSearch, sortKey, sortDir])
 
   const totalRows = sorted.length
   const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
@@ -180,7 +195,7 @@ export function ExpandableChargesTable({
       ? `matching ${selectedReasons.map((r) => humanReason(r)).join(', ')}`
       : 'recent elevated & highest-risk'
 
-  const hasActiveFilters = chargeTypeFilter !== '' || propertyFilter !== ''
+  const hasActiveFilters = propertyFilter !== '' || normalizedSearch !== ''
 
   return (
     <div className="space-y-3">
@@ -227,46 +242,61 @@ export function ExpandableChargesTable({
         />
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — Units + smart search. Building & Charge Type live in the
+          page-level scope bar so they affect every panel (KPIs, charts, etc.). */}
       <div className="bg-mvr-cream/60 border border-[#E0DBD4] rounded-lg p-3 flex flex-wrap items-center gap-3">
         <span className="text-[10px] uppercase tracking-widest font-semibold text-mvr-primary">
-          Filter
+          Refine
         </span>
-        <select
-          value={chargeTypeFilter}
-          onChange={(e) => setChargeTypeFilter(e.target.value)}
-          className="text-xs border border-[#E0DBD4] rounded-md px-3 py-1.5 bg-white focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary outline-none min-w-[180px]"
-        >
-          <option value="">All charge types</option>
-          {chargeTypes.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+
         <select
           value={propertyFilter}
           onChange={(e) => setPropertyFilter(e.target.value)}
-          className="text-xs border border-[#E0DBD4] rounded-md px-3 py-1.5 bg-white focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary outline-none min-w-[220px]"
+          aria-label="Filter by unit"
+          className="text-xs border border-[#E0DBD4] rounded-md px-3 py-1.5 bg-white focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary outline-none min-w-[200px]"
         >
-          <option value="">All properties</option>
+          <option value="">All units</option>
           {properties.map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
           ))}
         </select>
+
+        {/* Smart search — by guest name, reservation, email, or charge id */}
+        <label className="relative inline-flex items-center flex-1 min-w-[240px]">
+          <Search className="absolute left-2.5 w-3.5 h-3.5 text-mvr-sand pointer-events-none" aria-hidden />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search guest, reservation, email…"
+            aria-label="Search charges"
+            className="w-full text-xs border border-[#E0DBD4] rounded-md pl-7 pr-7 py-1.5 bg-white focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary outline-none"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+              className="absolute right-1.5 p-0.5 rounded text-muted-foreground hover:text-mvr-primary hover:bg-mvr-neutral transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </label>
+
         {hasActiveFilters && (
           <button
             type="button"
             onClick={() => {
-              setChargeTypeFilter('')
               setPropertyFilter('')
+              setSearchQuery('')
             }}
             className="inline-flex items-center gap-1 text-xs text-mvr-primary hover:underline"
           >
             <X className="w-3 h-3" />
-            Clear filters
+            Clear refinements
           </button>
         )}
       </div>

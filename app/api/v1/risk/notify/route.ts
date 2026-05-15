@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'crypto'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { riskDb } from '@/lib/db/risk'
-import { ALLOWED_RISK_ROLES, notifyPayloadSchema } from '@/lib/risk/schemas'
+import { notifyPayloadSchema } from '@/lib/risk/schemas'
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!ALLOWED_RISK_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, 'customer_success.chargebacks'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

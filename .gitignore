@@ -38,3 +38,6 @@ next-env.d.ts
 
 /app/generated/prisma
 /lib/generated/risk-client
+
+# n8n workflow JSON snapshots — local-only safety backups
+/n8n-snapshots

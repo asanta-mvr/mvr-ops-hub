@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { ALLOWED_RISK_ROLES, ruleInputSchema } from '@/lib/risk/schemas'
+import { ruleInputSchema } from '@/lib/risk/schemas'
 
 export async function PATCH(
   req: NextRequest,
@@ -11,7 +12,7 @@ export async function PATCH(
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!ALLOWED_RISK_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, 'customer_success.chargebacks_rules'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -70,7 +71,7 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!ALLOWED_RISK_ROLES.includes(session.user.role)) {
+    if (!(await canEdit(session, 'customer_success.chargebacks_rules'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

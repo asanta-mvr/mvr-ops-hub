@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { canEdit, canView } from '@/lib/auth/permissions'
 import { getRecentRefunds } from '@/lib/risk/queries'
-import { ALLOWED_RISK_ROLES, refundFiltersSchema } from '@/lib/risk/schemas'
+import { refundFiltersSchema } from '@/lib/risk/schemas'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    if (!ALLOWED_RISK_ROLES.includes(session.user.role)) {
+    if (!(await canView(session, 'customer_success.chargebacks'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
