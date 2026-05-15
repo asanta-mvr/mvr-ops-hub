@@ -13,6 +13,12 @@ const bigquery = new BigQuery({
     : {}),
 })
 
+// Shared accessor for other modules (reviews, future BQ-backed features).
+// Single BigQuery client per process — same credentials, same project.
+export function getBigQueryClient(): BigQuery {
+  return bigquery
+}
+
 // Substring patterns mapped to OtaSource enum values.
 // Order matters: more specific patterns first.
 const OTA_PATTERNS: Array<[string, OtaSource]> = [

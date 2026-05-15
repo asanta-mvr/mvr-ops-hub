@@ -15,6 +15,7 @@ export const RESOURCES = [
   { key: 'customer_success.tickets',           label: 'OTA Tickets',         group: 'Customer Success' },
   { key: 'customer_success.chargebacks',       label: 'Chargebacks',         group: 'Customer Success' },
   { key: 'customer_success.chargebacks_rules', label: 'Chargeback Alert Rules', group: 'Customer Success' },
+  { key: 'customer_success.reviews',           label: 'Reviews',             group: 'Customer Success' },
   { key: 'operations',                         label: 'Operations',          group: 'Operations' },
   { key: 'integrations',                       label: 'Integrations',        group: 'Operations' },
   { key: 'settings.users',                     label: 'User Management',     group: 'Settings' },

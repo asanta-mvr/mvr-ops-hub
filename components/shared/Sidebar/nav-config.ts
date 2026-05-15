@@ -13,6 +13,7 @@ import {
   Plug,
   Settings,
   ShieldAlert,
+  Star,
   Ticket,
   UserCog,
   Users,
@@ -61,6 +62,7 @@ export const NAV_CONFIG: NavItem[] = [
     children: [
       { label: 'OTA Tickets', href: '/customer-success/tickets',     icon: Ticket,      resource: 'customer_success.tickets' },
       { label: 'Chargebacks', href: '/customer-success/chargebacks', icon: ShieldAlert, resource: 'customer_success.chargebacks' },
+      { label: 'Reviews',     href: '/customer-success/reviews',     icon: Star,        resource: 'customer_success.reviews' },
     ],
   },
   { label: 'Operations',   href: '/operations',   icon: Wrench, resource: 'operations' },

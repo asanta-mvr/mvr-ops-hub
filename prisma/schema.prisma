@@ -39,6 +39,8 @@ model User {
   ticketComments    TicketComment[]         @relation("TicketComments")
   notificationRules NotificationRule[]      @relation("NotificationRulesCreated")
   watchlistEntries  NotificationWatchlist[] @relation("WatchlistEntriesCreated")
+  assignedReviews   ReviewAction[]          @relation("AssignedReviews")
+  escalatedReviews  ReviewAction[]          @relation("EscalatedReviews")
   permissions       UserPermission[]
   workspaceCred     GoogleWorkspaceCredential?
 
@@ -643,6 +645,60 @@ model NotificationWatchlist {
   @@index([email])
   @@index([cardLast4])
   @@map("notification_watchlist")
+}
+
+// ─── REVIEWS (ops-hub-owned dispute workflow on top of BQ reviews) ───────────
+// The review content itself lives in BigQuery (`miami-vr-data.reva_reviews.reviews`)
+// and is read live with no mirror. This table is the ops-hub-side state machine:
+// who is handling a review, where it sits in the dispute pipeline, the outcome,
+// and (Phase 2 hook) the escalation footprint.
+
+enum ReviewActionStatus {
+  new
+  under_review
+  no_action
+  disputing
+  dispute_won
+  dispute_lost
+  closed_no_change
+}
+
+model ReviewAction {
+  id               String             @id @default(cuid())
+  otaSource        OtaSource
+  externalReviewId String // BQ reviews.id — UUID v4, unique within (otaSource, externalReviewId)
+  status           ReviewActionStatus @default(new)
+
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedReviews", fields: [assignedToId], references: [id])
+
+  disputeDecision    String? @db.Text // why we are (or aren't) disputing
+  disputeOutcomeNote String? @db.Text // resolution detail (won/lost/closed_no_change)
+  internalNotes      String? @db.Text // single free-form note in v1; threading is Phase 2
+
+  // Phase 3 hook — populated by the n8n auto-scorer workflow against company
+  // dispute policy. Read-only from the ops-hub UI until that workflow ships.
+  disputeScore     Float? // 0.0–1.0 — probability of winning a dispute
+  disputeAnalysis  Json? // structured payload from the AI scorer (criteria + reasoning)
+  aiRecommendation String? @db.Text // human-readable verdict, e.g. "Dispute" / "Borderline" / "Don't dispute"
+
+  // Phase 2 escalation hooks — columns created now to avoid future migrations.
+  escalatedAt           DateTime?
+  escalatedById         String?
+  escalatedBy           User?     @relation("EscalatedReviews", fields: [escalatedById], references: [id])
+  escalatedSlackChannel String?
+
+  firstActionedAt DateTime? // set once on first transition out of `new`
+  closedAt        DateTime? // set on transition into a terminal status
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([otaSource, externalReviewId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([createdAt])
+  @@map("review_actions")
 }
 
 // ─── USER MANAGEMENT (RBAC + INVITATIONS) ────────────────────────────────────
