@@ -44,6 +44,21 @@ export interface ReviewRow {
   unitProviderId:   string | null
   reviewOf:         string | null
   displayOnWebsite: boolean
+  /** Booking confirmation / reservation id from the OTA. Often null on
+   *  Revaboard import — surfaced in the detail modal when present. */
+  reservationId:    string | null
+}
+
+// ── Unit-level summary (used by the review detail modal) ──────────────────
+// Snapshot of a single unit's review history — total volume, per-OTA mix,
+// and star distribution. Always reads the full history of the unit (ignores
+// the page-level scope) so the modal gives unit-wide context.
+export interface UnitSummary {
+  unitName:      string
+  totalReviews:  number
+  avgRating:     number | null
+  byOta:         Array<{ otaSource: OtaSource; count: number; avgRating: number | null }>
+  ratingBuckets: Record<'1' | '2' | '3' | '4' | '5', number>
 }
 
 export interface ReviewActionRow {

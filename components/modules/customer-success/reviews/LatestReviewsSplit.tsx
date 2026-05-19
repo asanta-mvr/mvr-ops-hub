@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Loader2, Star, ThumbsDown, ThumbsUp } from '
 import type { OtaSource } from '@prisma/client'
 import type { ReviewWithAction } from '@/lib/reviews/types'
 import { ReviewActionDrawer } from './ReviewActionDrawer'
+import { ReviewDetailModal } from './ReviewDetailModal'
 
 interface Props {
   /** Reviews to render on the left (≥ 4 ★). Parent decides where they came from. */
@@ -40,6 +41,16 @@ function snippet(text: string | null | undefined, n = 110): string {
   return text.length > n ? text.slice(0, n - 1).trimEnd() + '…' : text
 }
 
+// Same color scale used by CellDetailPanel for review ratings: ≥4 green,
+// 3 amber, ≤2 red, null muted. Applied to the star icon + rating digit so
+// Latest Good rows read as green at a glance and Latest Bad rows pop red.
+function ratingTone(rating: number | null): string {
+  if (rating == null) return 'text-muted-foreground'
+  if (rating <= 2)    return 'text-mvr-danger'
+  if (rating === 3)   return 'text-mvr-warning'
+  return 'text-mvr-success'
+}
+
 export function LatestReviewsSplit({
   goodRows,
   badRows,
@@ -55,6 +66,7 @@ export function LatestReviewsSplit({
   onActionSaved,
 }: Props) {
   const [drawerRow, setDrawerRow] = useState<ReviewWithAction | null>(null)
+  const [detailRow, setDetailRow] = useState<ReviewWithAction | null>(null)
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -67,7 +79,8 @@ export function LatestReviewsSplit({
         loading={loadingGood}
         limit={goodLimit}
         onChangeLimit={onChangeGoodLimit}
-        onOpen={setDrawerRow}
+        onOpenAction={setDrawerRow}
+        onOpenDetail={setDetailRow}
         emptyLabel={
           positiveTagFilter
             ? `No reviews tagged "${positiveTagFilter}" with ≥4★ in this scope.`
@@ -83,13 +96,28 @@ export function LatestReviewsSplit({
         loading={loadingBad}
         limit={badLimit}
         onChangeLimit={onChangeBadLimit}
-        onOpen={setDrawerRow}
+        onOpenAction={setDrawerRow}
+        onOpenDetail={setDetailRow}
         emptyLabel={
           negativeTagFilter
             ? `No reviews tagged "${negativeTagFilter}" with ≤3★ in this scope.`
             : 'No bad reviews — nice work.'
         }
       />
+
+      {detailRow ? (
+        <ReviewDetailModal
+          review={detailRow}
+          onClose={() => setDetailRow(null)}
+          onAction={(r) => {
+            // Close the detail modal first, then open the action drawer for
+            // the same row — keeps the two surfaces from stacking on top of
+            // each other.
+            setDetailRow(null)
+            setDrawerRow(r)
+          }}
+        />
+      ) : null}
 
       {drawerRow ? (
         <ReviewActionDrawer
@@ -115,12 +143,16 @@ interface ColumnProps {
   loading:       boolean
   limit:         number
   onChangeLimit: (n: number) => void
-  onOpen:        (r: ReviewWithAction) => void
+  /** Clicking the small "Action" pill — opens the editing drawer directly. */
+  onOpenAction:  (r: ReviewWithAction) => void
+  /** Clicking the row body — opens the read-only detail modal. */
+  onOpenDetail:  (r: ReviewWithAction) => void
   emptyLabel:    string
 }
 
 function Column({
-  title, subtitle, icon, accent, rows, loading, limit, onChangeLimit, onOpen, emptyLabel,
+  title, subtitle, icon, accent, rows, loading, limit, onChangeLimit,
+  onOpenAction, onOpenDetail, emptyLabel,
 }: ColumnProps) {
   const [page, setPage] = useState(0)
 
@@ -156,29 +188,36 @@ function Column({
         ) : (
           <ul className="divide-y divide-[#E0DBD4]">
             {slice.map((r) => (
-              <li key={r.id} className="px-4 py-2.5 flex items-start gap-3 text-sm">
-                <div className="flex items-center gap-1 text-mvr-warning font-semibold w-12">
-                  <Star className="w-3.5 h-3.5 fill-current" />
-                  {r.rating ?? '—'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-mvr-primary font-medium truncate">
-                      {r.unitName ?? '—'}
-                      {r.guestName ? (
-                        <span className="text-mvr-olive font-normal"> · {r.guestName}</span>
-                      ) : null}
-                    </span>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {r.date} · {OTA_LABEL[r.otaSource]}
-                    </span>
-                  </div>
-                  <p className="text-mvr-olive text-xs">{snippet(r.description)}</p>
-                </div>
+              <li key={r.id} className="flex items-start gap-3 text-sm hover:bg-mvr-cream/60 transition-colors">
                 <button
                   type="button"
-                  onClick={() => onOpen(r)}
-                  className="inline-flex items-center rounded-md border border-[#E0DBD4] px-2 py-0.5 text-xs font-medium text-mvr-primary hover:bg-mvr-cream"
+                  onClick={() => onOpenDetail(r)}
+                  aria-label={`Open review detail for ${r.unitName ?? 'review'}`}
+                  className="flex-1 min-w-0 flex items-start gap-3 px-4 py-2.5 text-left"
+                >
+                  <div className={`flex items-center gap-1 font-semibold w-12 shrink-0 ${ratingTone(r.rating)}`}>
+                    <Star className="w-3.5 h-3.5 fill-current" />
+                    {r.rating ?? '—'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-mvr-primary font-medium truncate">
+                        {r.unitName ?? '—'}
+                        {r.guestName ? (
+                          <span className="text-mvr-olive font-normal"> · {r.guestName}</span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {r.date} · {OTA_LABEL[r.otaSource]}
+                      </span>
+                    </div>
+                    <p className="text-mvr-olive text-xs">{snippet(r.description)}</p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenAction(r)}
+                  className="inline-flex items-center rounded-md border border-[#E0DBD4] px-2 py-0.5 text-xs font-medium text-mvr-primary hover:bg-white shrink-0 mr-4 mt-2.5"
                 >
                   Action
                 </button>

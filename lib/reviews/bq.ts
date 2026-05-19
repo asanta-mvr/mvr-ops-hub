@@ -15,6 +15,7 @@ import type {
   HeatmapColDim,
   DailyVolumePoint,
   TagDistRow,
+  UnitSummary,
 } from './types'
 
 const TABLE = '`miami-vr-data.reva_reviews.reviews`'
@@ -160,6 +161,7 @@ function toReviewRow(r: Record<string, unknown>): ReviewRow {
     unitProviderId:   (r.unit_provider_id as string | null | undefined) ?? null,
     reviewOf:         (r.review_of as string | null | undefined) ?? null,
     displayOnWebsite: Boolean(r.display_on_website),
+    reservationId:    (r.reservation_id as string | null | undefined) ?? null,
   }
 }
 
@@ -167,7 +169,7 @@ const SELECT_COLS = `
   id, channel_name, rating, date, updated_at, title, description, guest_name,
   host_response, host_response_text, positive_tags, negative_tags,
   unit_name, unit_provider_id, review_of, timing, display_on_website,
-  etl_loaded_at
+  etl_loaded_at, reservation_id
 `.trim()
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -536,6 +538,78 @@ export async function fetchLatestForBucket(
 
   const [rows] = await bq.query({ query: latestSql, params: xparams, useLegacySql: false })
   return (rows as Array<Record<string, unknown>>).map(toReviewRow)
+}
+
+// Per-unit summary used by the review detail modal. Reads the full review
+// history of a single unit (ignores the page-level scope) so the modal
+// always provides unit-wide context regardless of which year/building/etc.
+// the user has filtered by.
+export async function fetchUnitSummary(unitName: string): Promise<UnitSummary> {
+  const bq = getBigQueryClient()
+
+  const summarySql = `
+    SELECT
+      COUNT(*)              AS total,
+      AVG(rating)           AS avg_rating,
+      COUNTIF(rating = 1)   AS r1,
+      COUNTIF(rating = 2)   AS r2,
+      COUNTIF(rating = 3)   AS r3,
+      COUNTIF(rating = 4)   AS r4,
+      COUNTIF(rating = 5)   AS r5
+    FROM ${TABLE}
+    WHERE review_of = 'Unit' AND unit_name = @unitName
+  `
+
+  const otaSql = `
+    SELECT channel_name, COUNT(*) AS n, AVG(rating) AS avg_rating
+    FROM ${TABLE}
+    WHERE review_of = 'Unit' AND unit_name = @unitName
+    GROUP BY channel_name
+    ORDER BY n DESC
+  `
+
+  const [[summaryRows], [otaRows]] = await Promise.all([
+    bq.query({ query: summarySql, params: { unitName }, useLegacySql: false }),
+    bq.query({ query: otaSql,     params: { unitName }, useLegacySql: false }),
+  ])
+
+  const s = (summaryRows[0] ?? {}) as Record<string, unknown>
+  const totalReviews = Number(s.total ?? 0)
+  const avgRating    = s.avg_rating == null ? null : Number(s.avg_rating)
+
+  // Fold raw channel_name variants into the OtaSource enum, same approach as
+  // fetchReviewsKPIs so "Booking" + "Booking.com" collapse to one bucket.
+  const byOtaMap = new Map<OtaSource, { count: number; ratingSum: number; ratingN: number }>()
+  for (const r of otaRows as Array<{ channel_name?: string; n?: number | string; avg_rating?: number | string | null }>) {
+    const ota   = mapOta(r.channel_name)
+    const count = Number(r.n ?? 0)
+    const avg   = r.avg_rating == null ? null : Number(r.avg_rating)
+    const slot  = byOtaMap.get(ota) ?? { count: 0, ratingSum: 0, ratingN: 0 }
+    slot.count += count
+    if (avg != null) { slot.ratingSum += avg * count; slot.ratingN += count }
+    byOtaMap.set(ota, slot)
+  }
+  const byOta = Array.from(byOtaMap.entries())
+    .map(([otaSource, v]) => ({
+      otaSource,
+      count: v.count,
+      avgRating: v.ratingN > 0 ? v.ratingSum / v.ratingN : null,
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  return {
+    unitName,
+    totalReviews,
+    avgRating,
+    byOta,
+    ratingBuckets: {
+      '1': Number(s.r1 ?? 0),
+      '2': Number(s.r2 ?? 0),
+      '3': Number(s.r3 ?? 0),
+      '4': Number(s.r4 ?? 0),
+      '5': Number(s.r5 ?? 0),
+    },
+  }
 }
 
 export async function fetchFilterOptions(): Promise<ReviewsFilterOptions> {
