@@ -75,43 +75,7 @@ export function PeriodFilterBar({
         Scope
       </span>
 
-      {/* Building — multi */}
-      <MultiSelectFilter
-        icon={Building2}
-        allLabel="All buildings"
-        itemNoun="building"
-        ariaLabel="Filter by buildings"
-        options={buildings.map((b) => ({ value: b, label: b }))}
-        selected={selectedBuildings}
-        onChange={onBuildingsChange}
-        minWidth="180px"
-      />
-
-      {/* Charge Type — multi */}
-      <MultiSelectFilter
-        icon={Tag}
-        allLabel="All charge types"
-        itemNoun="charge type"
-        ariaLabel="Filter by charge types"
-        options={chargeTypes.map((t) => ({ value: t, label: t }))}
-        selected={selectedChargeTypes}
-        onChange={onChargeTypesChange}
-        minWidth="170px"
-      />
-
-      {/* Risk Level — multi */}
-      <MultiSelectFilter
-        icon={ShieldAlert}
-        allLabel="All risk levels"
-        itemNoun="risk level"
-        ariaLabel="Filter by risk levels"
-        options={RISK_LEVEL_OPTIONS}
-        selected={selectedRiskLevels}
-        onChange={onRiskLevelsChange}
-        minWidth="160px"
-      />
-
-      {/* Year — single */}
+      {/* Year — first */}
       <label className="relative inline-flex items-center">
         <Calendar
           className={`absolute left-2.5 w-4 h-4 pointer-events-none transition-colors ${
@@ -140,7 +104,7 @@ export function PeriodFilterBar({
         />
       </label>
 
-      {/* Month — fifth. Disabled when no year is selected (month without year is ambiguous). */}
+      {/* Month — second. Disabled when no year is selected (month without year is ambiguous). */}
       <label className="relative inline-flex items-center">
         <CalendarRange
           className={`absolute left-2.5 w-4 h-4 pointer-events-none transition-colors ${
@@ -169,6 +133,42 @@ export function PeriodFilterBar({
           aria-hidden
         />
       </label>
+
+      {/* Building — third (multi) */}
+      <MultiSelectFilter
+        icon={Building2}
+        allLabel="All buildings"
+        itemNoun="building"
+        ariaLabel="Filter by buildings"
+        options={buildings.map((b) => ({ value: b, label: b }))}
+        selected={selectedBuildings}
+        onChange={onBuildingsChange}
+        minWidth="180px"
+      />
+
+      {/* Charge Type — fourth (multi) */}
+      <MultiSelectFilter
+        icon={Tag}
+        allLabel="All charge types"
+        itemNoun="charge type"
+        ariaLabel="Filter by charge types"
+        options={chargeTypes.map((t) => ({ value: t, label: t }))}
+        selected={selectedChargeTypes}
+        onChange={onChargeTypesChange}
+        minWidth="170px"
+      />
+
+      {/* Risk Level — fifth (multi) */}
+      <MultiSelectFilter
+        icon={ShieldAlert}
+        allLabel="All risk levels"
+        itemNoun="risk level"
+        ariaLabel="Filter by risk levels"
+        options={RISK_LEVEL_OPTIONS}
+        selected={selectedRiskLevels}
+        onChange={onRiskLevelsChange}
+        minWidth="160px"
+      />
 
       {hasFilter && (
         <button

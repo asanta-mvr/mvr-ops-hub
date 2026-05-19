@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NAV_CONFIG, isGroup, type NavItem } from './nav-config'
@@ -40,6 +41,26 @@ export function SidebarClient({ allowedResources }: Props) {
     }
   }
 
+  // Which group, if any, contains the current route. Used to auto-open the
+  // matching accordion on initial load and on every client-side navigation.
+  let activeGroupHref: string | null = null
+  for (const item of items) {
+    if (!isGroup(item)) continue
+    for (const child of item.children) {
+      if (pathname === child.href || pathname.startsWith(child.href + '/')) {
+        activeGroupHref = item.href
+        break
+      }
+    }
+    if (activeGroupHref) break
+  }
+
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroupHref)
+
+  useEffect(() => {
+    if (activeGroupHref) setOpenGroup(activeGroupHref)
+  }, [activeGroupHref])
+
   return (
     <aside
       className="w-60 min-h-screen flex flex-col"
@@ -60,63 +81,84 @@ export function SidebarClient({ allowedResources }: Props) {
           const Icon = item.icon
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           const hasChildren = isGroup(item)
+          const isOpen = hasChildren && openGroup === item.href
+
+          const rowClass = cn(
+            'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 w-full text-left',
+            isActive
+              ? 'bg-white/12 text-white'
+              : 'text-white/55 hover:bg-white/8 hover:text-white/90'
+          )
+
+          const iconClass = cn(
+            'w-4 h-4 shrink-0 transition-colors',
+            isActive ? 'text-mvr-sand' : 'text-white/40 group-hover:text-white/70'
+          )
+
+          if (hasChildren) {
+            return (
+              <div key={item.href}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() =>
+                    setOpenGroup((prev) => (prev === item.href ? null : item.href))
+                  }
+                  className={rowClass}
+                >
+                  <Icon className={iconClass} />
+                  <span className="flex-1">{item.label}</span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 transition-transform text-white/30',
+                      isOpen && 'rotate-180 text-white/50'
+                    )}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="mt-0.5 mb-1 ml-3 pl-4 border-l border-white/10 space-y-0.5">
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon
+                      const isChildActive =
+                        pathname === child.href || pathname.startsWith(child.href + '/')
+                      return (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={cn(
+                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-all duration-150',
+                            isChildActive
+                              ? 'bg-white/10 text-white font-medium'
+                              : 'text-white/45 hover:bg-white/6 hover:text-white/80'
+                          )}
+                        >
+                          <ChildIcon
+                            className={cn(
+                              'w-3.5 h-3.5 shrink-0',
+                              isChildActive ? 'text-mvr-sand' : 'text-white/30'
+                            )}
+                          />
+                          {child.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
           return (
             <div key={item.href}>
               <Link
                 href={item.href}
-                className={cn(
-                  'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                  isActive
-                    ? 'bg-white/12 text-white'
-                    : 'text-white/55 hover:bg-white/8 hover:text-white/90'
-                )}
+                onClick={() => setOpenGroup(null)}
+                className={rowClass}
               >
-                <Icon
-                  className={cn(
-                    'w-4 h-4 shrink-0 transition-colors',
-                    isActive ? 'text-mvr-sand' : 'text-white/40 group-hover:text-white/70'
-                  )}
-                />
+                <Icon className={iconClass} />
                 <span className="flex-1">{item.label}</span>
-                {hasChildren && (
-                  <ChevronDown
-                    className={cn(
-                      'w-3.5 h-3.5 transition-transform text-white/30',
-                      isActive && 'rotate-180 text-white/50'
-                    )}
-                  />
-                )}
               </Link>
-
-              {hasChildren && isActive && (
-                <div className="mt-0.5 mb-1 ml-3 pl-4 border-l border-white/10 space-y-0.5">
-                  {item.children.map((child) => {
-                    const ChildIcon = child.icon
-                    const isChildActive =
-                      pathname === child.href || pathname.startsWith(child.href + '/')
-                    return (
-                      <Link
-                        key={child.href}
-                        href={child.href}
-                        className={cn(
-                          'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-all duration-150',
-                          isChildActive
-                            ? 'bg-white/10 text-white font-medium'
-                            : 'text-white/45 hover:bg-white/6 hover:text-white/80'
-                        )}
-                      >
-                        <ChildIcon
-                          className={cn(
-                            'w-3.5 h-3.5 shrink-0',
-                            isChildActive ? 'text-mvr-sand' : 'text-white/30'
-                          )}
-                        />
-                        {child.label}
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           )
         })}

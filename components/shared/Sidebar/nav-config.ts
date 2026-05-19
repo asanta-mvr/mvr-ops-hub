@@ -57,12 +57,12 @@ export const NAV_CONFIG: NavItem[] = [
   },
   {
     label: 'Customer Success',
-    href: '/customer-success/tickets',
+    href: '/customer-success/reviews',
     icon: HeadphonesIcon,
     children: [
-      { label: 'OTA Tickets', href: '/customer-success/tickets',     icon: Ticket,      resource: 'customer_success.tickets' },
-      { label: 'Chargebacks', href: '/customer-success/chargebacks', icon: ShieldAlert, resource: 'customer_success.chargebacks' },
       { label: 'Reviews',     href: '/customer-success/reviews',     icon: Star,        resource: 'customer_success.reviews' },
+      { label: 'Chargebacks', href: '/customer-success/chargebacks', icon: ShieldAlert, resource: 'customer_success.chargebacks' },
+      { label: 'OTA Tickets', href: '/customer-success/tickets',     icon: Ticket,      resource: 'customer_success.tickets' },
     ],
   },
   { label: 'Operations',   href: '/operations',   icon: Wrench, resource: 'operations' },

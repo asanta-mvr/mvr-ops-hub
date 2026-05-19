@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { Settings } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
@@ -42,6 +43,19 @@ interface PageProps {
 
 const ALLOWED_RISK = new Set<RiskLevelFilter>(['normal', 'elevated', 'highest'])
 
+// Filter keys that count as "user has expressed intent". When none are
+// present in the URL on first entry, we redirect to a canonical default
+// scope (year=2026 + current month) so the page always loads with a
+// preselected period.
+const FILTER_KEYS: ReadonlyArray<keyof PageProps['searchParams']> = [
+  'year',
+  'month',
+  'building',
+  'chargeType',
+  'riskLevel',
+  'status',
+]
+
 function splitCsv(v: string | undefined): string[] {
   if (!v) return []
   return v
@@ -53,6 +67,17 @@ function splitCsv(v: string | undefined): string[] {
 export default async function ChargebacksPage({ searchParams }: PageProps) {
   const session = await auth()
   await requireView(session, 'customer_success.chargebacks', '/no-access')
+
+  // First-entry defaults — when no filter param is present in the URL we
+  // redirect to year=2026 + current month. Users can deselect afterwards;
+  // the redirect only fires when the URL is truly empty.
+  const hasAnyFilter = FILTER_KEYS.some((k) => searchParams[k] !== undefined)
+  if (!hasAnyFilter) {
+    const defaults = new URLSearchParams()
+    defaults.set('year', '2026')
+    defaults.set('month', String(new Date().getMonth() + 1))
+    redirect(`/customer-success/chargebacks?${defaults.toString()}`)
+  }
 
   const year = searchParams.year ? Number(searchParams.year) : undefined
   const month = searchParams.month ? Number(searchParams.month) : undefined
