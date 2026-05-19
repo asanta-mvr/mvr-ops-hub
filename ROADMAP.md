@@ -40,6 +40,8 @@ Replace AppSheet as the canonical source of truth for buildings, owners, units, 
 
 - Risk / chargebacks dashboard overhaul + Stripe ingestion fixes (commit `39e29314`).
 - Settings + Users module with RBAC backbone (commit `e8d2314`).
+- Customer Success — Reviews module (commit `e6d491a`), review detail modal with unit snapshot + channel icons.
+- Reviews weekly brief PDF + Slack delivery via n8n cron (`/api/v1/reviews/weekly-brief`, token-gated, runs Mondays 8 AM ET).
 
 ## ⏭ Phase 2+ — Future
 
