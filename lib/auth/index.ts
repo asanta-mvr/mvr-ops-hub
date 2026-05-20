@@ -22,6 +22,49 @@ function isCompanyEmail(email: string | null | undefined): boolean {
   return email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`)
 }
 
+// CredentialsProvider is the local "Dev Login" bypass — only registered in
+// non-production environments. In production, the only way in is Google OAuth
+// against an existing User row or a pending UserInvitation (see signIn below).
+const devCredentialsProvider =
+  process.env.NODE_ENV !== 'production'
+    ? [
+        CredentialsProvider({
+          name: 'Dev Login',
+          credentials: {
+            email: { label: 'Email', type: 'email' },
+            password: { label: 'Password', type: 'password' },
+          },
+          async authorize(credentials) {
+            const devEmail = process.env.DEV_LOGIN_EMAIL ?? 'dev@miamivacationrentals.com'
+            const devPassword = process.env.DEV_LOGIN_PASSWORD ?? 'mvr-dev-2026'
+
+            if (
+              credentials?.email === devEmail &&
+              credentials?.password === devPassword
+            ) {
+              await db.user.upsert({
+                where: { id: 'dev-user-001' },
+                update: { lastLoginAt: new Date() },
+                create: {
+                  id: 'dev-user-001',
+                  name: 'Andrés Santa',
+                  email: devEmail,
+                  role: 'super_admin',
+                },
+              })
+              return {
+                id: 'dev-user-001',
+                name: 'Andrés Santa',
+                email: devEmail,
+                role: 'super_admin',
+              }
+            }
+            return null
+          },
+        }),
+      ]
+    : []
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   debug: process.env.NODE_ENV === 'development',
@@ -30,49 +73,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
-    CredentialsProvider({
-      name: 'Dev Login',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        // Dev-only bypass — never reaches production (Google OAuth is used there)
-        const devEmail = process.env.DEV_LOGIN_EMAIL ?? 'dev@miamivacationrentals.com'
-        const devPassword = process.env.DEV_LOGIN_PASSWORD ?? 'mvr-dev-2026'
-
-        if (
-          credentials?.email === devEmail &&
-          credentials?.password === devPassword
-        ) {
-          await db.user.upsert({
-            where: { id: 'dev-user-001' },
-            update: { lastLoginAt: new Date() },
-            create: {
-              id: 'dev-user-001',
-              name: 'Andrés Santa',
-              email: devEmail,
-              role: 'super_admin',
-            },
-          })
-          return {
-            id: 'dev-user-001',
-            name: 'Andrés Santa',
-            email: devEmail,
-            role: 'super_admin',
-          }
-        }
-        return null
-      },
-    }),
+    ...devCredentialsProvider,
   ],
   callbacks: {
-    // Domain whitelist for Google sign-ins. CredentialsProvider (dev) is
+    // Strict access control for Google sign-ins. CredentialsProvider (dev) is
     // exempt — it has its own hardcoded email/password check above.
+    //   1. Email must be on the company domain.
+    //   2. A User row OR a pending UserInvitation must exist for the email.
+    //      Otherwise, redirect to /no-access with a reason so the user gets
+    //      an explanation instead of a silent failure.
     async signIn({ user, account }) {
       if (account?.provider === 'credentials') return true
       if (!isCompanyEmail(user?.email ?? undefined)) {
         return `/login?error=domain&email=${encodeURIComponent(user?.email ?? '')}`
+      }
+      const email = user!.email!.toLowerCase()
+      const [existingUser, pendingInvite] = await Promise.all([
+        db.user.findUnique({ where: { email }, select: { id: true, isActive: true } }),
+        db.userInvitation.findFirst({
+          where: { email, acceptedAt: null, expiresAt: { gt: new Date() } },
+          select: { id: true },
+        }),
+      ])
+      if (!existingUser && !pendingInvite) {
+        return `/no-access?reason=noinvite`
+      }
+      if (existingUser && !existingUser.isActive && !pendingInvite) {
+        return `/no-access?reason=disabled`
       }
       return true
     },
@@ -90,6 +117,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           orderBy: { createdAt: 'desc' },
         })
 
+        // By the time we reach this callback, signIn has already validated that
+        // either a User exists OR a pending invitation exists. So if we're
+        // creating a new User row, it's because the invitation auto-accept path
+        // is about to run below — isActive starts true.
         const dbUser = await db.user.upsert({
           where: { email: user.email! },
           update: {
@@ -102,7 +133,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: user.name,
             image: user.image,
             role: 'read_only',
-            isActive: !!pendingInvite, // activate when accepting; otherwise pending until admin assigns
+            isActive: true,
           },
         })
 

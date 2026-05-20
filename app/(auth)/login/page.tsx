@@ -20,6 +20,12 @@ function CrownLogo() {
   )
 }
 
+// The Dev Login (CredentialsProvider) is only registered in non-production
+// environments by lib/auth/index.ts. Keep the form symmetric: hide it whenever
+// NODE_ENV is 'production'. This `process.env.NODE_ENV` reference is replaced
+// at build time by Next.js, so the form is statically tree-shaken in prod.
+const SHOW_DEV_LOGIN = process.env.NODE_ENV !== 'production'
+
 export default function LoginPage({
   searchParams,
 }: {
@@ -73,47 +79,54 @@ export default function LoginPage({
           </div>
         )}
 
-        {/* Credentials form */}
-        <form onSubmit={handleCredentials} className="flex flex-col gap-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="dev@miamivacationrentals.com"
-              required
-              className="w-full border border-[#E0DBD4] rounded-lg px-3 py-2 text-sm bg-mvr-cream/40 focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="w-full border border-[#E0DBD4] rounded-lg px-3 py-2 text-sm bg-mvr-cream/40 focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary transition-colors"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-mvr-primary hover:bg-mvr-primary/90 mt-1 font-medium tracking-wide"
-          >
-            {loading ? 'Signing in…' : 'Sign In'}
-          </Button>
-        </form>
+        {SHOW_DEV_LOGIN && (
+          <>
+            <form onSubmit={handleCredentials} className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Email <span className="text-mvr-warning">(dev)</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="dev@miamivacationrentals.com"
+                  required
+                  className="w-full border border-[#E0DBD4] rounded-lg px-3 py-2 text-sm bg-mvr-cream/40 focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground block mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full border border-[#E0DBD4] rounded-lg px-3 py-2 text-sm bg-mvr-cream/40 focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary transition-colors"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-mvr-primary hover:bg-mvr-primary/90 mt-1 font-medium tracking-wide"
+              >
+                {loading ? 'Signing in…' : 'Sign In'}
+              </Button>
+            </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-[#E0DBD4]" />
-          </div>
-          <div className="relative flex justify-center text-xs text-muted-foreground">
-            <span className="bg-white px-2">or</span>
-          </div>
-        </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#E0DBD4]" />
+              </div>
+              <div className="relative flex justify-center text-xs text-muted-foreground">
+                <span className="bg-white px-2">or</span>
+              </div>
+            </div>
+          </>
+        )}
 
         <Button
           type="button"
