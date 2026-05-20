@@ -85,7 +85,15 @@ export async function sendInvitationEmail(
     return { sent: false, skipped: true, reason: 'no_smtp_config' }
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL?.replace(/\/$/, '') ?? 'http://localhost:3000'
+  // Prefer PUBLIC_APP_URL so invitation links always point to the public
+  // domain — even when generated from a local dev server. Falls back to
+  // NEXTAUTH_URL (Vercel sets this to the deployment URL automatically),
+  // then localhost as a last resort for fully offline dev.
+  const baseUrl = (
+    process.env.PUBLIC_APP_URL ??
+    process.env.NEXTAUTH_URL ??
+    'http://localhost:3000'
+  ).replace(/\/$/, '')
   const acceptUrl = `${baseUrl}/invite/${encodeURIComponent(params.token)}`
 
   const html = renderInvitationEmail({
