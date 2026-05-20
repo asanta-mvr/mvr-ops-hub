@@ -27,6 +27,12 @@ interface Props {
   disputeStats:      DisputeStats
   initialLatestGood: ReviewWithAction[]
   initialLatestBad:  ReviewWithAction[]
+  /** Flat (un-prefixed) query string of Overview's applied URL filters —
+   *  e.g. "year=2026&building=Arya,Icon&stars=4,5". Used as the base of
+   *  every drill-down API call (latest, heatmap, cell) so they respect the
+   *  ov_ tab scope without picking up the pf_ or dp_ keys from
+   *  window.location. */
+  scopeParams:       string
   assigneeOptions:   Array<{ id: string; name: string }>
   onActionSaved?:    (row: ReviewWithAction) => void
 }
@@ -44,6 +50,7 @@ export function OverviewPanel({
   disputeStats,
   initialLatestGood,
   initialLatestBad,
+  scopeParams,
   assigneeOptions,
   onActionSaved,
 }: Props) {
@@ -81,7 +88,7 @@ export function OverviewPanel({
     }
     const reqId = ++goodReqRef.current
     setLoadingGood(true)
-    const qs = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    const qs = new URLSearchParams(scopeParams)
     qs.set('bucket', 'good')
     if (selectedPositive) qs.set('tag', selectedPositive)
     qs.set('limit', String(goodLimit))
@@ -94,7 +101,7 @@ export function OverviewPanel({
       })
       .catch(() => { if (reqId === goodReqRef.current) setLatestGood([]) })
       .finally(() => { if (reqId === goodReqRef.current) setLoadingGood(false) })
-  }, [selectedPositive, goodLimit, initialLatestGood])
+  }, [selectedPositive, goodLimit, initialLatestGood, scopeParams])
 
   useEffect(() => {
     if (selectedNegative == null && badLimit === 5) {
@@ -102,7 +109,7 @@ export function OverviewPanel({
     }
     const reqId = ++badReqRef.current
     setLoadingBad(true)
-    const qs = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    const qs = new URLSearchParams(scopeParams)
     qs.set('bucket', 'bad')
     if (selectedNegative) qs.set('tag', selectedNegative)
     qs.set('limit', String(badLimit))
@@ -115,7 +122,7 @@ export function OverviewPanel({
       })
       .catch(() => { if (reqId === badReqRef.current) setLatestBad([]) })
       .finally(() => { if (reqId === badReqRef.current) setLoadingBad(false) })
-  }, [selectedNegative, badLimit, initialLatestBad])
+  }, [selectedNegative, badLimit, initialLatestBad, scopeParams])
 
   const cards: KpiCard[] = [
     { label: 'Total reviews', value: summary.totalReviews.toLocaleString() },
@@ -171,6 +178,7 @@ export function OverviewPanel({
         initialColDim="week"
         selectedCell={selectedCell}
         onSelectCell={setSelectedCell}
+        scopeParams={scopeParams}
       />
 
       <DailyVolumeChart data={dailyVolume} />
@@ -201,6 +209,7 @@ export function OverviewPanel({
       <CellDetailPanel
         selectedCell={selectedCell}
         onClear={() => setSelectedCell(null)}
+        scopeParams={scopeParams}
         assigneeOptions={assigneeOptions}
         onActionSaved={onActionSaved}
       />

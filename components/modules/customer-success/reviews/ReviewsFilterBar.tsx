@@ -2,17 +2,22 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { Building2, Calendar, Home, Search, Star, Tv, X } from 'lucide-react'
+import { Building2, Calendar, Home, Search as SearchIcon, Star, Tv, X } from 'lucide-react'
 import type { OtaSource } from '@prisma/client'
 import { MultiSelectFilter } from '@/components/modules/customer-success/chargebacks/MultiSelectFilter'
 
 interface Props {
+  /**
+   * URL param prefix this filter bar owns — e.g. 'ov_' for Overview, 'pf_'
+   * for Performance, 'dp_' for Disputes. Allows three independent filter
+   * bars to coexist in the same URL without trampling each other.
+   */
+  prefix:          string
   years:           number[]
   buildings:       string[]
   units:           string[]
   otas:            OtaSource[]
   stars:           number[]
-  unitSearch?:     string
   yearOptions:     number[]
   buildingOptions: string[]
   unitOptions:     string[]
@@ -30,13 +35,17 @@ const OTA_LABELS: Record<OtaSource, string> = {
 
 const STAR_VALUES = [5, 4, 3, 2, 1] as const
 
+// Keys the bar owns within its prefix namespace. Used by clearAll() to wipe
+// just this tab's params and by applyFilters() to know what to write.
+const OWNED_SUFFIXES = ['year', 'building', 'unit', 'ota', 'stars', 'q', 'page', 'pageSize'] as const
+
 export function ReviewsFilterBar({
+  prefix,
   years,
   buildings,
   units,
   otas,
   stars,
-  unitSearch,
   yearOptions,
   buildingOptions,
   unitOptions,
@@ -44,68 +53,95 @@ export function ReviewsFilterBar({
 }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
-  const [, startTransition] = useTransition()
+  const [isPending, startTransition] = useTransition()
 
-  // Cascading: when one or more buildings are selected, restrict the Unit
-  // dropdown to units that belong to those buildings (prefix match on
-  // "<Building> <UnitNumber>"). With no buildings selected, show all units.
+  // Draft state — selections are held locally and only committed to the URL
+  // (which triggers the data fetch) when the user clicks "Search". This
+  // prevents a query firing on every selection / deselection inside the
+  // multi-select dropdowns.
+  const [draftYears,     setDraftYears]     = useState<number[]>(years)
+  const [draftBuildings, setDraftBuildings] = useState<string[]>(buildings)
+  const [draftUnits,     setDraftUnits]     = useState<string[]>(units)
+  const [draftOtas,      setDraftOtas]      = useState<OtaSource[]>(otas)
+  const [draftStars,     setDraftStars]     = useState<number[]>(stars)
+
+  // Re-sync draft from props whenever the applied (URL) filters change —
+  // e.g. after a successful Search push, navigation, or external refresh.
+  useEffect(() => { setDraftYears(years) },         [years.join(',')])
+  useEffect(() => { setDraftBuildings(buildings) }, [buildings.join(',')])
+  useEffect(() => { setDraftUnits(units) },         [units.join(',')])
+  useEffect(() => { setDraftOtas(otas) },           [otas.join(',')])
+  useEffect(() => { setDraftStars(stars) },         [stars.join(',')])
+
+  // Cascading: when one or more buildings are selected in the draft, restrict
+  // the Unit dropdown to units that belong to those buildings.
   const filteredUnitOptions = useMemo(() => {
-    if (buildings.length === 0) return unitOptions
+    if (draftBuildings.length === 0) return unitOptions
     return unitOptions.filter((u) =>
-      buildings.some((b) => u === b || u.startsWith(`${b} `))
+      draftBuildings.some((b) => u === b || u.startsWith(`${b} `))
     )
-  }, [unitOptions, buildings])
+  }, [unitOptions, draftBuildings])
 
-  // Local draft for the search input so typing doesn't fire a router push
-  // on every keystroke. Committed on Enter / blur / explicit submit.
-  const [searchDraft, setSearchDraft] = useState<string>(unitSearch ?? '')
-  useEffect(() => { setSearchDraft(unitSearch ?? '') }, [unitSearch])
-
-  function pushUpdate(updates: Record<string, string | null>) {
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-    for (const [key, value] of Object.entries(updates)) {
-      if (value === null || value === '' || value === undefined) params.delete(key)
-      else params.set(key, value)
+  // Drop orphan units from the draft when the building selection shrinks.
+  useEffect(() => {
+    if (draftUnits.length === 0 || draftBuildings.length === 0) return
+    const stillValid = draftUnits.filter((u) =>
+      draftBuildings.some((b) => u === b || u.startsWith(`${b} `))
+    )
+    if (stillValid.length !== draftUnits.length) {
+      setDraftUnits(stillValid)
     }
-    params.delete('page') // reset paging when scope changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftBuildings.join(',')])
+
+  const hasPendingChanges = useMemo(() => {
+    return (
+      draftYears.join(',')     !== years.join(',')     ||
+      draftBuildings.join(',') !== buildings.join(',') ||
+      draftUnits.join(',')     !== units.join(',')     ||
+      draftOtas.join(',')      !== otas.join(',')      ||
+      draftStars.join(',')     !== stars.join(',')
+    )
+  }, [draftYears, draftBuildings, draftUnits, draftOtas, draftStars, years, buildings, units, otas, stars])
+
+  const hasAnyFilter =
+    draftYears.length     > 0 ||
+    draftBuildings.length > 0 ||
+    draftUnits.length     > 0 ||
+    draftOtas.length      > 0 ||
+    draftStars.length     > 0
+
+  function currentParams(): URLSearchParams {
+    return new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+  }
+
+  function applyFilters() {
+    // Start from the live URL so we preserve OTHER tabs' filter params.
+    const params = currentParams()
+
+    // Wipe our owned suffixes, then set the active ones.
+    for (const suffix of OWNED_SUFFIXES) params.delete(`${prefix}${suffix}`)
+    if (draftYears.length     > 0) params.set(`${prefix}year`,     draftYears.map(String).join(','))
+    if (draftBuildings.length > 0) params.set(`${prefix}building`, draftBuildings.join(','))
+    if (draftUnits.length     > 0) params.set(`${prefix}unit`,     draftUnits.join(','))
+    if (draftOtas.length      > 0) params.set(`${prefix}ota`,      draftOtas.join(','))
+    if (draftStars.length     > 0) params.set(`${prefix}stars`,    draftStars.map(String).join(','))
+
     const qs = params.toString()
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname))
   }
 
-  function setMultiCsv(key: string, next: string[]) {
-    pushUpdate({ [key]: next.length === 0 ? null : next.join(',') })
-  }
-
-  function commitSearch() {
-    const trimmed = searchDraft.trim()
-    if (trimmed === (unitSearch ?? '')) return
-    pushUpdate({ q: trimmed || null })
-  }
-
-  // If the user deselects a building, drop any selected units that no longer
-  // belong to the remaining buildings. Otherwise the URL would silently keep
-  // filtering by an orphan unit.
-  useEffect(() => {
-    if (units.length === 0 || buildings.length === 0) return
-    const stillValid = units.filter((u) =>
-      buildings.some((b) => u === b || u.startsWith(`${b} `))
-    )
-    if (stillValid.length !== units.length) {
-      setMultiCsv('unit', stillValid)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildings.join(',')])
-
-  const hasAnyFilter =
-    years.length     > 0 ||
-    buildings.length > 0 ||
-    units.length     > 0 ||
-    otas.length      > 0 ||
-    stars.length     > 0 ||
-    Boolean(unitSearch && unitSearch.length > 0)
-
   function clearAll() {
-    startTransition(() => router.push(pathname))
+    setDraftYears([])
+    setDraftBuildings([])
+    setDraftUnits([])
+    setDraftOtas([])
+    setDraftStars([])
+    // Only remove our owned keys — preserve the other tabs' state.
+    const params = currentParams()
+    for (const suffix of OWNED_SUFFIXES) params.delete(`${prefix}${suffix}`)
+    const qs = params.toString()
+    startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname))
   }
 
   return (
@@ -116,8 +152,8 @@ export function ReviewsFilterBar({
         itemNoun="year"
         ariaLabel="Filter by year"
         options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
-        selected={years.map(String)}
-        onChange={(next) => setMultiCsv('year', next)}
+        selected={draftYears.map(String)}
+        onChange={(next) => setDraftYears(next.map((v) => Number(v)))}
       />
 
       <MultiSelectFilter
@@ -126,18 +162,18 @@ export function ReviewsFilterBar({
         itemNoun="building"
         ariaLabel="Filter by building"
         options={buildingOptions.map((b) => ({ value: b, label: b }))}
-        selected={buildings}
-        onChange={(next) => setMultiCsv('building', next)}
+        selected={draftBuildings}
+        onChange={(next) => setDraftBuildings(next)}
       />
 
       <MultiSelectFilter
         icon={Home}
-        allLabel={buildings.length > 0 ? 'All units (in buildings)' : 'All units'}
+        allLabel={draftBuildings.length > 0 ? 'All units (in buildings)' : 'All units'}
         itemNoun="unit"
         ariaLabel="Filter by unit"
         options={filteredUnitOptions.map((u) => ({ value: u, label: u }))}
-        selected={units}
-        onChange={(next) => setMultiCsv('unit', next)}
+        selected={draftUnits}
+        onChange={(next) => setDraftUnits(next)}
       />
 
       <MultiSelectFilter
@@ -146,8 +182,8 @@ export function ReviewsFilterBar({
         itemNoun="channel"
         ariaLabel="Filter by OTA channel"
         options={otaOptions.map((o) => ({ value: o, label: OTA_LABELS[o] }))}
-        selected={otas}
-        onChange={(next) => setMultiCsv('ota', next)}
+        selected={draftOtas}
+        onChange={(next) => setDraftOtas(next as OtaSource[])}
       />
 
       <MultiSelectFilter
@@ -156,36 +192,26 @@ export function ReviewsFilterBar({
         itemNoun="star"
         ariaLabel="Filter by star rating"
         options={STAR_VALUES.map((s) => ({ value: String(s), label: `${s} ★` }))}
-        selected={stars.map(String)}
-        onChange={(next) => setMultiCsv('stars', next)}
+        selected={draftStars.map(String)}
+        onChange={(next) => setDraftStars(next.map((v) => Number(v)))}
       />
 
       <span className="h-6 w-px bg-[#E0DBD4]" aria-hidden />
 
-      {/* Unit search — accepts partial fragments like "1906" or "Icon". */}
-      <div className="inline-flex items-center gap-1 rounded-md border border-[#E0DBD4] bg-white px-2 py-1">
-        <Search className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
-        <input
-          type="text"
-          placeholder="Search unit (e.g. 1906)"
-          value={searchDraft}
-          onChange={(e) => setSearchDraft(e.target.value)}
-          onBlur={commitSearch}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitSearch() } }}
-          className="text-xs w-44 focus:outline-none"
-          aria-label="Search unit name"
-        />
-        {searchDraft ? (
-          <button
-            type="button"
-            onClick={() => { setSearchDraft(''); pushUpdate({ q: null }) }}
-            aria-label="Clear search"
-            className="text-muted-foreground hover:text-mvr-primary"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        ) : null}
-      </div>
+      <button
+        type="button"
+        onClick={applyFilters}
+        disabled={!hasPendingChanges || isPending}
+        className={`inline-flex items-center gap-1.5 text-xs rounded-md px-3 py-1.5 transition-colors ${
+          hasPendingChanges
+            ? 'bg-mvr-primary text-white hover:bg-mvr-primary/90'
+            : 'bg-mvr-cream text-mvr-primary/40 cursor-not-allowed border border-[#E0DBD4]'
+        }`}
+        aria-label="Apply filters"
+      >
+        <SearchIcon className="w-3.5 h-3.5" />
+        Search
+      </button>
 
       {hasAnyFilter ? (
         <button

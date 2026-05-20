@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 import { useState, useTransition } from 'react'
 import {
@@ -22,9 +22,10 @@ interface Props {
   pageSize:          number
   /** KPI strip — omitted by the Disputes panel which owns its own strip. */
   topKpis?:          KpiCard[]
-  /** Show the Performance-tab quick filter pills above the list. Disputes
-   *  panel hides them since its scope is already narrow. */
-  showQuickFilters?: boolean
+  /** URL prefix for pagination params (e.g. 'pf_' so we write 'pf_page').
+   *  Each tab owns its own namespace; defaults to '' for callers that don't
+   *  paginate via URL. */
+  paramPrefix?:      string
   assigneeOptions:   Array<{ id: string; name: string }>
   onActionSaved?:    (row: ReviewWithAction) => void
   emptyLabel?:       string
@@ -82,7 +83,7 @@ export function PerformanceList({
   page,
   pageSize,
   topKpis,
-  showQuickFilters = false,
+  paramPrefix = '',
   assigneeOptions,
   onActionSaved,
   emptyLabel = 'No reviews match the current filters.',
@@ -94,8 +95,9 @@ export function PerformanceList({
 
   function setPage(next: number) {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
-    if (next <= 0) params.delete('page')
-    else params.set('page', String(next))
+    const pageKey = `${paramPrefix}page`
+    if (next <= 0) params.delete(pageKey)
+    else params.set(pageKey, String(next))
     const qs = params.toString()
     startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname))
   }
@@ -107,8 +109,6 @@ export function PerformanceList({
   return (
     <div className="space-y-3">
       {topKpis ? <KpiStrip cards={topKpis} /> : null}
-
-      {showQuickFilters ? <PerformanceQuickFilters /> : null}
 
       {rows.length === 0 ? (
         <div className="bg-white border border-[#E0DBD4] rounded-xl p-10 text-center shadow-card">
@@ -243,100 +243,6 @@ export function PerformanceList({
         />
       ) : null}
     </div>
-  )
-}
-
-// ── Quick filter pills (Performance tab only) ──────────────────────────────
-//
-// Single-select shortcuts that write to the same URL params as the global
-// filter bar's multi-select dropdowns. Clicking "5 ★" replaces whatever was
-// in `?stars=…`; clicking "All" clears it. Multi-select state (e.g. user
-// picked 4+5 via the dropdown) shows no specific pill highlighted.
-
-const OTA_ORDER: ReadonlyArray<OtaSource> = ['airbnb', 'booking', 'expedia', 'vrbo', 'vacasa', 'other']
-const STAR_VALUES = ['5', '4', '3', '2', '1'] as const
-
-function PerformanceQuickFilters() {
-  const router       = useRouter()
-  const pathname     = usePathname()
-  const searchParams = useSearchParams()
-  const [, startTransition] = useTransition()
-
-  const stars = (searchParams.get('stars') ?? '').split(',').filter(Boolean)
-  const otas  = (searchParams.get('ota')   ?? '').split(',').filter(Boolean)
-
-  const activeStar = stars.length === 1 ? stars[0] : null
-  const activeOta  = otas.length  === 1 ? otas[0]  : null
-
-  function setParam(key: string, value: string | null) {
-    const params = new URLSearchParams(searchParams.toString())
-    if (value == null) params.delete(key)
-    else params.set(key, value)
-    params.delete('page')
-    const qs = params.toString()
-    startTransition(() => router.push(qs ? `${pathname}?${qs}` : pathname))
-  }
-
-  return (
-    <div className="bg-white border border-[#E0DBD4] rounded-xl p-2 shadow-card flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground px-1">Stars:</span>
-      <PillRow
-        active={activeStar}
-        all={stars.length === 0}
-        onSelect={(v) => setParam('stars', v)}
-        items={STAR_VALUES.map((s) => ({ value: s, label: `${s} ★` }))}
-      />
-
-      <span className="h-5 w-px bg-[#E0DBD4]" aria-hidden />
-
-      <span className="text-xs text-muted-foreground px-1">Channels:</span>
-      <PillRow
-        active={activeOta}
-        all={otas.length === 0}
-        onSelect={(v) => setParam('ota', v)}
-        items={OTA_ORDER.map((o) => ({ value: o, label: OTA_LABEL[o] }))}
-      />
-    </div>
-  )
-}
-
-interface PillRowProps {
-  active:   string | null
-  all:      boolean
-  onSelect: (value: string | null) => void
-  items:    Array<{ value: string; label: string }>
-}
-
-function PillRow({ active, all, onSelect, items }: PillRowProps) {
-  return (
-    <div className="inline-flex flex-wrap items-center gap-1">
-      <Pill active={all} onClick={() => onSelect(null)} label="All" />
-      {items.map((p) => (
-        <Pill
-          key={p.value}
-          active={active === p.value}
-          onClick={() => onSelect(p.value)}
-          label={p.label}
-        />
-      ))}
-    </div>
-  )
-}
-
-function Pill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-        active
-          ? 'bg-mvr-primary text-white border-mvr-primary'
-          : 'bg-mvr-cream text-mvr-primary border-[#E0DBD4] hover:bg-mvr-neutral',
-      ].join(' ')}
-    >
-      {label}
-    </button>
   )
 }
 

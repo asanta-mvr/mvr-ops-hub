@@ -22,6 +22,10 @@ export interface SelectedCell {
 interface Props {
   selectedCell:    SelectedCell | null
   onClear:         () => void
+  /** Flat (un-prefixed) URL query string of the parent tab's filter scope.
+   *  Used as the base of the cell-drill-down fetch so we don't pick up
+   *  other tabs' prefixed params from window.location.search. */
+  scopeParams:     string
   assigneeOptions: Array<{ id: string; name: string }>
   onActionSaved?:  (row: ReviewWithAction) => void
 }
@@ -69,7 +73,7 @@ function ratingTone(rating: number | null): string {
 const PAGE_SIZE = 10
 const DISPUTE_STATUSES: ReadonlyArray<ReviewActionStatus> = ['disputing', 'dispute_won', 'dispute_lost', 'closed_no_change']
 
-export function CellDetailPanel({ selectedCell, onClear, assigneeOptions, onActionSaved }: Props) {
+export function CellDetailPanel({ selectedCell, onClear, scopeParams, assigneeOptions, onActionSaved }: Props) {
   const [rows, setRows]             = useState<ReviewWithAction[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage]             = useState(0)
@@ -89,7 +93,7 @@ export function CellDetailPanel({ selectedCell, onClear, assigneeOptions, onActi
     }
     const reqId = ++reqRef.current
     setLoading(true)
-    const qs = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    const qs = new URLSearchParams(scopeParams)
     qs.set('rowDim',  selectedCell.rowDim)
     qs.set('row',     selectedCell.row)
     qs.set('colDim',  selectedCell.colDim)
@@ -108,7 +112,7 @@ export function CellDetailPanel({ selectedCell, onClear, assigneeOptions, onActi
       })
       .catch(() => { if (reqId === reqRef.current) { setRows([]); setTotalCount(0) } })
       .finally(() => { if (reqId === reqRef.current) setLoading(false) })
-  }, [selectedCell, page])
+  }, [selectedCell, page, scopeParams])
 
   if (!selectedCell) {
     return (

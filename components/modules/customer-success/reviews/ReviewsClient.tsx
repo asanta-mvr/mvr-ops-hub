@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { Gavel, LayoutDashboard, TrendingUp } from 'lucide-react'
 import type { OtaSource } from '@prisma/client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type {
@@ -17,119 +18,181 @@ import { OverviewPanel } from './OverviewPanel'
 import { PerformanceList, buildPerformanceKpis } from './PerformanceList'
 import { ReviewsFilterBar } from './ReviewsFilterBar'
 
+interface TabFilters {
+  years:     number[]
+  buildings: string[]
+  units:     string[]
+  otas:      OtaSource[]
+  stars:     number[]
+}
+
+interface PerformanceTabFilters extends TabFilters {
+  page:     number
+  pageSize: number
+}
+
 interface Props {
-  initialRows:       ReviewWithAction[]
-  initialLatestGood: ReviewWithAction[]
-  initialLatestBad:  ReviewWithAction[]
-  totalCount:        number
-  summary:           ReviewsSummary
-  heatmap:           HeatmapRow[]
-  dailyVolume:       DailyVolumePoint[]
-  tagDistribution:   TagDistRow[]
-  disputeStats:      DisputeStats
-  buildingOptions:   string[]
-  unitOptions:       string[]
-  otaOptions:        OtaSource[]
-  yearOptions:       number[]
-  assigneeOptions:   Array<{ id: string; name: string }>
-  initialFilters: {
-    years:       number[]
-    buildings:   string[]
-    units:       string[]
-    otas:        OtaSource[]
-    stars:       number[]
-    unitSearch?: string
-    page:        number
-    pageSize:    number
+  // Per-tab applied filters (parsed from each tab's URL prefix).
+  overviewFilters:    TabFilters
+  performanceFilters: PerformanceTabFilters
+  disputesFilters:    TabFilters
+
+  /** Flat (un-prefixed) query string of Overview's applied filters. Threaded
+   *  to OverviewPanel so its drill-down API calls (latest, heatmap, cell)
+   *  respect the ov_* scope. */
+  overviewScopeParams: string
+
+  // Per-tab server-fetched data.
+  overviewData: {
+    summary:           ReviewsSummary
+    heatmap:           HeatmapRow[]
+    dailyVolume:       DailyVolumePoint[]
+    tagDistribution:   TagDistRow[]
+    initialLatestGood: ReviewWithAction[]
+    initialLatestBad:  ReviewWithAction[]
+    disputeStats:      DisputeStats
   }
+  performanceData: {
+    rows:       ReviewWithAction[]
+    totalCount: number
+    summary:    ReviewsSummary
+  }
+  disputesData: {
+    rows:         ReviewWithAction[]
+    disputeStats: DisputeStats
+  }
+
+  // Shared option lists for every filter bar.
+  buildingOptions: string[]
+  unitOptions:     string[]
+  otaOptions:      OtaSource[]
+  yearOptions:     number[]
+  assigneeOptions: Array<{ id: string; name: string }>
 }
 
 export function ReviewsClient({
-  initialRows,
-  initialLatestGood,
-  initialLatestBad,
-  totalCount,
-  summary,
-  heatmap,
-  dailyVolume,
-  tagDistribution,
-  disputeStats,
+  overviewFilters,
+  performanceFilters,
+  disputesFilters,
+  overviewScopeParams,
+  overviewData,
+  performanceData,
+  disputesData,
   buildingOptions,
   unitOptions,
   otaOptions,
   yearOptions,
   assigneeOptions,
-  initialFilters,
 }: Props) {
   const router = useRouter()
-  const [rows, setRows]           = useState<ReviewWithAction[]>(initialRows)
+  // Performance and Disputes each fetch their own row set via per-tab URL
+  // filters, so we keep two independent client-side stores. patchRow updates
+  // both if the same review appears in both filtered slices.
+  const [perfRows, setPerfRows]   = useState<ReviewWithAction[]>(performanceData.rows)
+  const [dispRows, setDispRows]   = useState<ReviewWithAction[]>(disputesData.rows)
   const [activeTab, setActiveTab] = useState<string>('overview')
 
   function patchRow(updated: ReviewWithAction) {
-    setRows((prev) =>
-      prev.map((r) =>
-        r.otaSource === updated.otaSource && r.id === updated.id ? updated : r
-      )
-    )
+    const matches = (r: ReviewWithAction) =>
+      r.otaSource === updated.otaSource && r.id === updated.id
+    setPerfRows((prev) => prev.map((r) => (matches(r) ? updated : r)))
+    setDispRows((prev) => prev.map((r) => (matches(r) ? updated : r)))
     // Light-touch refresh — pulls fresh summary counts on the server.
     router.refresh()
   }
 
-  const perfKpis = buildPerformanceKpis(totalCount, summary.avgRating, summary.responseRate)
+  const perfKpis = buildPerformanceKpis(
+    performanceData.totalCount,
+    performanceData.summary.avgRating,
+    performanceData.summary.responseRate,
+  )
 
   return (
     <div className="space-y-4">
-      <ReviewsFilterBar
-        years={initialFilters.years}
-        buildings={initialFilters.buildings}
-        units={initialFilters.units}
-        otas={initialFilters.otas}
-        stars={initialFilters.stars}
-        unitSearch={initialFilters.unitSearch}
-        yearOptions={yearOptions}
-        buildingOptions={buildingOptions}
-        unitOptions={unitOptions}
-        otaOptions={otaOptions}
-      />
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="!flex-col w-full">
-        <TabsList variant="line" className="border-b border-[#E0DBD4] w-full justify-start h-10">
-          <TabsTrigger value="overview" className="px-4 text-sm">Overview</TabsTrigger>
-          <TabsTrigger value="performance" className="px-4 text-sm">Performance</TabsTrigger>
-          <TabsTrigger value="disputes" className="px-4 text-sm">Disputes</TabsTrigger>
+        <TabsList variant="line" className="border-b border-[#E0DBD4] w-full justify-start h-12 pb-2">
+          <TabsTrigger value="overview" className="px-4 text-sm gap-2">
+            <LayoutDashboard className="w-4 h-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="px-4 text-sm gap-2">
+            <TrendingUp className="w-4 h-4" />
+            Performance
+          </TabsTrigger>
+          <TabsTrigger value="disputes" className="px-4 text-sm gap-2">
+            <Gavel className="w-4 h-4" />
+            Disputes
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
+        <TabsContent value="overview" className="space-y-4">
+          <ReviewsFilterBar
+            prefix="ov_"
+            years={overviewFilters.years}
+            buildings={overviewFilters.buildings}
+            units={overviewFilters.units}
+            otas={overviewFilters.otas}
+            stars={overviewFilters.stars}
+            yearOptions={yearOptions}
+            buildingOptions={buildingOptions}
+            unitOptions={unitOptions}
+            otaOptions={otaOptions}
+          />
           <OverviewPanel
-            summary={summary}
-            heatmap={heatmap}
-            dailyVolume={dailyVolume}
-            tagDistribution={tagDistribution}
-            disputeStats={disputeStats}
-            initialLatestGood={initialLatestGood}
-            initialLatestBad={initialLatestBad}
+            summary={overviewData.summary}
+            heatmap={overviewData.heatmap}
+            dailyVolume={overviewData.dailyVolume}
+            tagDistribution={overviewData.tagDistribution}
+            disputeStats={overviewData.disputeStats}
+            initialLatestGood={overviewData.initialLatestGood}
+            initialLatestBad={overviewData.initialLatestBad}
+            scopeParams={overviewScopeParams}
             assigneeOptions={assigneeOptions}
             onActionSaved={patchRow}
           />
         </TabsContent>
 
-        <TabsContent value="performance">
+        <TabsContent value="performance" className="space-y-4">
+          <ReviewsFilterBar
+            prefix="pf_"
+            years={performanceFilters.years}
+            buildings={performanceFilters.buildings}
+            units={performanceFilters.units}
+            otas={performanceFilters.otas}
+            stars={performanceFilters.stars}
+            yearOptions={yearOptions}
+            buildingOptions={buildingOptions}
+            unitOptions={unitOptions}
+            otaOptions={otaOptions}
+          />
           <PerformanceList
-            rows={rows}
-            totalCount={totalCount}
-            page={initialFilters.page}
-            pageSize={initialFilters.pageSize}
+            rows={perfRows}
+            totalCount={performanceData.totalCount}
+            page={performanceFilters.page}
+            pageSize={performanceFilters.pageSize}
             topKpis={perfKpis}
-            showQuickFilters
+            paramPrefix="pf_"
             assigneeOptions={assigneeOptions}
             onActionSaved={patchRow}
           />
         </TabsContent>
 
-        <TabsContent value="disputes">
+        <TabsContent value="disputes" className="space-y-4">
+          <ReviewsFilterBar
+            prefix="dp_"
+            years={disputesFilters.years}
+            buildings={disputesFilters.buildings}
+            units={disputesFilters.units}
+            otas={disputesFilters.otas}
+            stars={disputesFilters.stars}
+            yearOptions={yearOptions}
+            buildingOptions={buildingOptions}
+            unitOptions={unitOptions}
+            otaOptions={otaOptions}
+          />
           <DisputesPanel
-            rows={rows}
-            disputeStats={disputeStats}
+            rows={dispRows}
+            disputeStats={disputesData.disputeStats}
             assigneeOptions={assigneeOptions}
             onActionSaved={patchRow}
           />

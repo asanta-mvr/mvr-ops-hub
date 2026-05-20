@@ -71,7 +71,7 @@ export function SidebarClient({ allowedResources }: Props) {
         <Link href="/dashboard" className="flex items-center gap-3">
           <CrownLogo />
           <div className="leading-tight">
-            <p className="text-white font-semibold text-sm tracking-wide">MVR - OPS HUB</p>
+            <p className="text-white font-semibold text-sm tracking-wide">MVR-OS</p>
           </div>
         </Link>
       </div>

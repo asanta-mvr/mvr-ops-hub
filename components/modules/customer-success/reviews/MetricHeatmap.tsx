@@ -20,6 +20,10 @@ interface Props {
   /** Fires when the user clicks a cell. Null clears. The heatmap surfaces
    *  rowDim/colDim so the parent doesn't need to guess. */
   onSelectCell?:  (cell: { rowDim: HeatmapRowDim; row: string; colDim: HeatmapColDim; col: string } | null) => void
+  /** Flat (un-prefixed) URL query string of the parent tab's filter scope.
+   *  Used as the base of the heatmap refetch so we don't pick up other tabs'
+   *  prefixed params from window.location.search. */
+  scopeParams:    string
 }
 
 const ROW_LABEL: Record<HeatmapRowDim, string> = {
@@ -78,6 +82,7 @@ export function MetricHeatmap({
   initialColDim = 'week',
   selectedCell = null,
   onSelectCell,
+  scopeParams,
 }: Props) {
   const [rowDim, setRowDim]   = useState<HeatmapRowDim>(initialRowDim)
   const [colDim, setColDim]   = useState<HeatmapColDim>(initialColDim)
@@ -98,7 +103,7 @@ export function MetricHeatmap({
 
     const reqId = ++reqRef.current
     setLoading(true)
-    const qs = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    const qs = new URLSearchParams(scopeParams)
     qs.set('rows', rowDim)
     qs.set('cols', colDim)
     fetch(`/api/v1/reviews/heatmap?${qs.toString()}`)
@@ -110,7 +115,7 @@ export function MetricHeatmap({
       })
       .catch(() => { if (reqId === reqRef.current) setData([]) })
       .finally(() => { if (reqId === reqRef.current) setLoading(false) })
-  }, [rowDim, colDim, initialRowDim, initialColDim])
+  }, [rowDim, colDim, initialRowDim, initialColDim, scopeParams])
 
   // Sync local state when the server re-renders with new initialData
   // (e.g. user changed a global filter from the URL).
