@@ -5,7 +5,7 @@
 // caller decides how to surface it.
 import nodemailer, { type Transporter } from 'nodemailer'
 import { renderInvitationEmail } from './templates/invitation'
-import { RESOURCES, type Level, type Resource } from '@/lib/auth/resources'
+import type { Level, Resource } from '@/lib/auth/resources'
 
 type SmtpConfig = {
   host: string
@@ -45,6 +45,9 @@ function getTransporter(cfg: SmtpConfig): Transporter {
   return cachedTransporter
 }
 
+// `InvitationPermission` is still exported because the API routes persist
+// the granted permissions on the UserInvitation row. The email template no
+// longer renders them — they are seeded silently on first sign-in.
 export type InvitationPermission = { resource: Resource; level: Level }
 
 export type SendInvitationParams = {
@@ -62,19 +65,6 @@ export type SendInvitationResult =
   | { sent: true; messageId: string }
   | { sent: false; skipped: true; reason: 'no_smtp_config' }
   | { sent: false; error: string }
-
-function permissionsSummary(
-  permissions: InvitationPermission[]
-): Array<{ group: string; label: string; level: Level }> {
-  const byKey = new Map(RESOURCES.map((r) => [r.key, r] as const))
-  const out: Array<{ group: string; label: string; level: Level }> = []
-  for (const p of permissions) {
-    const meta = byKey.get(p.resource)
-    if (!meta) continue
-    out.push({ group: meta.group, label: meta.label, level: p.level })
-  }
-  return out
-}
 
 export async function sendInvitationEmail(
   params: SendInvitationParams
@@ -97,22 +87,29 @@ export async function sendInvitationEmail(
   const acceptUrl = `${baseUrl}/invite/${encodeURIComponent(params.token)}`
 
   const html = renderInvitationEmail({
+    baseUrl,
     inviteeName: params.name ?? null,
     inviterName: params.inviterName,
     inviterEmail: params.inviterEmail,
     message: params.message ?? null,
     acceptUrl,
-    permissions: permissionsSummary(params.permissions),
     expiresAt: params.expiresAt,
   })
+
+  const expiresLabel = params.expiresAt.toLocaleDateString('en-US', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  })
+  const greeting = params.name ? `Hi ${params.name.split(/\s+/)[0]},` : 'Hi there,'
 
   try {
     const info = await getTransporter(cfg).sendMail({
       from: `"${cfg.fromName}" <${cfg.user}>`,
       to: params.to,
-      subject: `Has sido invitado a MVR-OS por ${params.inviterName}`,
+      subject: `You've been invited to MVR-OS by ${params.inviterName}`,
       html,
-      text: `Hola${params.name ? ' ' + params.name : ''},\n\n${params.inviterName} (${params.inviterEmail}) te ha invitado a usar MVR-OS, la plataforma operacional de Miami Vacation Rentals.\n\nAcepta la invitación aquí: ${acceptUrl}\n\nEste enlace expira el ${params.expiresAt.toLocaleString('es-MX')}.\n\nSi no esperabas esta invitación, puedes ignorar este mensaje.`,
+      text: `${greeting}\n\n${params.inviterName} (${params.inviterEmail}) has invited you to join MVR-OS, the internal operations platform for Miami Vacation Rentals.\n\nAccept your invitation:\n${acceptUrl}\n\nHow to sign in:\n  1. Open the link above.\n  2. Sign in with your @miamivacationrentals.com Google account.\n  3. You'll land on your MVR-OS dashboard.\n\nThis invitation expires on ${expiresLabel}.\n\nIf you weren't expecting this invitation, you can safely ignore this email.`,
     })
     return { sent: true, messageId: info.messageId }
   } catch (err) {
