@@ -3,9 +3,30 @@
 // first send so a missing/incomplete SMTP config does not crash the app at
 // boot; instead, `sendInvitationEmail` reports `{ skipped: true }` and the
 // caller decides how to surface it.
+import { readFileSync } from 'fs'
+import path from 'path'
 import nodemailer, { type Transporter } from 'nodemailer'
 import { renderInvitationEmail } from './templates/invitation'
 import type { Level, Resource } from '@/lib/auth/resources'
+
+const LOGO_CID = 'mvr-crown-logo'
+
+// Cache the PNG bytes once per process. The file lives at /public/mvr-crown-logo.png
+// in the repo; Vercel includes /public in the function bundle so the read works
+// in production as well as local dev. If the file is missing (shouldn't happen),
+// we still send the email — recipients will see the alt text instead of the logo.
+let cachedLogoBuffer: Buffer | null = null
+function loadLogoBuffer(): Buffer | null {
+  if (cachedLogoBuffer) return cachedLogoBuffer
+  try {
+    const filePath = path.join(process.cwd(), 'public', 'mvr-crown-logo.png')
+    cachedLogoBuffer = readFileSync(filePath)
+    return cachedLogoBuffer
+  } catch (err) {
+    console.warn('[email] could not read crown logo PNG:', err)
+    return null
+  }
+}
 
 type SmtpConfig = {
   host: string
@@ -87,13 +108,13 @@ export async function sendInvitationEmail(
   const acceptUrl = `${baseUrl}/invite/${encodeURIComponent(params.token)}`
 
   const html = renderInvitationEmail({
-    baseUrl,
     inviteeName: params.name ?? null,
     inviterName: params.inviterName,
     inviterEmail: params.inviterEmail,
     message: params.message ?? null,
     acceptUrl,
     expiresAt: params.expiresAt,
+    logoCid: LOGO_CID,
   })
 
   const expiresLabel = params.expiresAt.toLocaleDateString('en-US', {
@@ -103,6 +124,18 @@ export async function sendInvitationEmail(
   })
   const greeting = params.name ? `Hi ${params.name.split(/\s+/)[0]},` : 'Hi there,'
 
+  const logoBuffer = loadLogoBuffer()
+  const attachments = logoBuffer
+    ? [
+        {
+          filename: 'mvr-crown-logo.png',
+          content: logoBuffer,
+          cid: LOGO_CID,
+          contentType: 'image/png',
+        },
+      ]
+    : undefined
+
   try {
     const info = await getTransporter(cfg).sendMail({
       from: `"${cfg.fromName}" <${cfg.user}>`,
@@ -110,6 +143,7 @@ export async function sendInvitationEmail(
       subject: `You've been invited to MVR-OS by ${params.inviterName}`,
       html,
       text: `${greeting}\n\n${params.inviterName} (${params.inviterEmail}) has invited you to join MVR-OS, the internal operations platform for Miami Vacation Rentals.\n\nAccept your invitation:\n${acceptUrl}\n\nHow to sign in:\n  1. Open the link above.\n  2. Sign in with your @miamivacationrentals.com Google account.\n  3. You'll land on your MVR-OS dashboard.\n\nThis invitation expires on ${expiresLabel}.\n\nIf you weren't expecting this invitation, you can safely ignore this email.`,
+      attachments,
     })
     return { sent: true, messageId: info.messageId }
   } catch (err) {

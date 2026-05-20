@@ -1,17 +1,18 @@
 // HTML invitation email template. Inline styles only — email clients (Gmail
 // especially) strip <style> blocks and most CSS classes. Brand palette is
 // hardcoded to match `tailwind.config.ts` since email cannot import tokens.
-// The crown logo is rendered as an <img> pointing at /mvr-crown-logo.png on
-// the public domain (PUBLIC_APP_URL / NEXTAUTH_URL); Gmail strips inline SVG.
+// The crown logo is referenced via `cid:` so nodemailer can ship it as an
+// inline attachment — this avoids the Gmail image proxy choking on the
+// hosted URL, which left recipients with a broken-image placeholder.
 
 type TemplateParams = {
-  baseUrl: string
   inviteeName: string | null
   inviterName: string
   inviterEmail: string
   message: string | null
   acceptUrl: string
   expiresAt: Date
+  logoCid: string
 }
 
 const BRAND = {
@@ -49,8 +50,6 @@ export function renderInvitationEmail(params: TemplateParams): string {
        </div>`
     : ''
 
-  const logoUrl = `${params.baseUrl}/mvr-crown-logo.png`
-
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -62,13 +61,13 @@ export function renderInvitationEmail(params: TemplateParams): string {
   <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
 
     <div style="text-align:center;padding:24px 0 16px;">
-      <img src="${logoUrl}" alt="MVR" width="56" height="56" style="display:inline-block;border:0;outline:none;text-decoration:none;height:56px;width:56px;">
+      <img src="cid:${params.logoCid}" alt="MVR" width="56" height="56" style="display:inline-block;border:0;outline:none;text-decoration:none;height:56px;width:56px;">
       <div style="margin-top:10px;font-size:11px;text-transform:uppercase;letter-spacing:0.18em;color:${BRAND.primary};font-weight:600;">Miami Vacation Rentals</div>
     </div>
 
     <div style="background:#FFFFFF;border:1px solid ${BRAND.border};border-radius:16px;padding:32px 28px;box-shadow:0 1px 2px rgba(30,45,64,0.04);">
-      <h1 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${BRAND.primary};line-height:1.2;">You've been invited to MVR-OS</h1>
-      <p style="margin:0;color:#6B6B66;font-size:13px;">The internal operations platform for Miami Vacation Rentals.</p>
+      <h1 style="margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:700;color:${BRAND.primary};line-height:1.2;text-align:center;">You've been invited to MVR-OS</h1>
+      <p style="margin:0 0 4px;color:#6B6B66;font-size:13px;text-align:center;">The internal operations platform for Miami Vacation Rentals.</p>
 
       <div style="margin-top:24px;font-size:15px;line-height:1.6;color:${BRAND.olive};">
         <p style="margin:0 0 12px;">${greeting}</p>
