@@ -36,5 +36,12 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|images).*)'],
+  // Exclude Next.js internals, manifest, favicon, the /icons and /images
+  // directories, AND any top-level static asset by extension. Without the
+  // extension allowlist, unauthenticated pages (login, invite) couldn't
+  // load /mvr-crown-logo.png because the middleware redirected the image
+  // request to /login, yielding a broken-image placeholder.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|images|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|otf)).*)',
+  ],
 }
