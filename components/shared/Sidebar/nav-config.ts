@@ -4,8 +4,10 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Building2,
+  ClipboardList,
   Database,
   FileText,
+  Gavel,
   HeadphonesIcon,
   Home,
   LayoutDashboard,
@@ -60,13 +62,29 @@ export const NAV_CONFIG: NavItem[] = [
     href: '/customer-success/reviews',
     icon: HeadphonesIcon,
     children: [
-      { label: 'Reviews',     href: '/customer-success/reviews',     icon: Star,        resource: 'customer_success.reviews' },
-      { label: 'Chargebacks', href: '/customer-success/chargebacks', icon: ShieldAlert, resource: 'customer_success.chargebacks' },
-      { label: 'OTA Tickets', href: '/customer-success/tickets',     icon: Ticket,      resource: 'customer_success.tickets' },
+      { label: 'Reviews',      href: '/customer-success/reviews',      icon: Star,        resource: 'customer_success.reviews' },
+      { label: 'Dispute Tool', href: '/customer-success/dispute-tool', icon: Gavel,       resource: 'customer_success.dispute_tool' },
+      { label: 'Chargebacks',  href: '/customer-success/chargebacks',  icon: ShieldAlert, resource: 'customer_success.chargebacks' },
+      { label: 'OTA Tickets',  href: '/customer-success/tickets',      icon: Ticket,      resource: 'customer_success.tickets' },
     ],
   },
-  { label: 'Operations',   href: '/operations',   icon: Wrench, resource: 'operations' },
-  { label: 'Integrations', href: '/integrations', icon: Plug,   resource: 'integrations' },
+  {
+    label: 'Operations',
+    href: '/operations/maintenance',
+    icon: Wrench,
+    children: [
+      { label: 'Maintenance Report', href: '/operations/maintenance', icon: ClipboardList, resource: 'operations.maintenance' },
+    ],
+  },
+  {
+    label: 'Integrations',
+    href: '/integrations',
+    icon: Plug,
+    children: [
+      { label: 'Overview', href: '/integrations',        icon: Plug,      resource: 'integrations' },
+      { label: 'Guesty',   href: '/integrations/guesty',  icon: Building2, resource: 'integrations' },
+    ],
+  },
   {
     label: 'Settings',
     href: '/settings/users',

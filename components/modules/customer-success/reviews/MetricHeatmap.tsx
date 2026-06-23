@@ -35,6 +35,7 @@ const COL_LABEL: Record<HeatmapColDim, string> = {
   day:   'Day',
   week:  'Week',
   month: 'Month',
+  year:  'Year',
 }
 
 // Color scales — avg-rating uses red→amber→green; count uses cream→navy ramp.
@@ -60,6 +61,10 @@ function countColor(count: number, max: number): { bg: string; fg: string } {
 const SHORT_MONTH = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function formatCol(value: string, dim: HeatmapColDim): string {
+  if (dim === 'year') {
+    // 'YYYY' → 'YYYY'
+    return value
+  }
   if (dim === 'month') {
     const [y, m] = value.split('-')
     const idx = Number(m) - 1

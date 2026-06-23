@@ -160,6 +160,27 @@ export async function listFolderImages(folderId: string): Promise<string[]> {
   return urls
 }
 
+/**
+ * Lists image files inside a Google Drive folder, returning ids + names so
+ * callers can store a stable fileId and render via the `/api/v1/drive/image/{id}`
+ * proxy. Used by the listing photo picker (select-from-Drive).
+ */
+export async function listFolderImageFiles(folderId: string): Promise<Array<{ fileId: string; name: string }>> {
+  const drive = createDriveClient()
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+    fields: 'files(id,name)',
+    spaces: 'drive',
+    orderBy: 'name',
+    pageSize: 200,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  })
+  return (res.data.files ?? [])
+    .filter((f) => f.id)
+    .map((f) => ({ fileId: f.id!, name: f.name ?? f.id! }))
+}
+
 /** Returns the service account email used for Drive access, for sharing instructions. */
 export function getDriveServiceAccountEmail(): string | null {
   try {

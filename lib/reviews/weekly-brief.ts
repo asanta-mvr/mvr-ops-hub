@@ -75,6 +75,7 @@ function filtersFor(range: { dateFrom: string; dateTo: string }): ReviewFilters 
     units:     [],
     stars:     [],
     years:     [],
+    months:    [],
     dateFrom:  range.dateFrom,
     dateTo:    range.dateTo,
     page:      0,

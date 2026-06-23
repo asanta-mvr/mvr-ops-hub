@@ -117,6 +117,13 @@ function buildWhere(filters: ReviewFilters): BqWhere {
     clauses.push('EXTRACT(YEAR FROM date) IN UNNEST(@years)')
   }
 
+  // Month multi-select — translated to EXTRACT(MONTH FROM date) IN (…).
+  // Independent of year, so e.g. "June" across all years is expressible.
+  if (filters.months.length > 0) {
+    params.months = filters.months
+    clauses.push('EXTRACT(MONTH FROM date) IN UNNEST(@months)')
+  }
+
   // Date range — inclusive (kept for API back-compat; UI no longer surfaces it).
   if (filters.dateFrom) {
     params.dateFrom = filters.dateFrom
@@ -364,6 +371,7 @@ function colDimSql(dim: HeatmapColDim): string {
     case 'day':   return "FORMAT_DATE('%Y-%m-%d', date)"
     case 'week':  return "FORMAT_DATE('%G-W%V', date)"  // ISO year + ISO week
     case 'month': return "FORMAT_DATE('%Y-%m', date)"
+    case 'year':  return "FORMAT_DATE('%Y', date)"
   }
 }
 
@@ -640,12 +648,23 @@ export async function fetchFilterOptions(): Promise<ReviewsFilterOptions> {
     WHERE review_of = 'Unit' AND date IS NOT NULL
     ORDER BY y DESC
   `
+  // Distinct (year, month) combos — drives the data-aware month dropdown so a
+  // selected year only offers months that actually have reviews.
+  const yearMonthsSql = `
+    SELECT DISTINCT
+      EXTRACT(YEAR FROM date)  AS y,
+      EXTRACT(MONTH FROM date) AS m
+    FROM ${TABLE}
+    WHERE review_of = 'Unit' AND date IS NOT NULL
+    ORDER BY y DESC, m ASC
+  `
 
-  const [[buildingRows], [unitRows], [channelRows], [yearRows]] = await Promise.all([
-    bq.query({ query: buildingsSql, useLegacySql: false }),
-    bq.query({ query: unitsSql,     useLegacySql: false }),
-    bq.query({ query: channelsSql,  useLegacySql: false }),
-    bq.query({ query: yearsSql,     useLegacySql: false }),
+  const [[buildingRows], [unitRows], [channelRows], [yearRows], [yearMonthRows]] = await Promise.all([
+    bq.query({ query: buildingsSql,  useLegacySql: false }),
+    bq.query({ query: unitsSql,      useLegacySql: false }),
+    bq.query({ query: channelsSql,   useLegacySql: false }),
+    bq.query({ query: yearsSql,      useLegacySql: false }),
+    bq.query({ query: yearMonthsSql, useLegacySql: false }),
   ])
 
   const buildings = (buildingRows as Array<{ building_prefix?: string }>)
@@ -666,5 +685,13 @@ export async function fetchFilterOptions(): Promise<ReviewsFilterOptions> {
     .map((r) => Number(r.y))
     .filter((n) => Number.isInteger(n) && n >= 2000 && n <= 2100)
 
-  return { buildings, units, otas, years }
+  const yearMonths = (yearMonthRows as Array<{ y?: number | string; m?: number | string }>)
+    .map((r) => ({ year: Number(r.y), month: Number(r.m) }))
+    .filter(
+      (ym) =>
+        Number.isInteger(ym.year) && ym.year >= 2000 && ym.year <= 2100 &&
+        Number.isInteger(ym.month) && ym.month >= 1 && ym.month <= 12
+    )
+
+  return { buildings, units, otas, years, yearMonths }
 }

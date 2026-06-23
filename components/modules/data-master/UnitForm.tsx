@@ -47,6 +47,8 @@ const formSchema = z.object({
 })
 
 type FormValues = z.infer<typeof formSchema>
+// Exported for embedders (e.g. the listing cockpit) that build `defaultValues`.
+export type UnitFormValues = FormValues
 
 interface UnitFormProps {
   unitId?:          string
@@ -59,6 +61,9 @@ interface UnitFormProps {
   featureOptions:   FieldOption[]
   bathTypeOptions:  FieldOption[]
   statusOptions:    FieldOption[]
+  // When provided, called after a successful save INSTEAD of navigating to the
+  // unit page — lets the form be embedded inline (e.g. the listing cockpit).
+  onSaved?:         (unitId: string) => void
 }
 
 // ── Micro-components ──────────────────────────────────────────────────────────
@@ -387,6 +392,7 @@ export default function UnitForm({
   featureOptions: initialFeatureOptions,
   bathTypeOptions: initialBathTypeOptions,
   statusOptions: initialStatusOptions,
+  onSaved,
 }: UnitFormProps) {
   const router = useRouter()
   const [serverError, setServerError] = useState('')
@@ -530,10 +536,16 @@ export default function UnitForm({
     }
 
     const data = await res.json()
-    const targetId = isEdit ? unitId : (data.data as { id: string }).id
+    const targetId = isEdit ? unitId! : (data.data as { id: string }).id
     toast.success(isEdit ? 'Unit updated successfully' : 'Unit created successfully')
-    router.push(`/data-master/units/${targetId}`)
-    router.refresh()
+    if (onSaved) {
+      // Embedded mode (e.g. listing cockpit): let the parent decide what's next.
+      onSaved(targetId)
+      router.refresh()
+    } else {
+      router.push(`/data-master/units/${targetId}`)
+      router.refresh()
+    }
   }
 
   return (

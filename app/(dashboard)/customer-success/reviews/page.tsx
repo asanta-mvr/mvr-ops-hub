@@ -77,6 +77,7 @@ function narrowOtas(filters: ReviewFilters): OtaSource[] {
 function buildScopeQs(filters: ReviewFilters): string {
   const qs = new URLSearchParams()
   if (filters.years.length     > 0) qs.set('year',     filters.years.map(String).join(','))
+  if (filters.months.length    > 0) qs.set('month',    filters.months.map(String).join(','))
   if (filters.buildings.length > 0) qs.set('building', filters.buildings.join(','))
   if (filters.units.length     > 0) qs.set('unit',     filters.units.join(','))
   if (filters.otas.length      > 0) qs.set('ota',      filters.otas.join(','))
@@ -199,12 +200,14 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
         unitOptions={bqOptions.units}
         otaOptions={bqOptions.otas}
         yearOptions={bqOptions.years}
+        yearMonthsOptions={bqOptions.yearMonths}
         assigneeOptions={assignees.map((u) => ({
           id:   u.id,
           name: u.name ?? u.email,
         }))}
         overviewFilters={{
           years:     overviewFilters.years,
+          months:    overviewFilters.months,
           buildings: overviewFilters.buildings,
           units:     overviewFilters.units,
           otas:      narrowOtas(overviewFilters),
@@ -212,6 +215,7 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
         }}
         performanceFilters={{
           years:     performanceFilters.years,
+          months:    performanceFilters.months,
           buildings: performanceFilters.buildings,
           units:     performanceFilters.units,
           otas:      narrowOtas(performanceFilters),
@@ -221,6 +225,7 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
         }}
         disputesFilters={{
           years:     disputesFilters.years,
+          months:    disputesFilters.months,
           buildings: disputesFilters.buildings,
           units:     disputesFilters.units,
           otas:      narrowOtas(disputesFilters),

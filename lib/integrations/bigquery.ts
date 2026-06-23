@@ -46,13 +46,24 @@ export interface ReservationLookup {
   guestPhone:   string | null
   property:     string | null
   unit:         string | null
-  checkinDate:  string | null // ISO string
+  checkinDate:  string | null // ISO (date-only, localized)
   checkoutDate: string | null
+  checkinAt:    string | null // ISO timestamp (date + time, UTC) from check_in
+  checkoutAt:   string | null // ISO timestamp (date + time, UTC) from check_out
+  nightsCount:  number | null
+  // Join keys (used by the Dispute Tool to pull the conversation + review).
+  reservationId:    string | null // Guesty reservation id → ops_reviews_processed.reservation_id
+  conversationId:   string | null // Guesty conversation id → conversation_posts.json_payload.conversationId
+  otaReservationId: string | null
+  guestId:          string | null
 }
 
 export async function lookupReservation(confirmationCode: string): Promise<ReservationLookup | null> {
   const query = `
-    SELECT source, guest_full_name, building_name, listing_nickname, check_in_date_localized, check_out_date_localized
+    SELECT source, guest_full_name, building_name, listing_nickname,
+           check_in_date_localized, check_out_date_localized,
+           check_in, check_out, nights_count,
+           reservation_id, conversation_id, ota_reservation_id, guest_id
     FROM \`miami-vr-data.ops.ops_reservations\`
     WHERE UPPER(confirmation_code) = UPPER(@confirmationCode)
     LIMIT 1
@@ -72,6 +83,13 @@ export async function lookupReservation(confirmationCode: string): Promise<Reser
     listing_nickname?: string
     check_in_date_localized?: { value: string } | string
     check_out_date_localized?: { value: string } | string
+    check_in?: { value: string } | string
+    check_out?: { value: string } | string
+    nights_count?: number | string
+    reservation_id?: string
+    conversation_id?: string
+    ota_reservation_id?: string
+    guest_id?: string
   }
 
   const toIso = (v: unknown): string | null => {
@@ -82,12 +100,19 @@ export async function lookupReservation(confirmationCode: string): Promise<Reser
   }
 
   return {
-    source:       mapOta(r.source),
-    guestName:    r.guest_full_name ?? null,
-    guestPhone:   null,
-    property:     r.building_name ?? null,
-    unit:         r.listing_nickname ?? null,
-    checkinDate:  toIso(r.check_in_date_localized),
-    checkoutDate: toIso(r.check_out_date_localized),
+    source:           mapOta(r.source),
+    guestName:        r.guest_full_name ?? null,
+    guestPhone:       null,
+    property:         r.building_name ?? null,
+    unit:             r.listing_nickname ?? null,
+    checkinDate:      toIso(r.check_in_date_localized),
+    checkoutDate:     toIso(r.check_out_date_localized),
+    checkinAt:        toIso(r.check_in),
+    checkoutAt:       toIso(r.check_out),
+    nightsCount:      r.nights_count != null ? Number(r.nights_count) : null,
+    reservationId:    r.reservation_id ?? null,
+    conversationId:   r.conversation_id ?? null,
+    otaReservationId: r.ota_reservation_id ?? null,
+    guestId:          r.guest_id ?? null,
   }
 }

@@ -61,6 +61,7 @@ const COL_LABEL: Record<HeatmapColDim, string> = {
   day:   'Day',
   week:  'Week',
   month: 'Month',
+  year:  'Year',
 }
 
 function ratingTone(rating: number | null): string {

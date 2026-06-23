@@ -1,0 +1,266 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-23T19:44:21.486Z",
+  "source": "auto-postool",
+  "partial": false,
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "auto-checkpoint",
+  "completed_tasks": [],
+  "remaining_tasks": [],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [],
+  "uncommitted_files": [
+    {
+      "status": "M",
+      "path": ".env.example"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/customer-success/reviews/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/integrations/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/reservations/lookup/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/reviews/cell/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/chargebacks/MultiSelectFilter.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/reviews/CellDetailPanel.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/reviews/DailyVolumeChart.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/reviews/MetricHeatmap.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/reviews/ReviewsClient.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/reviews/ReviewsFilterBar.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/data-master/UnitForm.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/shared/Sidebar/nav-config.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/auth/crypto.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/auth/resources.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/integrations/bigquery.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/integrations/google-drive.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/reviews/bq.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/reviews/filters.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/reviews/types.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/reviews/weekly-brief.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/storage/gcs.ts"
+    },
+    {
+      "status": "M",
+      "path": "next.config.mjs"
+    },
+    {
+      "status": "M",
+      "path": "package-lock.json"
+    },
+    {
+      "status": "M",
+      "path": "package.json"
+    },
+    {
+      "status": "M",
+      "path": "prisma/schema.prisma"
+    },
+    {
+      "status": "??",
+      "path": ".planning/"
+    },
+    {
+      "status": "??",
+      "path": "app/(dashboard)/customer-success/dispute-tool/"
+    },
+    {
+      "status": "??",
+      "path": "app/(dashboard)/data-master/listings/"
+    },
+    {
+      "status": "??",
+      "path": "app/(dashboard)/integrations/guesty/"
+    },
+    {
+      "status": "??",
+      "path": "app/(dashboard)/operations/"
+    },
+    {
+      "status": "??",
+      "path": "app/api/v1/disputes/"
+    },
+    {
+      "status": "??",
+      "path": "app/api/v1/integrations/"
+    },
+    {
+      "status": "??",
+      "path": "app/api/v1/listings/"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/customer-success/dispute-tool/"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/GuestyListingDetail.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/ListingDataMasterPanel.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/ListingPhotoGallery.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/ListingRecordDrift.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/ListingUnitCockpit.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/data-master/ListingsTableView.tsx"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/integrations/"
+    },
+    {
+      "status": "??",
+      "path": "components/modules/operations/"
+    },
+    {
+      "status": "??",
+      "path": "docs/dispute-sources-bq-schema.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/guesty-listing-api-map.md"
+    },
+    {
+      "status": "??",
+      "path": "docs/maintenance-bq-schema.md"
+    },
+    {
+      "status": "??",
+      "path": "lib/disputes/"
+    },
+    {
+      "status": "??",
+      "path": "lib/integrations/guesty.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/maintenance/"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/dispute.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/guesty.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/listing.ts"
+    },
+    {
+      "status": "??",
+      "path": "prisma/seed-agent.ts"
+    },
+    {
+      "status": "??",
+      "path": "prisma/seed-knowledge.ts"
+    },
+    {
+      "status": "??",
+      "path": "prisma/seed-policies.ts"
+    },
+    {
+      "status": "??",
+      "path": "reviews-brief-sample.pdf"
+    },
+    {
+      "status": "??",
+      "path": "scripts/inspect-breeze-tables.ts"
+    },
+    {
+      "status": "??",
+      "path": "scripts/inspect-breezeway-bq.ts"
+    },
+    {
+      "status": "??",
+      "path": "scripts/inspect-dispute-sources.ts"
+    },
+    {
+      "status": "??",
+      "path": "scripts/inspect-guesty-listing.ts"
+    },
+    {
+      "status": "??",
+      "path": "svg_files/aribnb2.png"
+    }
+  ],
+  "next_action": null,
+  "context_notes": "Recent commits:\n832aeb9 fix(middleware): allow static assets through without auth redirect\neaed048 fix(invitations): inline crown logo via CID, simplify invite landing, centered email header\n8600963 refactor(email): translate invitation email to English, drop permissions list, swap SVG logo for hosted PNG\nb1658cc fix(invitations): point email links at PUBLIC_APP_URL when set\n7a38d18 feat(reviews): per-tab filter scoping, Search button, tab icons + rename to MVR-OS"
+}

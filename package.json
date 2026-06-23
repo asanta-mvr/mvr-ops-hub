@@ -9,6 +9,9 @@
     "lint": "next lint",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:rules": "tsx prisma/seed-rules.ts",
+    "db:seed:policies": "tsx prisma/seed-policies.ts",
+    "db:seed:agent": "tsx prisma/seed-agent.ts",
+    "db:seed:knowledge": "tsx prisma/seed-knowledge.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:import-buildings": "tsx prisma/import-buildings.ts",
@@ -20,6 +23,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@auth/prisma-adapter": "^2.11.2",
     "@base-ui/react": "^1.4.0",
     "@dnd-kit/core": "^6.3.1",

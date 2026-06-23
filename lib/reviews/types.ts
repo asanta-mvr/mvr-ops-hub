@@ -119,6 +119,10 @@ export interface ReviewsFilterOptions {
   units:     string[]
   otas:      OtaSource[]
   years:     number[]
+  /** Distinct (year, month) combos present in the data. The filter bar slices
+   *  the month dropdown by the selected year(s) so only months that actually
+   *  have reviews are offered (e.g. 2026 → Jan..Jun, never future months). */
+  yearMonths: Array<{ year: number; month: number }>
 }
 
 // ── Phase 2 aggregate shapes (heatmap + daily volume + tag treemap) ───────
@@ -128,13 +132,13 @@ export const HEATMAP_ROW_DIMS = ['building', 'channel', 'rating'] as const
 export type HeatmapRowDim = (typeof HEATMAP_ROW_DIMS)[number]
 
 /** Column dimension for the metric heatmap. */
-export const HEATMAP_COL_DIMS = ['day', 'week', 'month'] as const
+export const HEATMAP_COL_DIMS = ['day', 'week', 'month', 'year'] as const
 export type HeatmapColDim = (typeof HEATMAP_COL_DIMS)[number]
 
 export interface HeatmapRow {
   /** Row label — building name, channel name, or rating value (as string). */
   row:       string
-  /** Column bucket — 'YYYY-MM-DD' (day), 'YYYY-Www' (ISO week), or 'YYYY-MM' (month). */
+  /** Column bucket — 'YYYY-MM-DD' (day), 'YYYY-Www' (ISO week), 'YYYY-MM' (month), or 'YYYY' (year). */
   col:       string
   avgRating: number | null
   count:     number
@@ -189,6 +193,8 @@ export const reviewFiltersSchema = z.object({
   stars:      z.array(z.number().int().min(1).max(5)).default([]),
   /** Multi-select year filter — translated to EXTRACT(YEAR FROM date) IN (...). */
   years:      z.array(z.number().int().min(2000).max(2100)).default([]),
+  /** Multi-select month filter (1=Jan..12=Dec) — translated to EXTRACT(MONTH FROM date) IN (...). */
+  months:     z.array(z.number().int().min(1).max(12)).default([]),
   /** Free-text fragment matched against BigQuery `unit_name` (e.g. "1906" or "Icon"). */
   unitSearch: z.string().trim().min(1).max(80).optional(),
   /** Internal-only — used by the cell-drill-down endpoint, not URL-bound. */

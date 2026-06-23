@@ -32,17 +32,29 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts          Account[]
-  sessions          Session[]
-  auditLogs         AuditLog[]
-  assignedTickets   SupportTicket[]         @relation("AssignedTickets")
-  ticketComments    TicketComment[]         @relation("TicketComments")
-  notificationRules NotificationRule[]      @relation("NotificationRulesCreated")
-  watchlistEntries  NotificationWatchlist[] @relation("WatchlistEntriesCreated")
-  assignedReviews   ReviewAction[]          @relation("AssignedReviews")
-  escalatedReviews  ReviewAction[]          @relation("EscalatedReviews")
-  permissions       UserPermission[]
-  workspaceCred     GoogleWorkspaceCredential?
+  accounts                      Account[]
+  sessions                      Session[]
+  auditLogs                     AuditLog[]
+  assignedTickets               SupportTicket[]            @relation("AssignedTickets")
+  ticketComments                TicketComment[]            @relation("TicketComments")
+  notificationRules             NotificationRule[]         @relation("NotificationRulesCreated")
+  watchlistEntries              NotificationWatchlist[]    @relation("WatchlistEntriesCreated")
+  assignedReviews               ReviewAction[]             @relation("AssignedReviews")
+  escalatedReviews              ReviewAction[]             @relation("EscalatedReviews")
+  permissions                   UserPermission[]
+  workspaceCred                 GoogleWorkspaceCredential?
+  maintenanceExclusionsCreated  MaintenanceCostExclusion[] @relation("MaintenanceExclusionExcludedBy")
+  maintenanceExclusionsRestored MaintenanceCostExclusion[] @relation("MaintenanceExclusionRestoredBy")
+  maintenanceCyclesClosed       MaintenanceRechargeCycle[] @relation("MaintenanceCycleClosedBy")
+  maintenanceCyclesReopened     MaintenanceRechargeCycle[] @relation("MaintenanceCycleReopenedBy")
+  disputeCasesCreated           DisputeCase[]              @relation("DisputeCasesCreated")
+  disputeCasesResolved          DisputeCase[]              @relation("DisputeCasesResolved")
+  policyContentUpdated          PolicyContent[]            @relation("PolicyContentUpdated")
+  disputeAgentConfigUpdated     DisputeAgentConfig[]       @relation("DisputeAgentConfigUpdated")
+  disputeAgentVersionsCreated   DisputeAgentVersion[]      @relation("DisputeAgentVersionsCreated")
+  disputeSkillsCreated          DisputeSkill[]             @relation("DisputeSkillsCreated")
+  disputeKnowledgeCreated       DisputeKnowledge[]         @relation("DisputeKnowledgeCreated")
+  disputeKnowledgeUpdated       DisputeKnowledge[]         @relation("DisputeKnowledgeUpdated")
 
   @@map("users")
 }
@@ -261,20 +273,34 @@ model Owner {
   @@map("owners")
 }
 
+// Raw staging mirror of every owner pulled from Guesty. `raw` holds the
+// COMPLETE Guesty owner payload verbatim; the typed columns are projections.
+// `ownerUniqueId` is the CONFIRMED link to a Data Master Owner; `suggestedOwnerId`
+// is an auto-match candidate (by email/name) awaiting manual confirmation.
 model GuestyOwner {
-  id              String    @id @default(cuid())
-  guestyId        String    @unique
-  fullName        String?
-  accountId       String?
-  email           String?
-  ownerType       String?
-  createdAtGuesty DateTime?
-  ownerUniqueId   String?   @unique
-  addressField9   String?
-  syncedAt        DateTime  @default(now())
+  id               String    @id @default(cuid())
+  guestyId         String    @unique
+  connectionId     String?
+  fullName         String?
+  accountId        String?
+  email            String?
+  phone            String?
+  ownerType        String?
+  pictureUrl       String?
+  listingCount     Int?
+  createdAtGuesty  DateTime?
+  ownerUniqueId    String?   @unique // confirmed FK to Owner.id
+  suggestedOwnerId String? // auto-match candidate (not yet confirmed)
+  mappedAt         DateTime?
+  addressField9    String?
+  raw              Json? // full Guesty owner payload (source of truth)
+  syncedAt         DateTime  @default(now())
 
-  owner Owner? @relation(fields: [ownerUniqueId], references: [id])
+  owner      Owner?            @relation(fields: [ownerUniqueId], references: [id])
+  connection GuestyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
 
+  @@index([connectionId])
+  @@index([suggestedOwnerId])
   @@map("guesty_owners")
 }
 
@@ -343,28 +369,30 @@ model Unit {
 // ─── LISTINGS ────────────────────────────────────────────────────────────────
 
 model Listing {
-  id             String    @id @default(cuid())
-  name           String
-  guestyId       String?   @unique
-  listedStatusId String?
-  groupTypeId    String?
-  propertyTypeId String?
-  nickname       String?
-  sqrFeet        Int?
-  sqrMeter       Decimal?  @db.Decimal(8, 2)
-  totalOccupancy Int?
-  activeStatusId String?
-  liveDate       DateTime?
-  urlAirbnb      String?
-  urlBooking     String?
-  urlVrbo        String?
-  urlExpedia     String?
-  urlVacasa      String?
-  unitId         String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String
+  guestyId        String?   @unique
+  listedStatusId  String?
+  groupTypeId     String?
+  propertyTypeId  String?
+  nickname        String?
+  sqrFeet         Int?
+  sqrMeter        Decimal?  @db.Decimal(8, 2)
+  totalOccupancy  Int?
+  activeStatusId  String?
+  liveDate        DateTime?
+  urlAirbnb       String?
+  urlBooking      String?
+  urlVrbo         String?
+  urlExpedia      String?
+  urlVacasa       String?
+  guestyListingId String?   @unique // source GuestyListing.id when pushed from the integration
+  unitId          String? // optional — a listing can exist in Data Master before being attached to a Unit
+  photos          Json? // curated ListingPhoto[]: { id, kind: 'guesty'|'drive', src, order }
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  unit    Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit    Unit?           @relation(fields: [unitId], references: [id], onDelete: SetNull)
   tickets SupportTicket[]
 
   @@index([unitId])
@@ -701,6 +729,168 @@ model ReviewAction {
   @@map("review_actions")
 }
 
+// ─── DISPUTE TOOL (AI adjudication: review removals + OTA disputes) ───────────
+// Standalone Customer Success tool. Unlike ReviewAction (which is state on top of
+// BigQuery reviews), a DisputeCase is self-contained: the agent pastes the review
+// or support chat, Claude returns win-probability metrics + a verdict + an English
+// support message + an evidence checklist + an English public response, and the
+// case is tracked to resolution. PolicyContent is the editable OTA knowledge base.
+
+enum DisputeCaseType {
+  review // review-removal request
+  disputa // OTA economic dispute
+}
+
+enum DisputeCaseStatus {
+  // review-removal lifecycle (default: disputing)
+  disputing
+  removed
+  notremoved
+  // OTA-dispute lifecycle (default: open)
+  open
+  won
+  lost
+}
+
+model DisputeCase {
+  id       String            @id @default(cuid())
+  caseType DisputeCaseType
+  ota      OtaSource // constrained to airbnb|booking|vrbo|expedia in Zod
+  status   DisputeCaseStatus // default applied in the service layer per caseType
+
+  title          String?
+  guestName      String?
+  reservationRef String?
+  inputText      String  @db.Text // the review text or OTA support chat
+  monto          String? // amount in dispute (OTA disputes only)
+  cronologia     String? @db.Text // timeline (OTA disputes only)
+  evidencePaths  Json? // string[] of GCS object paths; rendered via signed URLs
+
+  probs      Json? // parsed [PROB_START]..[PROB_END] metrics (ints)
+  resultText String? @db.Text // cleaned markdown analysis (verdict + messages + guide)
+
+  // Booking context pulled from BigQuery via the reservation-code lookup:
+  // { confirmationCode, reservationId, guestId, otaReservationId, property, unit,
+  //   checkinDate, checkoutDate, conversationText?, reviewText? }. Fed into the AI
+  // prompt and shown in the Tracker. Nullable — manual cases have none.
+  reservationMeta Json?
+
+  outcomeNote  String?   @db.Text // learning note captured on resolve (RAG seed — loop deferred)
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("DisputeCasesResolved", fields: [resolvedById], references: [id])
+
+  // RESERVED for the future RAG learning loop — inert until embeddings ship.
+  // Stored as Json? to avoid requiring the pgvector extension now; a real
+  // `vector` column + similarity index is a deliberate later migration.
+  embedding Json?
+
+  createdById String
+  createdBy   User     @relation("DisputeCasesCreated", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([caseType])
+  @@index([ota])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("dispute_cases")
+}
+
+model PolicyContent {
+  id          String    @id @default(cuid())
+  ota         OtaSource // constrained to airbnb|booking|vrbo|expedia in Zod
+  section     String // "review" | "general" (Zod-validated)
+  contentJson Json // { review: [], general_guests: [], general_hosts: [] }
+  contentHtml String    @db.Text // pre-rendered HTML for the card
+  sourceUrl   String?
+  updatedById String?
+  updatedBy   User?     @relation("PolicyContentUpdated", fields: [updatedById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([ota, section])
+  @@index([ota])
+  @@map("policy_content")
+}
+
+// ─── DISPUTE AGENT (editable analysis context for the Dispute Tool) ──────────
+// Configures how the analyzer "thinks": an editable identity/personality prompt
+// (with simple version history), response guardrails, and scoped skills. All of
+// it is appended to the Anthropic system prompt at analyze time. No memory/RAG
+// here — the Agent tab's Memory section is a UI placeholder for a later pass.
+
+model DisputeAgentConfig {
+  id            String   @id @default(cuid())
+  key           String   @unique @default("default") // singleton anchor
+  agentName     String   @default("Dispute Adjudicator")
+  identityPrompt String  @db.Text
+  behaviorPrompt String  @db.Text @default("") // "Behavior & Formatting" procedural rules
+  guardrails    String[]
+  updatedById   String?
+  updatedBy     User?    @relation("DisputeAgentConfigUpdated", fields: [updatedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("dispute_agent_config")
+}
+
+model DisputeAgentVersion {
+  id             String   @id @default(cuid())
+  agentName      String
+  identityPrompt String   @db.Text
+  behaviorPrompt String   @db.Text @default("")
+  guardrails     String[]
+  note           String? // e.g. "restored from <id>"
+  createdById    String
+  createdBy      User     @relation("DisputeAgentVersionsCreated", fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("dispute_agent_versions")
+}
+
+model DisputeSkill {
+  id           String           @id @default(cuid())
+  name         String
+  caseType     DisputeCaseType? // null = applies to any case type
+  ota          OtaSource? // null = any OTA (constrained to the 4 in Zod)
+  instructions String           @db.Text
+  enabled      Boolean          @default(true)
+  createdById  String
+  createdBy    User             @relation("DisputeSkillsCreated", fields: [createdById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([enabled])
+  @@map("dispute_skills")
+}
+
+// Tagged reference sources (OTA policies, internal notes) the analyzer can cite.
+// Replaces the old PolicyContent CMS — these entries are matched by scope and
+// injected into the analyze system prompt. PolicyContent is now deprecated.
+model DisputeKnowledge {
+  id          String           @id @default(cuid())
+  title       String
+  body        String           @db.Text
+  ota         OtaSource? // null = any OTA (constrained to the 4 in Zod)
+  caseType    DisputeCaseType? // null = any case type
+  category    String? // optional label, e.g. "Review policy"
+  sourceUrl   String?
+  enabled     Boolean          @default(true)
+  createdById String
+  createdBy   User             @relation("DisputeKnowledgeCreated", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?            @relation("DisputeKnowledgeUpdated", fields: [updatedById], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([enabled])
+  @@index([ota, caseType])
+  @@map("dispute_knowledge")
+}
+
 // ─── USER MANAGEMENT (RBAC + INVITATIONS) ────────────────────────────────────
 // Catalog of resource keys lives in `lib/auth/resources.ts`. Each user holds
 // a set of UserPermission rows (resource × view|edit). super_admin role
@@ -752,4 +942,121 @@ model GoogleWorkspaceCredential {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("google_workspace_credentials")
+}
+
+// ─── MAINTENANCE REPORT MODULE ───────────────────────────────────────────────
+// Owner-relations workflow state for the Maintenance Report. The Breezeway
+// tasks themselves live in BigQuery (`miami-vr-data.etl_stage.parsed_breezeway_*`)
+// and are read-only — these two tables capture the *decisions* the team makes
+// each month about which tasks to recharge to the owner.
+
+// One row per (taskId, periodMonth) — when a team member excludes a task from
+// the recharge for a given month. Restoring sets restoredAt/restoredById
+// rather than deleting, so we keep a full audit trail. Snapshots of name +
+// cost are stored so the UI doesn't re-query BigQuery just to render audit.
+model MaintenanceCostExclusion {
+  id           String   @id @default(cuid())
+  taskId       String // Breezeway task_id (INT64 in BQ, stored as string here)
+  periodMonth  String // "YYYY-MM" — the recharge cycle this exclusion belongs to
+  unitName     String // snapshot of Breezeway property.name at exclude time
+  buildingName String? // optional snapshot
+  taskTitle    String? // snapshot for audit/UI
+  totalCost    Decimal? @db.Decimal(10, 2) // snapshot of the cost being excluded
+  reason       String?  @db.Text // free text + dropdown choice
+
+  excludedById String
+  excludedBy   User     @relation("MaintenanceExclusionExcludedBy", fields: [excludedById], references: [id])
+  excludedAt   DateTime @default(now())
+
+  restoredById String?
+  restoredBy   User?     @relation("MaintenanceExclusionRestoredBy", fields: [restoredById], references: [id])
+  restoredAt   DateTime?
+
+  @@unique([taskId, periodMonth])
+  @@index([periodMonth])
+  @@index([unitName, periodMonth])
+  @@map("maintenance_cost_exclusions")
+}
+
+// One row per recharge cycle (YYYY-MM). Defaults to 'open'; admin can close
+// it to lock further exclusion changes, then optionally reopen with a reason.
+model MaintenanceRechargeCycle {
+  id          String @id @default(cuid())
+  periodMonth String @unique // "YYYY-MM"
+  status      String @default("open") // "open" | "closed"
+
+  closedById   String?
+  closedBy     User?     @relation("MaintenanceCycleClosedBy", fields: [closedById], references: [id])
+  closedAt     DateTime?
+  closedReason String?
+
+  reopenedById   String?
+  reopenedBy     User?     @relation("MaintenanceCycleReopenedBy", fields: [reopenedById], references: [id])
+  reopenedAt     DateTime?
+  reopenedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("maintenance_recharge_cycles")
+}
+
+// ─── GUESTY INTEGRATION ──────────────────────────────────────────────────────
+// One row = one Guesty Open API connection. The UI treats this as a singleton
+// (one company-wide connection), but the table shape leaves room for more.
+// clientSecret + accessToken are AES-256-GCM ciphertext (see lib/auth/crypto.ts).
+// The token is cached and reused for ~24h to respect Guesty's hard limit of
+// 5 tokens per 24h per key.
+model GuestyConnection {
+  id             String    @id @default(cuid())
+  name           String // display label, e.g. "Guesty Distribution Account"
+  clientId       String // plaintext — not a secret
+  clientSecret   String // AES-256-GCM ciphertext, base64
+  accessToken    String? // cached bearer token, AES-256-GCM ciphertext, base64
+  tokenExpiresAt DateTime? // when the cached token expires (24h after mint)
+  status         String    @default("disconnected") // disconnected | connected | error
+  lastError      String?   @db.Text
+  lastSyncAt     DateTime?
+  lastSyncCount  Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  listings GuestyListing[]
+  owners   GuestyOwner[]
+
+  @@map("guesty_connections")
+}
+
+// Raw staging mirror of every listing pulled from Guesty. `raw` holds the
+// COMPLETE Guesty payload verbatim (no field whitelist) so every refresh
+// captures 100% of each listing — including any fields Guesty adds later.
+// The typed columns below are projections of `raw` for fast display/search.
+// `unitId` is set in Phase B when a listing is attached to a Unit.
+model GuestyListing {
+  id              String    @id @default(cuid())
+  guestyId        String    @unique // Guesty listing _id
+  connectionId    String
+  title           String?
+  nickname        String?
+  propertyType    String? // Guesty `type`
+  addressFull     String?
+  accommodates    Int?
+  bedrooms        Int?
+  bathrooms       Decimal?  @db.Decimal(3, 1)
+  active          Boolean?
+  pictureUrl      String? // first picture thumbnail
+  createdAtGuesty DateTime? // listing creation date in Guesty (raw.createdAt)
+  raw             Json // full Guesty listing payload (source of truth)
+  unitId          String? // set in Phase B when mapped to a Unit
+  promoted        Boolean   @default(false) // pushed into Data Master → Listings
+  promotedAt      DateTime?
+  listingId       String?   @unique // the Data Master Listing created on push
+  syncedAt        DateTime  @default(now())
+
+  connection GuestyConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@index([unitId])
+  @@index([promoted])
+  @@map("guesty_listings")
 }

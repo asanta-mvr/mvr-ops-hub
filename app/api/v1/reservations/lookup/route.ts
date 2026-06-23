@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       })
       if (listing) {
         unitId     = listing.unitId
-        buildingId = listing.unit.buildingId
+        buildingId = listing.unit?.buildingId ?? null
       }
     }
 

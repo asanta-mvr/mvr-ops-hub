@@ -26,6 +26,11 @@ function monthRange(yyyymm: string): { from: string; to: string } | null {
   return { from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(last).padStart(2, '0')}` }
 }
 
+function yearRange(yyyy: string): { from: string; to: string } | null {
+  if (!/^\d{4}$/.test(yyyy)) return null
+  return { from: `${yyyy}-01-01`, to: `${yyyy}-12-31` }
+}
+
 function isoWeekRange(yyyyWww: string): { from: string; to: string } | null {
   const match = yyyyWww.match(/^(\d{4})-W(\d{2})$/)
   if (!match) return null
@@ -118,6 +123,9 @@ export async function GET(req: NextRequest) {
       if (range) { filters.dateFrom = range.from; filters.dateTo = range.to }
     } else if (colDim === 'week') {
       const range = isoWeekRange(col)
+      if (range) { filters.dateFrom = range.from; filters.dateTo = range.to }
+    } else if (colDim === 'year') {
+      const range = yearRange(col)
       if (range) { filters.dateFrom = range.from; filters.dateTo = range.to }
     }
 

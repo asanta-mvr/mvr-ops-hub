@@ -6,6 +6,7 @@
 // three tabs (Overview, Performance, Disputes) can hold independent filter
 // state side-by-side in the same URL:
 //   {prefix}year=YYYY[,YYYY…]      multi-select year filter
+//   {prefix}month=M[,M…]           multi-select month filter (1=Jan..12=Dec)
 //   {prefix}building=Icon[,Elser…] multi-select building prefix
 //   {prefix}unit=Icon%204407[,…]   multi-select exact unit_name match
 //   {prefix}ota=airbnb[,booking…]  multi-select OtaSource enum
@@ -54,6 +55,10 @@ export function parseReviewFilters(sp: ReviewsSearchParams, prefix = ''): Review
     .map((s) => Number(s))
     .filter((s) => Number.isInteger(s) && s >= 1 && s <= 5)
 
+  const monthsRaw = splitCsv(readOne(sp, k('month')))
+    .map((m) => Number(m))
+    .filter((m) => Number.isInteger(m) && m >= 1 && m <= 12)
+
   const pageRaw     = readOne(sp, k('page'))
   const pageSizeRaw = readOne(sp, k('pageSize'))
 
@@ -63,6 +68,7 @@ export function parseReviewFilters(sp: ReviewsSearchParams, prefix = ''): Review
     units:      splitCsv(readOne(sp, k('unit'))),
     stars:      starsRaw,
     years:      yearsRaw,
+    months:     monthsRaw,
     unitSearch: readOne(sp, k('q')),
     page:       pageRaw     ? Number(pageRaw)     : 0,
     pageSize:   pageSizeRaw ? Number(pageSizeRaw) : 50,
@@ -81,4 +87,4 @@ export type ReviewsTabPrefix = (typeof REVIEWS_TAB_PREFIXES)[number]
 // Suffixes the URL surface uses. Exposed so the page can check whether ANY
 // filter key (across all three tabs) is present before redirecting to the
 // canonical default scope.
-export const REVIEWS_PARAM_SUFFIXES = ['year', 'building', 'unit', 'ota', 'stars', 'q', 'page', 'pageSize'] as const
+export const REVIEWS_PARAM_SUFFIXES = ['year', 'month', 'building', 'unit', 'ota', 'stars', 'q', 'page', 'pageSize'] as const

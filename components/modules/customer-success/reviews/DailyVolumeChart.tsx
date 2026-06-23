@@ -22,13 +22,14 @@ interface Props {
   data: DailyVolumePoint[]
 }
 
-type Unit   = 'day' | 'week' | 'month'
+type Unit   = 'day' | 'week' | 'month' | 'year'
 type Metric = 'count' | 'rating'
 
 const UNIT_LABEL: Record<Unit, string> = {
   day:   'Day',
   week:  'Week',
   month: 'Month',
+  year:  'Year',
 }
 
 const METRIC_LABEL: Record<Metric, string> = {
@@ -92,6 +93,7 @@ function bucketKeyForDate(unit: Unit, isoDate: string): string {
   if (unit === 'day') return isoDate
   const dt = new Date(`${isoDate}T00:00:00Z`)
   if (unit === 'week') return isoWeekBucket(dt)
+  if (unit === 'year') return String(dt.getUTCFullYear())
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
@@ -165,6 +167,9 @@ function formatTick(label: string, unit: Unit): string {
     const match = label.match(/^(\d{4})-W(\d{2})$/)
     return match ? `W${match[2]} ’${match[1].slice(2)}` : label
   }
+  if (unit === 'year') {
+    return label
+  }
   const [y, m] = label.split('-')
   const idx = Number(m) - 1
   return `${SHORT_MONTH[idx] ?? m} ’${y.slice(2)}`
@@ -209,16 +214,8 @@ export function DailyVolumeChart({ data }: Props) {
   return (
     <div className="bg-white border border-[#E0DBD4] rounded-xl p-4 shadow-card">
       <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-mvr-primary justify-self-start">{headline}</h3>
-        <div className="justify-self-center">
-          <Toggle
-            value={metric}
-            options={['rating', 'count'] as const}
-            labels={METRIC_LABEL}
-            onChange={setMetric}
-          />
-        </div>
-        <div className="justify-self-end flex items-center gap-2 text-xs">
+        <div className="justify-self-start flex items-center gap-2 text-xs">
+          <h3 className="text-sm font-semibold text-mvr-primary">{headline}</h3>
           {buckets.length > 0 && hasData ? (
             <span className="text-muted-foreground">
               avg{' '}
@@ -230,9 +227,19 @@ export function DailyVolumeChart({ data }: Props) {
               </span>
             </span>
           ) : null}
+        </div>
+        <div className="justify-self-center">
+          <Toggle
+            value={metric}
+            options={['rating', 'count'] as const}
+            labels={METRIC_LABEL}
+            onChange={setMetric}
+          />
+        </div>
+        <div className="justify-self-end">
           <Toggle
             value={unit}
-            options={['day', 'week', 'month'] as const}
+            options={['day', 'week', 'month', 'year'] as const}
             labels={UNIT_LABEL}
             onChange={setUnit}
           />
@@ -353,7 +360,7 @@ interface ToggleProps<T extends string> {
 
 function Toggle<T extends string>({ value, options, labels, onChange }: ToggleProps<T>) {
   return (
-    <div className="inline-flex rounded-md border border-[#E0DBD4] overflow-hidden bg-white">
+    <div className="inline-flex rounded-md border border-[#E0DBD4] overflow-hidden bg-white text-xs">
       {options.map((opt) => {
         const active = opt === value
         return (
@@ -363,8 +370,8 @@ function Toggle<T extends string>({ value, options, labels, onChange }: TogglePr
             onClick={() => onChange(opt)}
             className={
               active
-                ? 'px-2 py-1 bg-mvr-primary text-white font-medium'
-                : 'px-2 py-1 text-mvr-primary hover:bg-mvr-cream'
+                ? 'px-3 py-1 bg-mvr-primary text-white font-medium'
+                : 'px-3 py-1 text-mvr-primary hover:bg-mvr-cream'
             }
           >
             {labels[opt]}

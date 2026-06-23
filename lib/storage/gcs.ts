@@ -43,8 +43,26 @@ export async function deleteFile(destination: string): Promise<void> {
   await bucket.file(destination).delete({ ignoreNotFound: true })
 }
 
+/**
+ * Downloads a GCS object's bytes + content type. Returns null on any failure so
+ * callers (e.g. attaching evidence images to an AI vision call) can degrade
+ * gracefully rather than throw.
+ */
+export async function downloadFile(
+  path: string
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  try {
+    const file = getBucket().file(path)
+    const [buffer] = await file.download()
+    const [metadata] = await file.getMetadata()
+    return { buffer, contentType: metadata.contentType ?? 'application/octet-stream' }
+  } catch {
+    return null
+  }
+}
+
 export function getGcsPath(
-  type: 'buildings' | 'units' | 'owners' | 'contracts' | 'inspections',
+  type: 'buildings' | 'units' | 'owners' | 'contracts' | 'inspections' | 'disputes',
   id: string,
   filename: string
 ): string {

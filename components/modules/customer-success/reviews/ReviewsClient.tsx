@@ -20,6 +20,7 @@ import { ReviewsFilterBar } from './ReviewsFilterBar'
 
 interface TabFilters {
   years:     number[]
+  months:    number[]
   buildings: string[]
   units:     string[]
   otas:      OtaSource[]
@@ -67,6 +68,8 @@ interface Props {
   unitOptions:     string[]
   otaOptions:      OtaSource[]
   yearOptions:     number[]
+  /** Distinct (year, month) combos in the data — scopes the month dropdown. */
+  yearMonthsOptions: Array<{ year: number; month: number }>
   assigneeOptions: Array<{ id: string; name: string }>
 }
 
@@ -82,6 +85,7 @@ export function ReviewsClient({
   unitOptions,
   otaOptions,
   yearOptions,
+  yearMonthsOptions,
   assigneeOptions,
 }: Props) {
   const router = useRouter()
@@ -129,11 +133,13 @@ export function ReviewsClient({
           <ReviewsFilterBar
             prefix="ov_"
             years={overviewFilters.years}
+            months={overviewFilters.months}
             buildings={overviewFilters.buildings}
             units={overviewFilters.units}
             otas={overviewFilters.otas}
             stars={overviewFilters.stars}
             yearOptions={yearOptions}
+            yearMonths={yearMonthsOptions}
             buildingOptions={buildingOptions}
             unitOptions={unitOptions}
             otaOptions={otaOptions}
@@ -156,11 +162,13 @@ export function ReviewsClient({
           <ReviewsFilterBar
             prefix="pf_"
             years={performanceFilters.years}
+            months={performanceFilters.months}
             buildings={performanceFilters.buildings}
             units={performanceFilters.units}
             otas={performanceFilters.otas}
             stars={performanceFilters.stars}
             yearOptions={yearOptions}
+            yearMonths={yearMonthsOptions}
             buildingOptions={buildingOptions}
             unitOptions={unitOptions}
             otaOptions={otaOptions}
@@ -181,11 +189,13 @@ export function ReviewsClient({
           <ReviewsFilterBar
             prefix="dp_"
             years={disputesFilters.years}
+            months={disputesFilters.months}
             buildings={disputesFilters.buildings}
             units={disputesFilters.units}
             otas={disputesFilters.otas}
             stars={disputesFilters.stars}
             yearOptions={yearOptions}
+            yearMonths={yearMonthsOptions}
             buildingOptions={buildingOptions}
             unitOptions={unitOptions}
             otaOptions={otaOptions}
