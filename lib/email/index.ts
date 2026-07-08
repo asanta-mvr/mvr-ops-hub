@@ -71,6 +71,64 @@ function getTransporter(cfg: SmtpConfig): Transporter {
 // longer renders them — they are seeded silently on first sign-in.
 export type InvitationPermission = { resource: Resource; level: Level }
 
+// ── Generic transactional send ────────────────────────────────────────────────
+// Reuses the same SMTP transport as the invitation email. Used by owner renewal
+// alerts (and any future one-off email). Gracefully no-ops when SMTP is unset.
+
+export type SendEmailParams = {
+  to: string
+  subject: string
+  html?: string
+  text?: string
+}
+
+export type SendEmailResult =
+  | { sent: true; messageId: string }
+  | { sent: false; skipped: true; reason: 'no_smtp_config' }
+  | { sent: false; error: string }
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// Wrap a plain-text body in a minimal branded HTML shell. Escapes HTML, then
+// applies the same lightweight markup the composer toolbar produces —
+// *bold* → <strong>, _italic_ → <em> — and turns newlines into <br>.
+export function wrapPlainTextHtml(text: string): string {
+  const body = escapeHtml(text)
+    .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+    .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>')
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1E2D40;max-width:600px;margin:0 auto;padding:24px">${body}</div>`
+}
+
+export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  const cfg = readSmtpConfig()
+  if (!cfg) {
+    console.warn('[email] SMTP not configured — email will not be sent.')
+    return { sent: false, skipped: true, reason: 'no_smtp_config' }
+  }
+  const html = params.html ?? (params.text ? wrapPlainTextHtml(params.text) : undefined)
+  try {
+    const info = await getTransporter(cfg).sendMail({
+      from: `"${cfg.fromName}" <${cfg.user}>`,
+      to: params.to,
+      subject: params.subject,
+      html,
+      text: params.text,
+    })
+    return { sent: true, messageId: info.messageId }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown SMTP error'
+    console.error('[email] sendEmail failed:', msg)
+    return { sent: false, error: msg }
+  }
+}
+
 export type SendInvitationParams = {
   to: string
   name?: string | null

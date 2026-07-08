@@ -7,7 +7,9 @@ import type {
   AgentConfigRecord,
   AgentVersionRecord,
   CaseListItem,
+  CaseTypeDef,
   KnowledgeRecord,
+  KnowledgeSectionRecord,
   SkillRecord,
 } from '@/lib/disputes/types'
 import { AnalyzeTab } from './AnalyzeTab'
@@ -18,6 +20,8 @@ import { AgentTab } from './AgentTab'
 interface Props {
   initialCases: CaseListItem[]
   initialKnowledge: KnowledgeRecord[]
+  initialSections: KnowledgeSectionRecord[]
+  initialCaseTypes: CaseTypeDef[]
   initialAgentConfig: AgentConfigRecord
   initialAgentVersions: AgentVersionRecord[]
   initialSkills: SkillRecord[]
@@ -26,6 +30,8 @@ interface Props {
 export function DisputeToolClient({
   initialCases,
   initialKnowledge,
+  initialSections,
+  initialCaseTypes,
   initialAgentConfig,
   initialAgentVersions,
   initialSkills,
@@ -55,15 +61,15 @@ export function DisputeToolClient({
         </TabsList>
 
         <TabsContent value="analyze" className="space-y-4">
-          <AnalyzeTab />
+          <AnalyzeTab initialCaseTypes={initialCaseTypes} />
         </TabsContent>
 
         <TabsContent value="tracker" className="space-y-4">
-          <TrackerTab initialCases={initialCases} />
+          <TrackerTab initialCases={initialCases} initialCaseTypes={initialCaseTypes} />
         </TabsContent>
 
         <TabsContent value="knowledge" className="space-y-4">
-          <KnowledgeTab initialKnowledge={initialKnowledge} />
+          <KnowledgeTab initialKnowledge={initialKnowledge} initialSections={initialSections} />
         </TabsContent>
 
         <TabsContent value="agent" className="space-y-4">

@@ -135,7 +135,9 @@ export function getSystemPrompt(ota: DisputeOta, caseType: DisputeCaseTypeT): st
   const typeNote =
     caseType === 'review'
       ? 'TIPO DE CASO: Review removal — el objetivo es evaluar la remoción de una reseña.'
-      : 'TIPO DE CASO: OTA dispute — el objetivo es evaluar una disputa económica con la OTA. Considera el monto en disputa y la cronología provista.'
+      : caseType === 'disputa'
+        ? 'TIPO DE CASO: OTA dispute — el objetivo es evaluar una disputa económica con la OTA. Considera el monto en disputa y la cronología provista.'
+        : `TIPO DE CASO: ${caseType} — evalúa el caso con criterio realista y conservador según el contexto provisto (conversación, reseña y evidencia).`
   return `${base}\n\n${typeNote}\n\n${FORMAT_RULES}`
 }
 

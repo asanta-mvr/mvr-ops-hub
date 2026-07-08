@@ -3,7 +3,12 @@
 // Routes stay thin: call these, serialize, audit. No AI here — these settings are
 // composed into the analyze system prompt by buildAnalyzeSystemPrompt().
 
-import { type DisputeAgentConfig, type DisputeAgentVersion, type DisputeSkill } from '@prisma/client'
+import {
+  type DisputeAgentConfig,
+  type DisputeAgentVersion,
+  type DisputeCaseType,
+  type DisputeSkill,
+} from '@prisma/client'
 import { db } from '@/lib/db'
 import { DEFAULT_AGENT_IDENTITY, DEFAULT_BEHAVIOR, DEFAULT_GUARDRAILS } from './prompts'
 import { DisputeError } from './cases'
@@ -147,7 +152,8 @@ export async function createSkill(input: SkillParams, userId: string): Promise<S
   const row = await db.disputeSkill.create({
     data: {
       name: input.name,
-      caseType: input.caseType ?? null,
+      // Skills scope only to built-ins (review/disputa) — the column is an enum.
+      caseType: (input.caseType ?? null) as DisputeCaseType | null,
       ota: input.ota ?? null,
       instructions: input.instructions,
       enabled: input.enabled,
@@ -164,7 +170,8 @@ export async function updateSkill(id: string, input: SkillParams): Promise<Skill
     where: { id },
     data: {
       name: input.name,
-      caseType: input.caseType ?? null,
+      // Skills scope only to built-ins (review/disputa) — the column is an enum.
+      caseType: (input.caseType ?? null) as DisputeCaseType | null,
       ota: input.ota ?? null,
       instructions: input.instructions,
       enabled: input.enabled,
@@ -188,7 +195,11 @@ export async function getRelevantSkills(
     where: {
       enabled: true,
       AND: [
-        { OR: [{ caseType: null }, { caseType }] },
+        // DisputeSkill.caseType is an enum (built-ins only); custom types match
+        // only the "any case type" (null) skills.
+        caseType === 'review' || caseType === 'disputa'
+          ? { OR: [{ caseType: null }, { caseType }] }
+          : { caseType: null },
         { OR: [{ ota: null }, { ota }] },
       ],
     },

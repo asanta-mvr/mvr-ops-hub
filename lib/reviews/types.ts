@@ -163,6 +163,88 @@ export interface TagDistRow {
   count: number
 }
 
+// ── Performance tab: checkout-cohort analytics ────────────────────────────
+//
+// The Performance tab answers the COO's L10 feedback. Volume / review-rate /
+// quality are computed on a **checkout cohort**: reviews from
+// `ops.ops_reviews_processed` joined to `ops.ops_reservations` on
+// `reservation_id`, both anchored on `check_out_date_localized`. Reads as
+// "of guests who checked out in week W, X% left a review, averaging Y★."
+// (See lib/reviews/cohort.ts.) Tags + response rate stay on `reva_reviews`
+// by publish date (see lib/reviews/bq.ts) — those are theme/ops metrics.
+
+/** One ISO week of the checkout-cohort trend (Weekly Pulse — PDF page 2). */
+export interface CohortWeekPoint {
+  isoWeek:      string         // 'YYYY-Www' (ISO year + ISO week)
+  weekStart:    string         // 'YYYY-MM-DD' — Monday of the ISO week
+  reservations: number         // confirmed guest stays checking out that week
+  reviews:      number         // those stays that have a review
+  /** reviews / reservations, in [0,1]. `null` when reservations = 0. */
+  reviewRate:   number | null
+  avgRating:    number | null  // AVG over reviewed stays (normalized to 1–5)
+  /** Share of reviewed stays rated ≥ 5, in [0,1]. `null` when reviews = 0. */
+  fiveStarRate: number | null
+  /** Checkout week too recent — reviews still arrive 1–3 weeks post-stay, so
+   *  the rate under-counts. The UI dims these and labels them "still maturing." */
+  maturing:     boolean
+}
+
+/** One segment (channel or building) of the cohort, current window + trend vs
+ *  the prior equal-length window + outlier flag (Segment Performance — page 3). */
+export interface CohortSegmentRow {
+  key:          string         // OtaSource label (channel dim) or building name
+  reservations: number
+  reviews:      number
+  reviewRate:   number | null
+  avgRating:    number | null
+  fiveStarRate: number | null
+  /** Share of the window's reviews this segment holds, in [0,1]. */
+  reviewShare:  number | null
+  prevReviewRate: number | null // prior equal-length window — drives the trend arrow
+  prevAvgRating:  number | null
+  /** True when avgRating deviates from the portfolio avg beyond the threshold. */
+  isOutlier:    boolean
+  /** Deterministic, data-derived "why" sentence for an outlier; `null` otherwise. */
+  assessment:   string | null
+}
+
+export const COHORT_SEGMENT_DIMS = ['channel', 'building'] as const
+export type CohortSegmentDim = (typeof COHORT_SEGMENT_DIMS)[number]
+
+/** Weekly response-rate point (reva_reviews, publish date — page 2, 5th metric). */
+export interface WeeklyResponsePoint {
+  isoWeek:      string
+  weekStart:    string
+  reviews:      number          // reviews received that week
+  responseRate: number | null   // share with host_response = TRUE
+}
+
+/** A positive tag whose share rose vs the trailing baseline (Emerging
+ *  Strengths — page 4). Rule-based, no AI. reva_reviews by publish date. */
+export interface EmergingStrength {
+  tag:           string
+  currentCount:  number
+  /** Share of positive-tag mentions in the current window, in [0,1]. */
+  currentShare:  number
+  baselineShare: number
+  /** currentShare − baselineShare; positive = rising. */
+  delta:         number
+}
+
+/** A negative theme with gravity metrics (Pain Points — page 5, analytics
+ *  half). reva_reviews by publish date. Remediation status is deferred to
+ *  the Support Tickets system. */
+export interface PainPointRow {
+  tag:              string
+  reviews:          number          // reviews citing this tag (current window)
+  guests:           number          // distinct guests citing it
+  /** Share of citing reviews rated < 5, in [0,1]. `null` when none cite it. */
+  belowFiveStarPct: number | null
+  /** Share of all reviews in the window that cite this tag, in [0,1]. */
+  sharePct:         number | null
+  prevReviews:      number          // prior equal-length window — trend arrow
+}
+
 // ── Disputes-tab stats (Postgres-side) ────────────────────────────────────
 
 export interface DisputeStats {

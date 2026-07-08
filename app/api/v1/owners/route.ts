@@ -1,9 +1,21 @@
+import { randomBytes } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { createOwnerSchema } from '@/lib/validations/owner'
+
+// Generate a short 8-char hex owner id (e.g. "40fb63a9"), retrying on the rare
+// collision. Falls back to a longer id if 10 attempts somehow all collide.
+async function generateOwnerId(): Promise<string> {
+  for (let i = 0; i < 10; i++) {
+    const id = randomBytes(4).toString('hex')
+    const exists = await db.owner.findUnique({ where: { id }, select: { id: true } })
+    if (!exists) return id
+  }
+  return randomBytes(6).toString('hex')
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,7 +69,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const owner = await db.owner.create({ data: validated.data })
+    const nickname = [validated.data.firstName, validated.data.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    const id = await generateOwnerId()
+    const owner = await db.owner.create({ data: { ...validated.data, id, nickname } })
 
     await db.auditLog.create({
       data: {

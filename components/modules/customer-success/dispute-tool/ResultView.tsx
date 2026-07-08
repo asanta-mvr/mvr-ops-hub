@@ -123,12 +123,15 @@ interface Props {
   probs: DisputeProbs | null
   resultText: string | null
   caseType: DisputeCaseTypeT
+  // The case detail's Analysis tab hides the % cards (the header pill covers the
+  // at-a-glance metric); the live AnalyzeTab still shows them. Defaults to true.
+  showProbs?: boolean
 }
 
-export function ResultView({ probs, resultText, caseType }: Props) {
+export function ResultView({ probs, resultText, caseType, showProbs = true }: Props) {
   return (
     <div className="space-y-4">
-      {probs ? <ProbCards probs={probs} caseType={caseType} /> : null}
+      {showProbs && probs ? <ProbCards probs={probs} caseType={caseType} /> : null}
       {resultText ? (
         <div className="rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
           <MarkdownView text={resultText} />

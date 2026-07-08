@@ -70,6 +70,27 @@ export function getGcsPath(
 }
 
 /**
+ * Signs a stored document reference for reading. Unlike getSignedImageUrl, this
+ * passes ALL http(s) URLs through unchanged (including Google Drive links), so
+ * document links — PDFs, external Drive files — are preserved as-is. Only
+ * relative GCS object paths are turned into 1-hour signed URLs.
+ */
+export async function getSignedFileUrl(path: string | null | undefined): Promise<string | null> {
+  if (!path) return null
+  if (path.startsWith('http://') || path.startsWith('https://')) return path
+  try {
+    const bucket = getBucket()
+    const [signedUrl] = await bucket.file(path).getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000,
+    })
+    return signedUrl
+  } catch {
+    return null
+  }
+}
+
+/**
  * Returns a 1-hour signed URL for a GCS object path.
  * Pass a relative path (e.g. "Buildings_Images/xxx.jpg") — full GCS/Drive/http URLs are
  * returned unchanged so callers don't need to pre-filter.

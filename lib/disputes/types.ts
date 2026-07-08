@@ -19,7 +19,9 @@ export const DISPUTE_OTA_LABELS: Record<DisputeOta, string> = {
 
 // ─── Case type + status lifecycles ─────────────────────────────────────────────
 export const DISPUTE_CASE_TYPES = ['review', 'disputa'] as const
-export type DisputeCaseTypeT = (typeof DISPUTE_CASE_TYPES)[number]
+// Open string — case types are data-driven (two built-ins below + user-created
+// DisputeCaseTypeDef rows). Resolve labels/statuses via the CaseTypeDef helpers.
+export type DisputeCaseTypeT = string
 
 // review-removal lifecycle
 export const REVIEW_STATUSES = ['disputing', 'removed', 'notremoved'] as const
@@ -27,7 +29,8 @@ export const REVIEW_STATUSES = ['disputing', 'removed', 'notremoved'] as const
 export const DISPUTA_STATUSES = ['open', 'won', 'lost'] as const
 
 export const DISPUTE_STATUSES = [...REVIEW_STATUSES, ...DISPUTA_STATUSES] as const
-export type DisputeCaseStatusT = (typeof DISPUTE_STATUSES)[number]
+// Open string — each case type defines its own statuses (built-in or custom).
+export type DisputeCaseStatusT = string
 
 // Default status when a case is first created, by case type.
 export const DEFAULT_STATUS_BY_TYPE: Record<DisputeCaseTypeT, DisputeCaseStatusT> = {
@@ -57,7 +60,94 @@ export function isStatusValidForType(
   caseType: DisputeCaseTypeT,
   status: DisputeCaseStatusT
 ): boolean {
-  return STATUSES_BY_TYPE[caseType].includes(status)
+  return (STATUSES_BY_TYPE[caseType] ?? []).includes(status)
+}
+
+// ─── Dynamic case-type model (built-ins + custom DisputeCaseTypeDef) ────────────
+// caseType/status are open strings; a CaseTypeDef carries the label, the ordered
+// status stages, and which stage a new case starts in. Two built-ins are defined
+// here as constants; custom types live in the DB and are merged at read time.
+export type StatusTone = 'neutral' | 'active' | 'steel' | 'success' | 'danger' | 'warning'
+
+export interface CaseStatusDef {
+  key: string
+  label: string
+  tone: StatusTone
+  terminal: boolean // closes the case (stamps resolvedAt) when reached
+}
+
+export interface CaseTypeDef {
+  key: string
+  label: string
+  statuses: CaseStatusDef[]
+  defaultStatus: string // status key a new case of this type starts in
+  builtIn: boolean
+  hasAmountTimeline?: boolean // built-in OTA dispute shows amount + timeline inputs
+}
+
+export const BUILTIN_CASE_TYPES: CaseTypeDef[] = [
+  {
+    key: 'review',
+    label: 'Review removal',
+    builtIn: true,
+    defaultStatus: 'disputing',
+    statuses: [
+      { key: 'disputing', label: 'Disputing', tone: 'active', terminal: false },
+      { key: 'removed', label: 'Removed', tone: 'success', terminal: true },
+      { key: 'notremoved', label: 'Not removed', tone: 'danger', terminal: true },
+    ],
+  },
+  {
+    key: 'disputa',
+    label: 'OTA dispute',
+    builtIn: true,
+    defaultStatus: 'open',
+    hasAmountTimeline: true,
+    statuses: [
+      { key: 'open', label: 'Open', tone: 'steel', terminal: false },
+      { key: 'won', label: 'Won', tone: 'success', terminal: true },
+      { key: 'lost', label: 'Lost', tone: 'danger', terminal: true },
+    ],
+  },
+]
+
+// Tailwind pill classes per status tone (MVR tokens).
+export const STATUS_TONE_CLASSES: Record<StatusTone, string> = {
+  neutral: 'bg-mvr-neutral text-muted-foreground',
+  active: 'bg-mvr-primary-light text-mvr-primary',
+  steel: 'bg-mvr-steel-light text-mvr-primary',
+  success: 'bg-mvr-success-light text-mvr-success',
+  danger: 'bg-mvr-danger-light text-mvr-danger',
+  warning: 'bg-mvr-warning-light text-mvr-warning',
+}
+
+export function findCaseType(defs: CaseTypeDef[], key: string): CaseTypeDef | undefined {
+  return defs.find((t) => t.key === key)
+}
+
+export function caseTypeLabelOf(defs: CaseTypeDef[], key: string): string {
+  return findCaseType(defs, key)?.label ?? key
+}
+
+export function statusesForType(defs: CaseTypeDef[], key: string): CaseStatusDef[] {
+  return findCaseType(defs, key)?.statuses ?? []
+}
+
+// Resolves a status to { label, pill classes }. Prefers the status within the
+// given type; falls back across all types (for the global status filter), then
+// to the raw key with a neutral tone.
+export function resolveStatusMeta(
+  defs: CaseTypeDef[],
+  typeKey: string | null,
+  statusKey: string
+): { label: string; cls: string } {
+  const inType = typeKey
+    ? findCaseType(defs, typeKey)?.statuses.find((s) => s.key === statusKey)
+    : undefined
+  const def = inType ?? defs.flatMap((t) => t.statuses).find((s) => s.key === statusKey)
+  return def
+    ? { label: def.label, cls: STATUS_TONE_CLASSES[def.tone] }
+    : { label: statusKey, cls: STATUS_TONE_CLASSES.neutral }
 }
 
 // ─── AI analysis I/O ───────────────────────────────────────────────────────────
@@ -89,7 +179,7 @@ export function successProb(
   caseType: DisputeCaseTypeT
 ): { label: string; value: number } | null {
   if (!probs) return null
-  for (const key of SUCCESS_PROB_ORDER[caseType]) {
+  for (const key of SUCCESS_PROB_ORDER[caseType] ?? []) {
     if (typeof probs[key] === 'number') {
       return { label: SUCCESS_PROB_LABELS[key] ?? key, value: probs[key] }
     }
@@ -194,6 +284,16 @@ export interface CaseListItem {
   updatedAt: string
 }
 
+// One entry in a case's activity log (History tab). Captures the status as of
+// this entry plus an optional free-text update, with author + timestamp.
+export interface CaseEventRecord {
+  id: string
+  status: DisputeCaseStatusT
+  note: string | null
+  createdByName: string | null
+  createdAt: string
+}
+
 export interface PolicyRecord {
   ota: DisputeOta
   section: PolicySection
@@ -242,6 +342,19 @@ export interface KnowledgeRecord {
   category: string | null
   sourceUrl: string | null
   enabled: boolean
+  // Custom section bucket (an OTA beyond the built-in 4). Mutually exclusive
+  // with `ota`: when sectionId is set, ota is null. Organizational only —
+  // custom-section entries are not injected into case analysis.
+  sectionId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// A user-created Knowledge section — a bucket for an OTA beyond the built-in 4.
+export interface KnowledgeSectionRecord {
+  id: string
+  label: string
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }

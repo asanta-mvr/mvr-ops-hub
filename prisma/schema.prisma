@@ -55,6 +55,9 @@ model User {
   disputeSkillsCreated          DisputeSkill[]             @relation("DisputeSkillsCreated")
   disputeKnowledgeCreated       DisputeKnowledge[]         @relation("DisputeKnowledgeCreated")
   disputeKnowledgeUpdated       DisputeKnowledge[]         @relation("DisputeKnowledgeUpdated")
+  disputeKnowledgeSections      DisputeKnowledgeSection[]  @relation("DisputeKnowledgeSectionsCreated")
+  disputeCaseEventsCreated      DisputeCaseEvent[]         @relation("DisputeCaseEventsCreated")
+  disputeCaseTypeDefsCreated    DisputeCaseTypeDef[]       @relation("DisputeCaseTypeDefsCreated")
 
   @@map("users")
 }
@@ -237,40 +240,65 @@ enum OwnerStatus {
   churned
 }
 
-enum OwnerType {
-  individual
-  company
-}
-
 model Owner {
-  id             String      @id
-  nickname       String
-  type           OwnerType   @default(individual)
-  category       String?
-  personality    String?
-  documentType   String?
-  documentNumber String?
-  phone          String?
-  address        String?     @db.Text
-  email          String?
-  otherEmail     String?
-  photoUrl       String?
-  linkedin       String?
-  age            Int?
-  nationality    String?
-  language       String      @default("en")
-  siteUser       String?
-  notes          String?     @db.Text
-  status         OwnerStatus @default(active)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  nickname           String // combined display name ("First Last"), kept for lists/search
+  firstName          String?
+  lastName           String?
+  type               String? // flexible tag (VIP, Normal, BIP, …)
+  category           String?
+  personality        String? // legacy free-text, retained
+  personalityScore   Int? // 0–100 slider: easygoing → high-maintenance
+  communicationScore Int? // 0–100 slider: low-touch → high-touch
+  documentType       String?
+  documentNumber     String?
+  phone              String?
+  address            String?     @db.Text // street line
+  city               String?
+  state              String?
+  postalCode         String?
+  country            String?
+  email              String?
+  otherEmail         String?
+  photoUrl           String?
+  linkedin           String?
+  age                Int? // legacy; superseded by dateOfBirth
+  dateOfBirth        DateTime?
+  nationality        String?
+  language           String      @default("en")
+  siteUser           String?
+  notes              String?     @db.Text
+  status             OwnerStatus @default(active)
+  inactivatedAt      DateTime? // set when status becomes inactive
+  driveFolderId      String? // Google Drive folder for this owner's personal docs
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
-  units       Unit[]
-  guestyOwner GuestyOwner?
-  contracts   OwnerContract[]
+  units           Unit[]
+  guestyOwners    GuestyOwner[]
+  contracts       OwnerContract[]
+  documents       OwnerDocument[]
+  alertPrefs      OwnerDocumentAlertPref[]
+  documentFolders DocumentFolder[]
+  fileAlerts      FileAlert[]
 
   @@index([status])
   @@map("owners")
+}
+
+// Reusable, user-extensible option lists for owner dropdowns (type, category,
+// language). New tags added from the form persist here so they appear next time.
+model OwnerFieldOption {
+  id        String   @id @default(cuid())
+  field     String // "type" | "category" | "language"
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([field, value])
+  @@index([field])
+  @@map("owner_field_options")
 }
 
 // Raw staging mirror of every owner pulled from Guesty. `raw` holds the
@@ -289,18 +317,22 @@ model GuestyOwner {
   pictureUrl       String?
   listingCount     Int?
   createdAtGuesty  DateTime?
-  ownerUniqueId    String?   @unique // confirmed FK to Owner.id
+  ownerUniqueId    String? // confirmed FK to Owner.id (many Guesty owners may map to one)
   suggestedOwnerId String? // auto-match candidate (not yet confirmed)
   mappedAt         DateTime?
   addressField9    String?
   raw              Json? // full Guesty owner payload (source of truth)
+  driveFolderId    String? // Drive subfolder for this legal owner's entity docs (W-9, banking)
   syncedAt         DateTime  @default(now())
 
   owner      Owner?            @relation(fields: [ownerUniqueId], references: [id])
   connection GuestyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  documents  OwnerDocument[]
+  units      Unit[]
 
   @@index([connectionId])
   @@index([suggestedOwnerId])
+  @@index([ownerUniqueId])
   @@map("guesty_owners")
 }
 
@@ -342,27 +374,34 @@ model Unit {
   hasBalcony     Boolean  @default(false)
   features       String[]
   driveFolderUrl String?
+  driveFolderId  String? // Google Drive folder for this unit's property docs
   status         String   @default("onboarding")
   score          Decimal? @db.Decimal(3, 1)
   photoQuality   String?
   notes          String?  @db.Text
   buildingId     String
   ownerUniqueId  String?
+  guestyOwnerId  String? // the legal owner (LLC) that holds this unit
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   building    Building             @relation(fields: [buildingId], references: [id])
   owner       Owner?               @relation(fields: [ownerUniqueId], references: [id])
-  listings    Listing[]
-  contracts   OwnerContract[]
-  inspections UnitInspection[]
-  onboarding  OnboardingChecklist?
-  tickets     SupportTicket[]
+  guestyOwner GuestyOwner?         @relation(fields: [guestyOwnerId], references: [id], onDelete: SetNull)
+  listings        Listing[]
+  contracts       OwnerContract[]
+  documents       OwnerDocument[]
+  inspections     UnitInspection[]
+  onboarding      OnboardingChecklist?
+  tickets         SupportTicket[]
+  documentFolders DocumentFolder[]
+  fileAlerts      FileAlert[]
 
   @@unique([buildingId, number])
   @@index([status])
   @@index([buildingId])
   @@index([ownerUniqueId])
+  @@index([guestyOwnerId])
   @@map("units")
 }
 
@@ -469,6 +508,210 @@ model OwnerUtility {
   contract OwnerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@map("owner_utilities")
+}
+
+// ─── OWNER DOCUMENTS & COMPLIANCE ALERTS ─────────────────────────────────────
+// Canonical document-tracking layer. A DocumentType (e.g. contract/w9/coi) is a
+// configurable catalog entry; an OwnerDocument is a concrete file that attaches
+// to EITHER an owner (owner-scoped, e.g. W-9) OR a unit (unit-scoped, e.g. COI,
+// Contract) and rolls up to the owner via unit.owner. Alerting is driven by a
+// global DocumentAlertRule per type, optionally overridden per owner via
+// OwnerDocumentAlertPref. DocumentReminderLog gives the daily cron idempotency.
+
+enum DocScope {
+  owner
+  legal_owner
+  unit
+}
+
+enum AlertChannel {
+  slack
+  email
+}
+
+// ─── SIMPLIFIED DOCUMENTS: named Drive folders + file-level renewal alerts ───
+// A DocumentFolder is a named Google Drive folder attached to an owner or unit.
+// An AlertType is a reusable, global renewal-alert definition (lead days + where
+// to notify). A FileAlert applies an AlertType to one Drive file with its expiry.
+// This supersedes the typed-document system (DocumentType/OwnerDocument/…), which
+// is left dormant to avoid a destructive migration.
+
+model DocumentFolder {
+  id            String   @id @default(cuid())
+  name          String // user-given label; shown as the section heading
+  driveFolderId String // extracted from the pasted folder URL
+  ownerId       String?
+  unitId        String?
+  createdAt     DateTime @default(now())
+
+  owner      Owner?      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  unit       Unit?       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  fileAlerts FileAlert[]
+
+  @@index([ownerId])
+  @@index([unitId])
+  @@map("document_folders")
+}
+
+model AlertType {
+  id             String   @id @default(cuid())
+  name           String // "Standard renewal (60/30/7)"
+  leadTimeDays   Int[] // reminder thresholds in days-before-expiry, e.g. [60, 30, 7]
+  sendHour       Int      @default(9) // hour-of-day (0–23, America/New_York) reminders send
+  notifyInternal Boolean  @default(false) // internal → Slack channel
+  slackChannel   String? // Slack channel human name (for display)
+  slackChannelId String? // Slack channel ID (used to actually send)
+  slackTemplate  String?  @db.Text // Slack message body; may contain {{variables}}
+  notifyOwner    Boolean  @default(false) // external → the owner's email
+  emailSubject   String? // email subject template
+  emailTemplate  String?  @db.Text // email body template; may contain {{variables}}
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  fileAlerts FileAlert[]
+
+  @@map("alert_types")
+}
+
+model FileAlert {
+  id             String   @id @default(cuid())
+  folderId       String // -> DocumentFolder the file lives in
+  driveFileId    String
+  fileName       String
+  expirationDate DateTime
+  alertTypeId    String
+  ownerId        String?
+  unitId         String?
+  createdAt      DateTime @default(now())
+
+  folder    DocumentFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  alertType AlertType      @relation(fields: [alertTypeId], references: [id])
+  owner     Owner?         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  unit      Unit?          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  sendLogs  AlertSendLog[]
+
+  @@index([expirationDate])
+  @@index([folderId])
+  @@map("file_alerts")
+}
+
+// Idempotency log for the scheduled renewal-alert sender: one row per
+// (file alert, channel, lead-day threshold) that has fired, so re-runs of the
+// hourly cron never double-send.
+model AlertSendLog {
+  id          String       @id @default(cuid())
+  fileAlertId String
+  channel     AlertChannel
+  leadDay     Int // which offset threshold fired
+  sentAt      DateTime     @default(now())
+  status      String // "sent" | "skipped" | "error"
+  detail      String?      @db.Text
+
+  fileAlert FileAlert @relation(fields: [fileAlertId], references: [id], onDelete: Cascade)
+
+  @@unique([fileAlertId, channel, leadDay])
+  @@index([fileAlertId])
+  @@map("alert_send_logs")
+}
+
+model DocumentType {
+  key            String   @id // "contract" | "w9" | "coi" | custom
+  label          String
+  scope          DocScope // where the document attaches
+  hasExpiry      Boolean  @default(false) // true → carries a renewal date (e.g. COI)
+  required       Boolean  @default(true) // drives the "missing" computation
+  sortOrder      Int      @default(0)
+  active         Boolean  @default(true)
+  namingTemplate String? // Drive file-naming pattern, e.g. "COI - {unit} - {issueDate}"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  documents OwnerDocument[]
+  alertRule DocumentAlertRule?
+
+  @@map("document_types")
+}
+
+model OwnerDocument {
+  id            String    @id @default(cuid())
+  typeKey       String
+  ownerId       String? // owner-scoped (personal: ID/passport)
+  guestyOwnerId String? // legal-owner-scoped (W-9, banking) — the mapped LLC
+  unitId        String? // unit-scoped (COI, Contract, HOA)
+  fileUrl       String? // Drive webViewLink or external URL (or legacy GCS path)
+  driveFileId   String? // Drive file id (for replace/delete); null for external links
+  issueDate     DateTime?
+  expireDate    DateTime? // null = no expiry (presence-only)
+  notes         String?   @db.Text
+  version       Int       @default(1)
+  isCurrent     Boolean   @default(true) // latest version drives compliance; older kept as history
+  label         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  type        DocumentType          @relation(fields: [typeKey], references: [key])
+  owner       Owner?                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  guestyOwner GuestyOwner?          @relation(fields: [guestyOwnerId], references: [id], onDelete: Cascade)
+  unit        Unit?                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  reminders   DocumentReminderLog[]
+
+  @@index([ownerId])
+  @@index([guestyOwnerId])
+  @@index([unitId])
+  @@index([typeKey])
+  @@index([expireDate])
+  @@index([typeKey, unitId])
+  @@map("owner_documents")
+}
+
+model DocumentAlertRule {
+  id                String       @id @default(cuid())
+  typeKey           String       @unique
+  enabled           Boolean      @default(true)
+  leadTimeDays      Int[] // internal reminder thresholds, e.g. [60, 30, 7]
+  notifyInternal    Boolean      @default(true)
+  internalChannel   AlertChannel @default(slack) // slack | email (admin choice)
+  internalTarget    String? // Slack channel id OR staff email
+  notifyOwner       Boolean      @default(false) // owner reminders are always email
+  ownerLeadTimeDays Int[] // owner reminder thresholds
+  updatedAt         DateTime     @updatedAt
+
+  type DocumentType @relation(fields: [typeKey], references: [key], onDelete: Cascade)
+
+  @@map("document_alert_rules")
+}
+
+model OwnerDocumentAlertPref {
+  id           String   @id @default(cuid())
+  ownerId      String
+  typeKey      String? // null = applies to all doc types for this owner
+  muted        Boolean  @default(false) // opt this owner out entirely
+  notifyOwner  Boolean? // override on/off (null = inherit)
+  leadTimeDays Int[] // override thresholds (empty = inherit)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, typeKey])
+  @@index([ownerId])
+  @@map("owner_document_alert_prefs")
+}
+
+model DocumentReminderLog {
+  id           String       @id @default(cuid())
+  documentId   String
+  channel      AlertChannel
+  audience     String // "owner" | "internal"
+  toAddress    String?
+  thresholdDay Int
+  status       String // sent | failed | skipped
+  sentAt       DateTime     @default(now())
+
+  document OwnerDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_reminder_logs")
 }
 
 // ─── ONBOARDING & INSPECTIONS ────────────────────────────────────────────────
@@ -741,22 +984,13 @@ enum DisputeCaseType {
   disputa // OTA economic dispute
 }
 
-enum DisputeCaseStatus {
-  // review-removal lifecycle (default: disputing)
-  disputing
-  removed
-  notremoved
-  // OTA-dispute lifecycle (default: open)
-  open
-  won
-  lost
-}
-
 model DisputeCase {
-  id       String            @id @default(cuid())
-  caseType DisputeCaseType
+  id       String    @id @default(cuid())
+  // 'review' | 'disputa' (built-ins) or a custom DisputeCaseTypeDef.key.
+  caseType String
   ota      OtaSource // constrained to airbnb|booking|vrbo|expedia in Zod
-  status   DisputeCaseStatus // default applied in the service layer per caseType
+  // Resolved against the case type's status stages (service layer enforces it).
+  status   String // default applied in the service layer per caseType
 
   title          String?
   guestName      String?
@@ -775,6 +1009,12 @@ model DisputeCase {
   // prompt and shown in the Tracker. Nullable — manual cases have none.
   reservationMeta Json?
 
+  // Frozen structured guest conversation (ConversationMessage[]) captured at
+  // create/dispute time. Makes the case a self-contained historical record so the
+  // Conversation tab reads from here instead of re-querying Guesty live (which
+  // could drift or be purged). Nullable — manual cases or fetch failures have none.
+  conversationSnapshot Json?
+
   outcomeNote  String?   @db.Text // learning note captured on resolve (RAG seed — loop deferred)
   resolvedAt   DateTime?
   resolvedById String?
@@ -790,12 +1030,50 @@ model DisputeCase {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  events DisputeCaseEvent[]
+
   @@index([status])
   @@index([caseType])
   @@index([ota])
   @@index([createdById])
   @@index([createdAt])
   @@map("dispute_cases")
+}
+
+// Append-only activity log for a DisputeCase: every status change and/or update
+// note logged from the case detail's History tab. Captures who did what and when
+// so the team can trace the case from the moment the issue arose.
+model DisputeCaseEvent {
+  id          String      @id @default(cuid())
+  caseId      String
+  case        DisputeCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  status      String // the case status as of this log entry (resolved per case type)
+  note        String?     @db.Text // the free-text "Update" captured with this entry
+  createdById String
+  createdBy   User        @relation("DisputeCaseEventsCreated", fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+
+  @@index([caseId, createdAt])
+  @@map("dispute_case_events")
+}
+
+// User-created case types beyond the two built-ins (review removal / OTA dispute).
+// Each carries an ordered list of status stages (CaseStatusDef[] in JSON: key,
+// label, tone, terminal) and the stage a new case starts in. Custom types reuse
+// the generic AI analysis; built-ins stay defined in code (lib/disputes/types.ts).
+model DisputeCaseTypeDef {
+  id            String   @id @default(cuid())
+  key           String   @unique // slug used as DisputeCase.caseType
+  label         String
+  statuses      Json // CaseStatusDef[]: [{ key, label, tone, terminal }]
+  defaultStatus String // status key a new case of this type starts in
+  sortOrder     Int      @default(0)
+  createdById   String
+  createdBy     User     @relation("DisputeCaseTypeDefsCreated", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("dispute_case_type_defs")
 }
 
 model PolicyContent {
@@ -822,16 +1100,16 @@ model PolicyContent {
 // here — the Agent tab's Memory section is a UI placeholder for a later pass.
 
 model DisputeAgentConfig {
-  id            String   @id @default(cuid())
-  key           String   @unique @default("default") // singleton anchor
-  agentName     String   @default("Dispute Adjudicator")
-  identityPrompt String  @db.Text
-  behaviorPrompt String  @db.Text @default("") // "Behavior & Formatting" procedural rules
-  guardrails    String[]
-  updatedById   String?
-  updatedBy     User?    @relation("DisputeAgentConfigUpdated", fields: [updatedById], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  key            String   @unique @default("default") // singleton anchor
+  agentName      String   @default("Dispute Adjudicator")
+  identityPrompt String   @db.Text
+  behaviorPrompt String   @default("") @db.Text // "Behavior & Formatting" procedural rules
+  guardrails     String[]
+  updatedById    String?
+  updatedBy      User?    @relation("DisputeAgentConfigUpdated", fields: [updatedById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@map("dispute_agent_config")
 }
@@ -840,7 +1118,7 @@ model DisputeAgentVersion {
   id             String   @id @default(cuid())
   agentName      String
   identityPrompt String   @db.Text
-  behaviorPrompt String   @db.Text @default("")
+  behaviorPrompt String   @default("") @db.Text
   guardrails     String[]
   note           String? // e.g. "restored from <id>"
   createdById    String
@@ -871,24 +1149,47 @@ model DisputeSkill {
 // Replaces the old PolicyContent CMS — these entries are matched by scope and
 // injected into the analyze system prompt. PolicyContent is now deprecated.
 model DisputeKnowledge {
-  id          String           @id @default(cuid())
+  id          String                   @id @default(cuid())
   title       String
-  body        String           @db.Text
+  body        String                   @db.Text
   ota         OtaSource? // null = any OTA (constrained to the 4 in Zod)
   caseType    DisputeCaseType? // null = any case type
   category    String? // optional label, e.g. "Review policy"
   sourceUrl   String?
-  enabled     Boolean          @default(true)
+  enabled     Boolean                  @default(true)
+  // Optional custom section (a user-created OTA bucket beyond the built-in 4).
+  // When set, `ota` is null. Custom-section entries are organizational only —
+  // they are NOT injected into case analysis (see getRelevantKnowledge).
+  sectionId   String?
+  section     DisputeKnowledgeSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   createdById String
-  createdBy   User             @relation("DisputeKnowledgeCreated", fields: [createdById], references: [id])
+  createdBy   User                     @relation("DisputeKnowledgeCreated", fields: [createdById], references: [id])
   updatedById String?
-  updatedBy   User?            @relation("DisputeKnowledgeUpdated", fields: [updatedById], references: [id])
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  updatedBy   User?                    @relation("DisputeKnowledgeUpdated", fields: [updatedById], references: [id])
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
 
   @@index([enabled])
   @@index([ota, caseType])
+  @@index([sectionId])
   @@map("dispute_knowledge")
+}
+
+// User-created Knowledge sections — buckets for OTAs beyond the built-in 4
+// (Airbnb / Booking / Vrbo / Expedia). Organizational only: entries filed under
+// a custom section are stored/displayed in the Knowledge tab but are not fed
+// into case analysis (cases remain locked to the 4 built-in OTAs).
+model DisputeKnowledgeSection {
+  id          String             @id @default(cuid())
+  label       String
+  sortOrder   Int                @default(0)
+  createdById String
+  createdBy   User               @relation("DisputeKnowledgeSectionsCreated", fields: [createdById], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  entries     DisputeKnowledge[]
+
+  @@map("dispute_knowledge_sections")
 }
 
 // ─── USER MANAGEMENT (RBAC + INVITATIONS) ────────────────────────────────────
@@ -1023,8 +1324,28 @@ model GuestyConnection {
 
   listings GuestyListing[]
   owners   GuestyOwner[]
+  syncLogs GuestySyncLog[]
 
   @@map("guesty_connections")
+}
+
+// Append-only activity log for Guesty operations (listing refresh, owner refresh,
+// test connection). Records success and failure so the integration UI can show a
+// recent-activity panel and, crucially, the reason when an operation fails.
+model GuestySyncLog {
+  id           String   @id @default(cuid())
+  connectionId String?
+  operation    String // "listing_sync" | "owner_sync" | "test_connection"
+  status       String // "success" | "error"
+  message      String?  @db.Text // error reason, or a short success summary
+  itemCount    Int? // items processed on success
+  createdAt    DateTime @default(now())
+
+  connection GuestyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([connectionId])
+  @@map("guesty_sync_logs")
 }
 
 // Raw staging mirror of every listing pulled from Guesty. `raw` holds the
@@ -1059,4 +1380,69 @@ model GuestyListing {
   @@index([unitId])
   @@index([promoted])
   @@map("guesty_listings")
+}
+
+// ─── SLACK INTEGRATION ───────────────────────────────────────────────────────
+// One row = one Slack workspace connection. The UI treats this as a singleton
+// (one company-wide bot), but the table shape leaves room for more. `botToken`
+// is AES-256-GCM ciphertext (see lib/auth/crypto.ts), prefixed `enc:`/`raw:`
+// exactly like the cached Guesty token. The token may instead be supplied via
+// the SLACK_BOT_TOKEN env var, in which case the DB column is left blank and the
+// env value wins (env-managed mode).
+model SlackConnection {
+  id            String    @id @default(cuid())
+  name          String // display label, e.g. "MVR Workspace"
+  botToken      String // AES-256-GCM ciphertext (enc:…|raw:…); blank when env-managed
+  teamId        String? // Slack team/workspace id (from auth.test)
+  teamName      String? // Slack workspace name (from auth.test)
+  status        String    @default("disconnected") // disconnected | connected | error
+  lastError     String?   @db.Text
+  lastSyncAt    DateTime? // last channel refresh
+  lastSyncCount Int? // channels pulled on the last refresh
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  channels SlackChannel[]
+  syncLogs SlackSyncLog[]
+
+  @@map("slack_connections")
+}
+
+// Cached mirror of the workspace's channels, refreshed from conversations.list.
+// Powers the channels table and the channel picker used by notification routing.
+model SlackChannel {
+  id             String   @id @default(cuid())
+  slackChannelId String   @unique // Slack channel id, e.g. "C098R8ZMZTL"
+  connectionId   String?
+  name           String // channel name without the leading '#'
+  isPrivate      Boolean  @default(false)
+  isArchived     Boolean  @default(false)
+  isMember       Boolean  @default(false) // whether the bot is a member
+  numMembers     Int?
+  syncedAt       DateTime @default(now())
+
+  connection SlackConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId])
+  @@index([name])
+  @@map("slack_channels")
+}
+
+// Append-only activity log for Slack operations (channel refresh, test
+// connection, test message). Mirrors GuestySyncLog so the connection UI can
+// show a recent-activity panel with failure reasons.
+model SlackSyncLog {
+  id           String   @id @default(cuid())
+  connectionId String?
+  operation    String // "channel_sync" | "test_connection" | "test_message"
+  status       String // "success" | "error"
+  message      String?  @db.Text // error reason, or a short success summary
+  itemCount    Int? // items processed on success
+  createdAt    DateTime @default(now())
+
+  connection SlackConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([connectionId])
+  @@map("slack_sync_logs")
 }

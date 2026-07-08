@@ -5,17 +5,27 @@ import { ChevronDown, ChevronRight, Loader2, Sparkles, Star, User, X } from 'luc
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  DISPUTA_STATUSES,
   DISPUTE_OTA_LABELS,
   DISPUTE_OTAS,
-  REVIEW_STATUSES,
+  caseTypeLabelOf,
+  resolveStatusMeta,
+  statusesForType,
   successProb,
   type CaseListItem,
+  type CaseStatusDef,
+  type CaseTypeDef,
   type DisputeCaseStatusT,
   type DisputeCaseTypeT,
   type DisputeOta,
 } from '@/lib/disputes/types'
-import { useCaseConversation, useCases, useResolveCase, type CaseFilters } from './useDisputeQueries'
+import {
+  useAppendCaseLog,
+  useCaseConversation,
+  useCaseLog,
+  useCaseTypes,
+  useCases,
+  type CaseFilters,
+} from './useDisputeQueries'
 import { ResultView } from './ResultView'
 import { ConversationInbox } from './ConversationInbox'
 import { OtaIcon } from './OtaIcon'
@@ -40,17 +50,16 @@ function SuccessPill({ caseItem, withLabel }: { caseItem: CaseListItem; withLabe
   )
 }
 
-const STATUS_META: Record<DisputeCaseStatusT, { label: string; cls: string }> = {
-  disputing: { label: 'Disputing', cls: 'bg-mvr-primary-light text-mvr-primary' },
-  removed: { label: 'Removed', cls: 'bg-mvr-success-light text-mvr-success' },
-  notremoved: { label: 'Not removed', cls: 'bg-mvr-danger-light text-mvr-danger' },
-  open: { label: 'Open', cls: 'bg-mvr-steel-light text-mvr-primary' },
-  won: { label: 'Won', cls: 'bg-mvr-success-light text-mvr-success' },
-  lost: { label: 'Lost', cls: 'bg-mvr-danger-light text-mvr-danger' },
-}
-
-function StatusBadge({ status }: { status: DisputeCaseStatusT }) {
-  const meta = STATUS_META[status]
+function StatusBadge({
+  types,
+  typeKey,
+  status,
+}: {
+  types: CaseTypeDef[]
+  typeKey: string | null
+  status: DisputeCaseStatusT
+}) {
+  const meta = resolveStatusMeta(types, typeKey, status)
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span>
 }
 
@@ -72,9 +81,11 @@ function FilterChip({ active, label, onClick }: { active: boolean; label: string
 
 interface Props {
   initialCases: CaseListItem[]
+  initialCaseTypes: CaseTypeDef[]
 }
 
-export function TrackerTab({ initialCases }: Props) {
+export function TrackerTab({ initialCases, initialCaseTypes }: Props) {
+  const { data: caseTypes = [] } = useCaseTypes(initialCaseTypes)
   const [statusFilter, setStatusFilter] = useState<DisputeCaseStatusT[]>([])
   const [otaFilter, setOtaFilter] = useState<DisputeOta[]>([])
   const [typeFilter, setTypeFilter] = useState<DisputeCaseTypeT[]>([])
@@ -88,6 +99,13 @@ export function TrackerTab({ initialCases }: Props) {
   const noFilters = !statusFilter.length && !otaFilter.length && !typeFilter.length
   const { data: cases = [], isLoading } = useCases(filters, noFilters ? initialCases : undefined)
 
+  // Status filter options = the union of every type's stages (deduped by key).
+  const allStatuses = useMemo(() => {
+    const seen = new Map<string, CaseStatusDef>()
+    for (const t of caseTypes) for (const s of t.statuses) if (!seen.has(s.key)) seen.set(s.key, s)
+    return Array.from(seen.values())
+  }, [caseTypes])
+
   function toggle<T>(arr: T[], v: T, set: (next: T[]) => void) {
     set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
   }
@@ -97,15 +115,16 @@ export function TrackerTab({ initialCases }: Props) {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#E0DBD4] bg-white p-3 shadow-card">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Type</span>
-        <FilterChip active={typeFilter.includes('review')} label="Review" onClick={() => toggle(typeFilter, 'review', setTypeFilter)} />
-        <FilterChip active={typeFilter.includes('disputa')} label="Dispute" onClick={() => toggle(typeFilter, 'disputa', setTypeFilter)} />
+        {caseTypes.map((t) => (
+          <FilterChip key={t.key} active={typeFilter.includes(t.key)} label={t.label} onClick={() => toggle(typeFilter, t.key, setTypeFilter)} />
+        ))}
         <span className="ml-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">OTA</span>
         {DISPUTE_OTAS.map((o) => (
           <FilterChip key={o} active={otaFilter.includes(o)} label={DISPUTE_OTA_LABELS[o]} onClick={() => toggle(otaFilter, o, setOtaFilter)} />
         ))}
         <span className="ml-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</span>
-        {([...REVIEW_STATUSES, ...DISPUTA_STATUSES] as DisputeCaseStatusT[]).map((s) => (
-          <FilterChip key={s} active={statusFilter.includes(s)} label={STATUS_META[s].label} onClick={() => toggle(statusFilter, s, setStatusFilter)} />
+        {allStatuses.map((s) => (
+          <FilterChip key={s.key} active={statusFilter.includes(s.key)} label={s.label} onClick={() => toggle(statusFilter, s.key, setStatusFilter)} />
         ))}
       </div>
 
@@ -147,7 +166,7 @@ export function TrackerTab({ initialCases }: Props) {
                       <div className="text-xs text-muted-foreground">Ref {c.reservationRef}</div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-mvr-olive">{c.caseType === 'review' ? 'Review' : 'Dispute'}</td>
+                  <td className="px-4 py-3 text-mvr-olive">{caseTypeLabelOf(caseTypes, c.caseType)}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1.5 text-mvr-olive">
                       <OtaIcon ota={c.ota} className="h-4 w-4" />
@@ -155,7 +174,7 @@ export function TrackerTab({ initialCases }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-3"><SuccessPill caseItem={c} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
+                  <td className="px-4 py-3"><StatusBadge types={caseTypes} typeKey={c.caseType} status={c.status} /></td>
                   <td className="px-4 py-3 text-muted-foreground">{c.createdByName ?? '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString()}</td>
                 </tr>
@@ -166,7 +185,13 @@ export function TrackerTab({ initialCases }: Props) {
       </div>
 
       {selected ? (
-        <CaseDetail caseItem={selected} onClose={() => setSelected(null)} onResolved={(c) => setSelected(c)} />
+        <CaseDetail
+          key={selected.id}
+          caseItem={selected}
+          types={caseTypes}
+          onClose={() => setSelected(null)}
+          onResolved={(c) => setSelected(c)}
+        />
       ) : null}
     </div>
   )
@@ -205,31 +230,49 @@ function ReservationSummary({ caseItem }: { caseItem: CaseListItem }) {
   )
 }
 
-// ─── Slide-over case detail + resolve (tabbed: Conversation / Review / Analysis) ─
+// ─── Slide-over case detail (tabbed: Analysis / Conversation / Review) ─────────
+// The header, booking summary, and the status control + activity log all stay
+// fixed; only the active tab's content scrolls. The status card is the single
+// place to change status and log updates; its activity log is collapsible.
 function CaseDetail({
   caseItem,
+  types,
   onClose,
   onResolved,
 }: {
   caseItem: CaseListItem
+  types: CaseTypeDef[]
   onClose: () => void
   onResolved: (c: CaseListItem) => void
 }) {
-  const resolve = useResolveCase()
   const conversation = useCaseConversation(caseItem.id)
-  const validStatuses = caseItem.caseType === 'review' ? REVIEW_STATUSES : DISPUTA_STATUSES
+  const log = useCaseLog(caseItem.id)
+  const append = useAppendCaseLog()
+  const validStatuses = statusesForType(types, caseItem.caseType)
+  const isReview = caseItem.caseType === 'review'
   const [status, setStatus] = useState<DisputeCaseStatusT>(caseItem.status)
-  const [outcomeNote, setOutcomeNote] = useState(caseItem.outcomeNote ?? '')
-  const [showInput, setShowInput] = useState(false)
+  const [note, setNote] = useState('')
+  const [logOpen, setLogOpen] = useState(false)
 
   const meta = caseItem.reservationMeta
-  // Review-type cases store the review in inputText; dispute cases keep it in reservationMeta.
-  const reviewText = meta?.reviewText ?? (caseItem.caseType === 'review' ? caseItem.inputText : null)
+  // Review tab surfaces ONLY the dedicated review snapshot — never fall back to
+  // inputText, which can hold the conversation/support chat. No review → nothing.
+  const reviewText = meta?.reviewText ?? null
   const reviewRating = typeof meta?.reviewRating === 'number' ? meta.reviewRating : null
 
-  async function handleSave() {
-    const updated = await resolve.mutateAsync({ id: caseItem.id, status, outcomeNote: outcomeNote || undefined })
-    onResolved(updated)
+  const statusChanged = status !== caseItem.status
+  const canSave = statusChanged || note.trim().length > 0
+  const logCount = (log.data ?? []).length
+
+  async function handleSaveUpdate() {
+    if (!canSave) return
+    const res = await append.mutateAsync({
+      id: caseItem.id,
+      status,
+      note: note.trim() || undefined,
+    })
+    onResolved(res.case)
+    setNote('')
   }
 
   return (
@@ -238,14 +281,14 @@ function CaseDetail({
         className="flex h-full w-full max-w-2xl flex-col bg-mvr-cream shadow-panel"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-[#E0DBD4] bg-white px-6 py-4">
+        {/* Header (fixed) */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#E0DBD4] bg-white px-6 py-4">
           <div className="min-w-0">
             <h3 className="truncate font-display text-xl text-mvr-primary">
               {caseItem.title || caseItem.guestName || 'Dispute case'}
             </h3>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span>{caseItem.caseType === 'review' ? 'Review removal' : 'OTA dispute'}</span>
+              <span>{caseTypeLabelOf(types, caseItem.caseType)}</span>
               <span className="inline-flex items-center gap-1"><OtaIcon ota={caseItem.ota} className="h-3.5 w-3.5" />{DISPUTE_OTA_LABELS[caseItem.ota]}</span>
               {caseItem.createdByName ? <span className="inline-flex items-center gap-1"><User className="h-3 w-3" />{caseItem.createdByName}</span> : null}
               <span>{new Date(caseItem.createdAt).toLocaleDateString()}</span>
@@ -253,25 +296,109 @@ function CaseDetail({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <SuccessPill caseItem={caseItem} withLabel />
-            <StatusBadge status={caseItem.status} />
+            <StatusBadge types={types} typeKey={caseItem.caseType} status={caseItem.status} />
             <button type="button" onClick={onClose} className="rounded-lg p-1 text-mvr-steel hover:bg-mvr-neutral" aria-label="Close">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {meta ? <div className="mb-4"><ReservationSummary caseItem={caseItem} /></div> : null}
+        {/* Fixed context: booking summary + status control + collapsible activity log */}
+        <div className="shrink-0 space-y-3 border-b border-[#E0DBD4] px-6 py-3">
+          {meta ? <ReservationSummary caseItem={caseItem} /> : null}
 
-          <Tabs defaultValue="conversation" className="!flex-col w-full">
-            <TabsList variant="line" className="mb-4 w-full justify-start border-b border-[#E0DBD4]">
-              <TabsTrigger value="conversation" className="gap-1.5 px-3 text-sm">Conversation</TabsTrigger>
-              <TabsTrigger value="review" className="gap-1.5 px-3 text-sm">Review</TabsTrigger>
-              <TabsTrigger value="analysis" className="gap-1.5 px-3 text-sm">
-                <Sparkles className="h-3.5 w-3.5" /> Analysis
-              </TabsTrigger>
-            </TabsList>
+          <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</label>
+              <div className="flex flex-wrap gap-2">
+                {validStatuses.map((s) => (
+                  <FilterChip key={s.key} active={status === s.key} label={s.label} onClick={() => setStatus(s.key)} />
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Update
+              </label>
+              <textarea
+                className="min-h-[72px] w-full resize-y rounded-lg border border-[#E0DBD4] bg-white px-3 py-2 text-sm text-mvr-olive focus:border-mvr-primary focus:outline-none focus:ring-2 focus:ring-mvr-primary/20"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Log what happened — what you did, the OTA's response, the next step…"
+              />
+            </div>
+            <Button onClick={handleSaveUpdate} disabled={append.isPending || !canSave}>
+              {append.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save update
+            </Button>
+            {append.isError ? <p className="text-sm text-mvr-danger">{(append.error as Error).message}</p> : null}
+
+            {/* Activity log — collapsible (newest first) */}
+            <div className="border-t border-[#E0DBD4] pt-3">
+              <button
+                type="button"
+                onClick={() => setLogOpen((v) => !v)}
+                className="flex w-full items-center gap-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-mvr-primary"
+              >
+                {logOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                Activity log{logCount ? ` (${logCount})` : ''}
+              </button>
+              {logOpen ? (
+                <div className="mt-2 max-h-60 space-y-2 overflow-y-auto pr-1">
+                  {log.isLoading ? (
+                    <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading history…
+                    </div>
+                  ) : log.isError ? (
+                    <p className="text-sm text-mvr-danger">Could not load the activity log.</p>
+                  ) : logCount === 0 ? (
+                    <p className="rounded-lg border border-dashed border-[#E0DBD4] bg-mvr-cream/50 p-3 text-center text-xs text-muted-foreground">
+                      No updates logged yet. Save a status change or note above to start the history.
+                    </p>
+                  ) : (
+                    <ol className="space-y-2">
+                      {(log.data ?? []).map((ev) => (
+                        <li key={ev.id} className="rounded-lg border border-[#E0DBD4] bg-mvr-cream/40 p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <StatusBadge types={types} typeKey={caseItem.caseType} status={ev.status} />
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(ev.createdAt).toLocaleString()}
+                              {ev.createdByName ? ` · ${ev.createdByName}` : ''}
+                            </span>
+                          </div>
+                          {ev.note ? (
+                            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-mvr-olive">{ev.note}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs — bar fixed, only the panel below scrolls */}
+        <Tabs defaultValue="analysis" className="flex min-h-0 flex-1 flex-col gap-0">
+          <TabsList variant="line" className="shrink-0 w-full justify-start border-b border-[#E0DBD4] px-6">
+            <TabsTrigger value="analysis" className="gap-1.5 px-3 text-sm">
+              <Sparkles className="h-3.5 w-3.5" /> Analysis
+            </TabsTrigger>
+            <TabsTrigger value="conversation" className="gap-1.5 px-3 text-sm">Conversation</TabsTrigger>
+            {isReview ? <TabsTrigger value="review" className="gap-1.5 px-3 text-sm">Review</TabsTrigger> : null}
+          </TabsList>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {/* Analysis — AI result only (no % bar, no raw input) */}
+            <TabsContent value="analysis">
+              <ResultView
+                probs={caseItem.probs}
+                resultText={caseItem.resultText}
+                caseType={caseItem.caseType}
+                showProbs={false}
+              />
+            </TabsContent>
 
             {/* Conversation — inbox */}
             <TabsContent value="conversation">
@@ -284,81 +411,28 @@ function CaseDetail({
               />
             </TabsContent>
 
-            {/* Review — overview */}
-            <TabsContent value="review">
-              {reviewText || reviewRating != null ? (
-                <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
-                  {reviewRating != null ? (
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Guest rating</span>
-                      <RatingDisplay rating={reviewRating} />
-                    </div>
-                  ) : null}
-                  {reviewText ? (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-mvr-olive">{reviewText}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No review text was captured.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#E0DBD4] bg-mvr-cream/50 p-8 text-center text-sm text-muted-foreground">
-                  <Star className="h-7 w-7 text-mvr-steel" />
-                  No review is linked to this case.
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Analysis — resolve + AI result */}
-            <TabsContent value="analysis" className="space-y-4">
-              <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</label>
-                  <div className="flex flex-wrap gap-2">
-                    {validStatuses.map((s) => (
-                      <FilterChip key={s} active={status === s} label={STATUS_META[s].label} onClick={() => setStatus(s)} />
-                    ))}
+            {/* Review — review-type cases only; the actual review, or nothing */}
+            {isReview ? (
+              <TabsContent value="review">
+                {reviewText || reviewRating != null ? (
+                  <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
+                    {reviewRating != null ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Guest rating</span>
+                        <RatingDisplay rating={reviewRating} />
+                      </div>
+                    ) : null}
+                    {reviewText ? (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-mvr-olive">{reviewText}</p>
+                    ) : null}
                   </div>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Outcome note (what worked / didn&apos;t)
-                  </label>
-                  <textarea
-                    className="min-h-[80px] w-full resize-y rounded-lg border border-[#E0DBD4] bg-white px-3 py-2 text-sm text-mvr-olive focus:border-mvr-primary focus:outline-none focus:ring-2 focus:ring-mvr-primary/20"
-                    value={outcomeNote}
-                    onChange={(e) => setOutcomeNote(e.target.value)}
-                    placeholder="e.g. The extortion argument worked. Key evidence: screenshot of the threatening message."
-                  />
-                </div>
-                <Button onClick={handleSave} disabled={resolve.isPending}>
-                  {resolve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Save outcome
-                </Button>
-                {resolve.isError ? <p className="text-sm text-mvr-danger">{(resolve.error as Error).message}</p> : null}
-              </div>
-
-              {/* Analyzed input (collapsible — the raw text the AI processed) */}
-              <div className="rounded-xl border border-[#E0DBD4] bg-white shadow-card">
-                <button
-                  type="button"
-                  onClick={() => setShowInput((v) => !v)}
-                  className="flex w-full items-center gap-1.5 px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                >
-                  {showInput ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  Analyzed input
-                </button>
-                {showInput ? (
-                  <div className="border-t border-[#E0DBD4] px-4 py-3">
-                    <p className="max-h-72 overflow-auto whitespace-pre-wrap text-sm text-mvr-olive">{caseItem.inputText}</p>
-                    {caseItem.monto ? <p className="mt-2 text-sm text-mvr-olive"><span className="font-medium">Amount:</span> {caseItem.monto}</p> : null}
-                  </div>
-                ) : null}
-              </div>
-
-              <ResultView probs={caseItem.probs} resultText={caseItem.resultText} caseType={caseItem.caseType} />
-            </TabsContent>
-          </Tabs>
-        </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No review text was captured for this case.</p>
+                )}
+              </TabsContent>
+            ) : null}
+          </div>
+        </Tabs>
       </div>
     </div>
   )

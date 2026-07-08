@@ -12,6 +12,7 @@ import {
   Home,
   LayoutDashboard,
   Mail,
+  MessagesSquare,
   Plug,
   Settings,
   ShieldAlert,
@@ -83,6 +84,7 @@ export const NAV_CONFIG: NavItem[] = [
     children: [
       { label: 'Overview', href: '/integrations',        icon: Plug,      resource: 'integrations' },
       { label: 'Guesty',   href: '/integrations/guesty',  icon: Building2, resource: 'integrations' },
+      { label: 'Slack',    href: '/integrations/slack',   icon: MessagesSquare, resource: 'integrations' },
     ],
   },
   {

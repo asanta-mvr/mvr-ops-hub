@@ -1,12 +1,15 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { OwnerForm } from '@/components/modules/data-master/OwnerForm'
+import { EditOwnerModal } from '@/components/modules/data-master/EditOwnerModal'
 import {
-  Pencil, Trash2, Search, Plus, Building2, X,
+  Pencil, Search, Plus, Building2, X,
   ChevronLeft, ChevronRight, User, Mail, Phone,
-  MapPin, Globe, Link2, FileText, Star, ExternalLink,
+  MapPin, Globe, Link2, Star, ExternalLink,
+  Smile, MessageCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -23,7 +26,7 @@ export interface OwnerUnit {
 export interface OwnerFull {
   id:       string
   nickname:       string
-  type:           'individual' | 'company'
+  type:           string | null
   status:         'active' | 'inactive' | 'churned'
   email:          string | null
   otherEmail:     string | null
@@ -37,10 +40,14 @@ export interface OwnerFull {
   siteUser:       string | null
   category:       string | null
   personality:    string | null
+  personalityScore:   number | null
+  communicationScore: number | null
   documentType:   string | null
   documentNumber: string | null
   notes:          string | null
   unitCount:      number
+  guestyOwnerCount: number
+  guestyAccounts: { guestyId: string; fullName: string | null }[]
   units:          OwnerUnit[]
 }
 
@@ -54,7 +61,7 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 const STATUS_STYLES: Record<string, string> = {
   active:   'bg-mvr-success-light text-mvr-success',
-  inactive: 'bg-mvr-neutral text-muted-foreground',
+  inactive: 'bg-mvr-danger-light text-mvr-danger',
   churned:  'bg-mvr-danger-light text-mvr-danger',
 }
 
@@ -81,10 +88,10 @@ interface PanelProps {
   onClose: () => void
   onPrev:  () => void
   onNext:  () => void
-  onDelete:(id: string, name: string) => void
+  onEdit:  (id: string) => void
 }
 
-function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDelete }: PanelProps) {
+function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onEdit }: PanelProps) {
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border shadow-panel overflow-hidden">
 
@@ -97,6 +104,13 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
         >
           <X className="w-4 h-4" />
         </button>
+
+        {/* Category tag — top left */}
+        {owner.category && (
+          <span className="absolute top-3 left-3 inline-flex items-center rounded-full bg-mvr-sand px-2 py-0.5 text-[10px] font-semibold text-mvr-olive">
+            {owner.category}
+          </span>
+        )}
 
         {/* Centered avatar + name */}
         <div className="flex flex-col items-center text-center gap-3 pt-2">
@@ -118,25 +132,57 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
             <h3 className="text-white font-bold text-lg leading-tight">
               {owner.nickname}
             </h3>
-            <p className="text-white/50 text-xs font-mono mt-1">{owner.id}</p>
+            {owner.documentNumber && (
+              <p className="text-white/50 text-xs mt-1">
+                {owner.documentType ? `${owner.documentType} · ` : ''}{owner.documentNumber}
+              </p>
+            )}
+            <div className="mt-2 flex justify-center">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[owner.status] ?? ''}`}>
+                {owner.status}
+              </span>
+            </div>
           </div>
 
           {/* Badges row */}
           <div className="flex items-center justify-center gap-2 flex-wrap">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[owner.status] ?? ''}`}>
-              {owner.status}
-            </span>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white capitalize">
-              {owner.type}
-            </span>
+            {owner.type && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white capitalize">
+                {owner.type}
+              </span>
+            )}
             {owner.unitCount > 0 && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
                 <Building2 className="w-3 h-3" />
                 {owner.unitCount} unit{owner.unitCount !== 1 ? 's' : ''}
               </span>
             )}
+            {owner.guestyOwnerCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
+                <Link2 className="w-3 h-3" />
+                {owner.guestyOwnerCount} Guesty
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Personality / communication scores — bottom left */}
+        {(owner.personalityScore != null || owner.communicationScore != null) && (
+          <div className="absolute bottom-3 left-3 flex items-center gap-3 text-white/70">
+            {owner.personalityScore != null && (
+              <span className="inline-flex items-center gap-1 text-xs" title="Personality">
+                <Smile className="w-3.5 h-3.5" />
+                {owner.personalityScore}
+              </span>
+            )}
+            {owner.communicationScore != null && (
+              <span className="inline-flex items-center gap-1 text-xs" title="Communication style">
+                <MessageCircle className="w-3.5 h-3.5" />
+                {owner.communicationScore}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Nav bar ── */}
@@ -168,13 +214,13 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
             <ExternalLink className="w-3.5 h-3.5" />
             Full profile
           </Link>
-          <Link
-            href={`/data-master/owners/${owner.id}/edit`}
+          <button
+            onClick={() => onEdit(owner.id)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-mvr-primary text-white rounded-lg hover:bg-mvr-primary/90 transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
             Edit
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -257,25 +303,6 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
           </section>
         )}
 
-        {/* Documents */}
-        {(owner.documentType || owner.documentNumber) && (
-          <section className="px-4 py-4 border-b border-[#E0DBD4]">
-            <h4 className="text-xs font-semibold text-mvr-primary uppercase tracking-wide mb-3">Documents</h4>
-            <div className="space-y-2.5">
-              {owner.documentType && (
-                <InfoRow icon={FileText} label="Type">
-                  <p className="text-sm">{owner.documentType}</p>
-                </InfoRow>
-              )}
-              {owner.documentNumber && (
-                <InfoRow icon={FileText} label="Number">
-                  <p className="text-sm font-mono">{owner.documentNumber}</p>
-                </InfoRow>
-              )}
-            </div>
-          </section>
-        )}
-
         {/* Notes */}
         {owner.notes && (
           <section className="px-4 py-4 border-b border-[#E0DBD4]">
@@ -318,23 +345,30 @@ function OwnerDetailPanel({ owner, index, total, onClose, onPrev, onNext, onDele
           </section>
         )}
 
+        {/* Guesty accounts mapped to this owner */}
+        {owner.guestyAccounts.length > 0 && (
+          <section className="px-4 py-4 border-t border-[#E0DBD4]">
+            <h4 className="text-xs font-semibold text-mvr-primary uppercase tracking-wide mb-3 flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5" />
+              Guesty Accounts ({owner.guestyAccounts.length})
+            </h4>
+            <div className="space-y-1.5">
+              {owner.guestyAccounts.map(g => (
+                <div key={g.guestyId} className="px-3 py-2 rounded-lg bg-mvr-neutral/40">
+                  <span className="text-sm text-foreground">{g.fullName || 'Unnamed owner'}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Empty state */}
-        {!owner.phone && !owner.email && !owner.nationality && !owner.notes && owner.units.length === 0 && (
+        {!owner.phone && !owner.email && !owner.nationality && !owner.notes && owner.units.length === 0 && owner.guestyAccounts.length === 0 && (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground italic">
             No additional details recorded for this owner.
           </div>
         )}
 
-        {/* Delete */}
-        <div className="px-4 py-4 border-t border-[#E0DBD4]">
-          <button
-            onClick={() => onDelete(owner.id, owner.nickname)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-mvr-danger hover:bg-mvr-danger-light rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Mark as churned
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -366,7 +400,16 @@ export function OwnersTableView({ owners }: Props) {
   const [statusFilter,  setStatusFilter]  = useState<string>('')
   const [activeLetter,  setActiveLetter]  = useState<string>('All')
   const [selectedId,    setSelectedId]    = useState<string | null>(null)
-  const [_deleting,     setDeleting]      = useState<string | null>(null)
+  const [showNew,       setShowNew]       = useState(false)
+  const [editId,        setEditId]        = useState<string | null>(null)
+
+  // Close the "New Owner" modal on Escape.
+  useEffect(() => {
+    if (!showNew) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowNew(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showNew])
 
   // Letters that have at least one owner
   const occupiedLetters = useMemo(() => {
@@ -424,22 +467,6 @@ export function OwnersTableView({ owners }: Props) {
     setSearch('')
   }
 
-  async function handleDelete(id: string, nickname: string) {
-    if (!confirm(`Mark "${nickname}" as churned? This will soft-delete the owner.`)) return
-    setDeleting(id)
-    try {
-      const res = await fetch(`/api/v1/owners/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        if (selectedId === id) setSelectedId(null)
-        router.refresh()
-      } else {
-        alert('Failed to delete owner.')
-      }
-    } finally {
-      setDeleting(null)
-    }
-  }
-
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -462,15 +489,15 @@ export function OwnersTableView({ owners }: Props) {
             <option value="">All statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-            <option value="churned">Churned</option>
           </select>
         </div>
-        <Link href="/data-master/owners/new">
-          <Button className="bg-mvr-primary hover:bg-mvr-primary/90 gap-2 shrink-0">
-            <Plus className="w-4 h-4" />
-            New Owner
-          </Button>
-        </Link>
+        <Button
+          onClick={() => setShowNew(true)}
+          className="bg-mvr-primary hover:bg-mvr-primary/90 gap-2 shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          New Owner
+        </Button>
       </div>
 
       {/* Directory */}
@@ -522,6 +549,7 @@ export function OwnersTableView({ owners }: Props) {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">
                   <Building2 className="w-3.5 h-3.5 inline mr-1" />Units
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Guesty</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Phone</th>
                 <th className="px-4 py-3 w-10" />
@@ -530,7 +558,7 @@ export function OwnersTableView({ owners }: Props) {
             <tbody>
               {grouped.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-sm text-muted-foreground italic">
+                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground italic">
                     No owners found.
                   </td>
                 </tr>
@@ -538,7 +566,7 @@ export function OwnersTableView({ owners }: Props) {
                 grouped.map(([letter, rows]) => (
                   <React.Fragment key={letter}>
                     <tr>
-                      <td colSpan={6} className="px-5 py-1.5 text-xs font-bold text-muted-foreground bg-mvr-cream border-y border-[#E0DBD4] tracking-widest">
+                      <td colSpan={7} className="px-5 py-1.5 text-xs font-bold text-muted-foreground bg-mvr-cream border-y border-[#E0DBD4] tracking-widest">
                         {letter}
                       </td>
                     </tr>
@@ -556,7 +584,6 @@ export function OwnersTableView({ owners }: Props) {
                           <p className={`font-medium ${selectedId === owner.id ? 'text-mvr-primary' : 'text-foreground'}`}>
                             {owner.nickname}
                           </p>
-                          <p className="text-xs text-muted-foreground font-mono mt-0.5">{owner.id}</p>
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[owner.status] ?? ''}`}>
@@ -566,6 +593,12 @@ export function OwnersTableView({ owners }: Props) {
                         <td className="px-4 py-3 hidden md:table-cell">
                           {owner.unitCount > 0
                             ? <span className="text-sm font-medium text-mvr-primary">{owner.unitCount}</span>
+                            : <span className="text-muted-foreground/40">—</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          {owner.guestyOwnerCount > 0
+                            ? <span className="text-sm font-medium text-mvr-primary">{owner.guestyOwnerCount}</span>
                             : <span className="text-muted-foreground/40">—</span>
                           }
                         </td>
@@ -615,11 +648,48 @@ export function OwnersTableView({ owners }: Props) {
               onNext={() => {
                 if (selectedIndex < sortedList.length - 1) setSelectedId(sortedList[selectedIndex + 1].id)
               }}
-              onDelete={handleDelete}
+              onEdit={setEditId}
             />
           </div>
         )}
       </div>
+
+      {/* ── New Owner modal ── */}
+      {showNew && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowNew(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[#E0DBD4] bg-mvr-cream shadow-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Pinned header */}
+            <div className="flex shrink-0 items-center justify-between border-b border-[#E0DBD4] bg-white px-6 py-4">
+              <h2 className="font-display text-lg font-bold text-mvr-primary">New Owner</h2>
+              <button
+                onClick={() => setShowNew(false)}
+                aria-label="Close"
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-mvr-neutral/60 hover:text-mvr-primary"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Only this body scrolls */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <OwnerForm
+                onSuccess={() => { setShowNew(false); router.refresh() }}
+                onCancel={() => setShowNew(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Owner modal ── */}
+      {editId && <EditOwnerModal ownerId={editId} onClose={() => setEditId(null)} />}
     </div>
   )
 }

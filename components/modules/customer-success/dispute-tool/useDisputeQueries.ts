@@ -5,12 +5,16 @@ import type {
   AgentConfigRecord,
   AgentVersionRecord,
   AnalyzeResult,
+  CaseEventRecord,
   CaseListItem,
+  CaseStatusDef,
+  CaseTypeDef,
   ConversationMessage,
   DisputeCaseStatusT,
   DisputeCaseTypeT,
   DisputeOta,
   KnowledgeRecord,
+  KnowledgeSectionRecord,
   ReservationMeta,
   SkillRecord,
 } from '@/lib/disputes/types'
@@ -63,11 +67,30 @@ export interface AnalyzePayload {
   reservationMeta?: ReservationMeta
 }
 
+// Analysis is ephemeral — it returns the AI result without creating a case.
+// Persisting happens via useCreateCase ("Add to tracker").
 export function useAnalyze() {
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: (payload: AnalyzePayload) =>
-      jsonFetch<{ caseId: string } & AnalyzeResult>('/api/v1/disputes/analyze', {
+      jsonFetch<AnalyzeResult>('/api/v1/disputes/analyze', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+  })
+}
+
+// "Add to tracker" — persists an analyzed case (with its precomputed result) so
+// the AI isn't re-run. Mirrors AnalyzePayload plus the analysis output.
+export interface CreateCasePayload extends AnalyzePayload {
+  resultText?: string
+  probs?: AnalyzeResult['probs']
+}
+
+export function useCreateCase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CreateCasePayload) =>
+      jsonFetch<CaseListItem>('/api/v1/disputes/cases', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
@@ -84,6 +107,76 @@ export function useResolveCase() {
         body: JSON.stringify({ status: vars.status, outcomeNote: vars.outcomeNote }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dispute-cases'] }),
+  })
+}
+
+// ─── Case types (built-in + custom) ────────────────────────────────────────────
+export function useCaseTypes(initialData?: CaseTypeDef[]) {
+  return useQuery({
+    queryKey: ['dispute-case-types'],
+    queryFn: () => jsonFetch<CaseTypeDef[]>('/api/v1/disputes/case-types'),
+    initialData,
+  })
+}
+
+export interface CaseTypeDefPayload {
+  label: string
+  statuses: CaseStatusDef[]
+  defaultStatus: string
+}
+
+export function useCreateCaseType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: CaseTypeDefPayload) =>
+      jsonFetch<CaseTypeDef>('/api/v1/disputes/case-types', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dispute-case-types'] }),
+  })
+}
+
+export function useDeleteCaseType() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (key: string) =>
+      jsonFetch<{ ok: boolean }>(`/api/v1/disputes/case-types/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dispute-case-types'] }),
+  })
+}
+
+// ─── Case activity log (History tab) ──────────────────────────────────────────
+export function useCaseLog(caseId: string | null, initialData?: CaseEventRecord[]) {
+  return useQuery({
+    queryKey: ['dispute-case-log', caseId],
+    queryFn: () => jsonFetch<CaseEventRecord[]>(`/api/v1/disputes/cases/${caseId}/log`),
+    enabled: !!caseId,
+    initialData,
+  })
+}
+
+export interface CaseLogPayload {
+  id: string
+  status?: DisputeCaseStatusT
+  note?: string
+}
+
+/** Appends a History entry (optional status change + update note) to a case. */
+export function useAppendCaseLog() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, note }: CaseLogPayload) =>
+      jsonFetch<{ case: CaseListItem; events: CaseEventRecord[] }>(
+        `/api/v1/disputes/cases/${id}/log`,
+        { method: 'POST', body: JSON.stringify({ status, note }) }
+      ),
+    onSuccess: (data, vars) => {
+      qc.setQueryData(['dispute-case-log', vars.id], data.events)
+      qc.invalidateQueries({ queryKey: ['dispute-cases'] })
+    },
   })
 }
 
@@ -112,6 +205,7 @@ export interface KnowledgePayload {
   caseType: DisputeCaseTypeT | null
   category: string | null
   sourceUrl: string | null
+  sectionId: string | null
   enabled: boolean
 }
 
@@ -151,6 +245,40 @@ export function useExtractKnowledge() {
         method: 'POST',
         body: JSON.stringify({ url }),
       }),
+  })
+}
+
+// ─── Knowledge custom sections (user-created OTA buckets) ──────────────────────
+export function useSections(initialData?: KnowledgeSectionRecord[]) {
+  return useQuery({
+    queryKey: ['dispute-knowledge-sections'],
+    queryFn: () =>
+      jsonFetch<KnowledgeSectionRecord[]>('/api/v1/disputes/knowledge/sections'),
+    initialData,
+  })
+}
+
+export function useSaveSection() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, label }: { id?: string; label: string }) =>
+      jsonFetch<KnowledgeSectionRecord>(
+        id ? `/api/v1/disputes/knowledge/sections/${id}` : '/api/v1/disputes/knowledge/sections',
+        { method: id ? 'PATCH' : 'POST', body: JSON.stringify({ label }) }
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dispute-knowledge-sections'] }),
+  })
+}
+
+export function useDeleteSection() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      jsonFetch<{ ok: boolean }>(`/api/v1/disputes/knowledge/sections/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dispute-knowledge-sections'] })
+      qc.invalidateQueries({ queryKey: ['dispute-knowledge'] })
+    },
   })
 }
 
@@ -272,7 +400,7 @@ export interface ReservationLookupResult {
     otaReservationId: string | null
     guestId: string | null
   }
-  conversation: { transcript: string; messageCount: number } | null
+  conversation: { transcript: string; messageCount: number; messages: ConversationMessage[] } | null
   review: { text: string | null; rating: number | null } | null
 }
 

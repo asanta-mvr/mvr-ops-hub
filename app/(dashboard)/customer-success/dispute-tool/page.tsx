@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { requireView } from '@/lib/auth/permissions'
 import { listCases } from '@/lib/disputes/cases'
 import { listKnowledge } from '@/lib/disputes/knowledge'
+import { listSections } from '@/lib/disputes/sections'
+import { listCaseTypeDefs } from '@/lib/disputes/caseTypes'
 import { getAgentConfigRecord, listVersions, listSkills } from '@/lib/disputes/agent'
 import { DisputeToolClient } from '@/components/modules/customer-success/dispute-tool/DisputeToolClient'
 
@@ -16,14 +18,23 @@ export default async function DisputeToolPage() {
   const session = await auth()
   await requireView(session, 'customer_success.dispute_tool', '/no-access')
 
-  const [initialCases, initialKnowledge, initialAgentConfig, initialAgentVersions, initialSkills] =
-    await Promise.all([
-      listCases({}),
-      listKnowledge(),
-      getAgentConfigRecord(),
-      listVersions(),
-      listSkills(),
-    ])
+  const [
+    initialCases,
+    initialKnowledge,
+    initialSections,
+    initialCaseTypes,
+    initialAgentConfig,
+    initialAgentVersions,
+    initialSkills,
+  ] = await Promise.all([
+    listCases({}),
+    listKnowledge(),
+    listSections(),
+    listCaseTypeDefs(),
+    getAgentConfigRecord(),
+    listVersions(),
+    listSkills(),
+  ])
 
   return (
     <div className="space-y-4">
@@ -39,6 +50,8 @@ export default async function DisputeToolPage() {
       <DisputeToolClient
         initialCases={initialCases}
         initialKnowledge={initialKnowledge}
+        initialSections={initialSections}
+        initialCaseTypes={initialCaseTypes}
         initialAgentConfig={initialAgentConfig}
         initialAgentVersions={initialAgentVersions}
         initialSkills={initialSkills}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Search, ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, ImageIcon, ChevronLeft, ChevronRight, Building2, LayoutGrid } from 'lucide-react'
 
 export interface DataMasterListingRow {
   id: string
@@ -23,7 +23,16 @@ export interface DataMasterListingRow {
   accommodates: number | null
 }
 
+export interface BuildingFilterOption {
+  id: string
+  name: string
+  listingCount: number
+}
+
 type AttachedFilter = 'all' | 'attached' | 'unattached'
+
+// null = "All buildings" (no building filter applied)
+type BuildingFilter = string | null
 
 interface ApiListings {
   data: { rows: DataMasterListingRow[]; total: number; page: number; pageSize: number }
@@ -33,10 +42,12 @@ export default function ListingsTableView({
   initialRows,
   initialTotal,
   pageSize,
+  buildings,
 }: {
   initialRows: DataMasterListingRow[]
   initialTotal: number
   pageSize: number
+  buildings: BuildingFilterOption[]
 }) {
   const router = useRouter()
   const [rows, setRows] = useState<DataMasterListingRow[]>(initialRows)
@@ -44,18 +55,20 @@ export default function ListingsTableView({
   const [page, setPage] = useState(1)
   const [q, setQ] = useState('')
   const [attached, setAttached] = useState<AttachedFilter>('all')
+  const [buildingId, setBuildingId] = useState<BuildingFilter>(null)
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const fetchListings = useCallback(
-    async (nextPage: number, search: string, at: AttachedFilter) => {
+    async (nextPage: number, search: string, at: AttachedFilter, building: BuildingFilter) => {
       setLoading(true)
       try {
         const params = new URLSearchParams({ page: String(nextPage), pageSize: String(pageSize) })
         if (search) params.set('q', search)
         if (at !== 'all') params.set('attached', at)
+        if (building) params.set('buildingId', building)
         const res = await fetch(`/api/v1/listings?${params.toString()}`)
         if (!res.ok) throw new Error()
         const json = (await res.json()) as ApiListings
@@ -73,7 +86,7 @@ export default function ListingsTableView({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => fetchListings(1, q, attached), 350)
+    debounceRef.current = setTimeout(() => fetchListings(1, q, attached, buildingId), 350)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
@@ -82,18 +95,80 @@ export default function ListingsTableView({
 
   const handleAttached = (at: AttachedFilter) => {
     setAttached(at)
-    fetchListings(1, q, at)
+    fetchListings(1, q, at, buildingId)
+  }
+
+  const handleBuilding = (next: BuildingFilter) => {
+    setBuildingId(next)
+    fetchListings(1, q, attached, next)
   }
 
   const goToPage = (next: number) => {
     const clamped = Math.min(totalPages, Math.max(1, next))
-    fetchListings(clamped, q, attached)
+    fetchListings(clamped, q, attached, buildingId)
   }
 
+  const activeBuilding = buildingId ? buildings.find((b) => b.id === buildingId) ?? null : null
+
   return (
-    <div className="rounded-xl border border-[#E0DBD4] bg-white shadow-card">
+    <div className="grid gap-4 md:grid-cols-[240px_1fr]">
+      {/* Left building filter card — mirrors the dispute-tool Agent sub-nav */}
+      <nav className="rounded-xl border border-[#E0DBD4] bg-white p-2 shadow-card md:sticky md:top-6 md:self-start">
+        <p className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Buildings
+        </p>
+        <div className="flex gap-1 overflow-x-auto md:max-h-[calc(100vh-10rem)] md:flex-col md:overflow-y-auto">
+          <button
+            type="button"
+            onClick={() => handleBuilding(null)}
+            className={`flex shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors md:shrink ${
+              buildingId === null
+                ? 'bg-mvr-primary-light font-medium text-mvr-primary'
+                : 'text-mvr-olive hover:bg-mvr-neutral'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4 shrink-0" />
+              All buildings
+            </span>
+          </button>
+          {buildings.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => handleBuilding(b.id)}
+              className={`flex shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors md:shrink ${
+                buildingId === b.id
+                  ? 'bg-mvr-primary-light font-medium text-mvr-primary'
+                  : 'text-mvr-olive hover:bg-mvr-neutral'
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <Building2 className="h-4 w-4 shrink-0 text-mvr-steel" />
+                <span className="truncate">{b.name}</span>
+              </span>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] tabular-nums ${
+                  buildingId === b.id ? 'bg-white text-mvr-primary' : 'bg-mvr-neutral text-muted-foreground'
+                }`}
+              >
+                {b.listingCount}
+              </span>
+            </button>
+          ))}
+          {buildings.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No active buildings.</p>
+          ) : null}
+        </div>
+      </nav>
+
+      {/* Right pane — listings table */}
+      <div className="min-w-0 rounded-xl border border-[#E0DBD4] bg-white shadow-card">
       <div className="flex flex-col gap-3 border-b border-[#E0DBD4] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">{total} listings in Data Master</p>
+        <p className="text-xs text-muted-foreground">
+          {total} listing{total === 1 ? '' : 's'}
+          {activeBuilding ? ` in ${activeBuilding.name}` : ' in Data Master'}
+        </p>
         <div className="flex items-center gap-2">
           <div className="inline-flex rounded-lg border border-[#E0DBD4] bg-mvr-neutral/30 p-0.5">
             {(['all', 'attached', 'unattached'] as AttachedFilter[]).map((a) => (
@@ -222,6 +297,7 @@ export default function ListingsTableView({
             <ChevronRight className="size-4" />
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

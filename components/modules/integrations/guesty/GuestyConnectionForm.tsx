@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useForm } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
-import { CheckCircle2, AlertCircle, CircleDashed, Loader2, KeyRound } from 'lucide-react'
+import { CheckCircle2, AlertCircle, CircleDashed, Loader2, KeyRound, ChevronDown } from 'lucide-react'
 
 export interface SafeGuestyConnection {
   id: string
@@ -18,6 +18,84 @@ export interface SafeGuestyConnection {
   lastSyncCount: number | null
   hasSecret: boolean
   envManaged?: boolean
+}
+
+export interface GuestySyncLogEntry {
+  id: string
+  operation: string
+  status: string
+  message: string | null
+  itemCount: number | null
+  createdAt: string
+}
+
+const OP_LABEL: Record<string, string> = {
+  listing_sync: 'Listing refresh',
+  owner_sync: 'Owner refresh',
+  test_connection: 'Test connection',
+}
+
+function fmtLogTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+/** Recent-activity log: shows each sync/test attempt with its outcome + reason. */
+function SyncActivityLog({ logs }: { logs: GuestySyncLogEntry[] }) {
+  const [open, setOpen] = useState(true)
+  if (logs.length === 0) return null
+  const failures = logs.filter((l) => l.status === 'error').length
+
+  return (
+    <div className="border-t border-[#E0DBD4] px-6 py-4">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-mvr-olive">
+          Sync activity
+          {failures > 0 && (
+            <span className="rounded-full bg-mvr-danger-light px-2 py-0.5 text-xs font-medium text-mvr-danger">
+              {failures} failed
+            </span>
+          )}
+        </span>
+        <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <ul className="mt-3 space-y-2">
+          {logs.map((l) => {
+            const error = l.status === 'error'
+            const Icon = error ? AlertCircle : CheckCircle2
+            return (
+              <li key={l.id} className="flex items-start gap-2.5 text-xs">
+                <Icon className={`mt-0.5 size-3.5 shrink-0 ${error ? 'text-mvr-danger' : 'text-mvr-success'}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-mvr-olive">{OP_LABEL[l.operation] ?? l.operation}</span>
+                    <span className="shrink-0 text-muted-foreground">{fmtLogTime(l.createdAt)}</span>
+                  </div>
+                  {l.message && (
+                    <p className={`mt-0.5 break-words ${error ? 'text-mvr-danger' : 'text-muted-foreground'}`}>
+                      {l.message}
+                    </p>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 const formSchema = z.object({
@@ -54,10 +132,12 @@ export default function GuestyConnectionForm({
   connection,
   editable,
   envManaged = false,
+  logs = [],
 }: {
   connection: SafeGuestyConnection | null
   editable: boolean
   envManaged?: boolean
+  logs?: GuestySyncLogEntry[]
 }) {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
@@ -200,11 +280,9 @@ export default function GuestyConnectionForm({
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-xs text-muted-foreground">
-            {connection?.lastSyncAt
-              ? `Last synced ${new Date(connection.lastSyncAt).toLocaleString()} · ${connection.lastSyncCount ?? 0} listings`
-              : envManaged
-                ? 'Test the connection to verify your environment credentials.'
-                : 'Credentials are encrypted at rest.'}
+            {envManaged
+              ? 'Test the connection to verify your environment credentials.'
+              : 'Credentials are encrypted at rest.'}
           </p>
           <button
             type="submit"
@@ -222,6 +300,8 @@ export default function GuestyConnectionForm({
           </button>
         </div>
       </form>
+
+      <SyncActivityLog logs={logs} />
     </div>
   )
 }

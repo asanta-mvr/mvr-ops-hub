@@ -13,6 +13,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from '@d
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
 import { X, ImagePlus, GripVertical, ImageIcon, Loader2, DownloadCloud, Check } from 'lucide-react'
+import CollapsibleCard from './CollapsibleCard'
 
 export interface GalleryPhoto {
   id: string
@@ -114,72 +115,76 @@ export default function ListingPhotoGallery({
   }
 
   return (
-    <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
-      <div className="flex items-center justify-between">
-        <h3 className="font-display text-lg text-mvr-primary">Photos ({photos.length})</h3>
-        {editable && (
-          <div className="flex items-center gap-2">
-            {photos.length === 0 && guestyCount > 0 && (
+    <>
+      <CollapsibleCard
+        title={`Photos (${photos.length})`}
+        actions={
+          editable ? (
+            <>
+              {photos.length === 0 && guestyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#E0DBD4] px-3 py-1.5 text-xs font-medium text-mvr-olive transition-colors hover:bg-mvr-neutral/50 disabled:opacity-50"
+                >
+                  <DownloadCloud className="size-3.5" />
+                  Import {guestyCount} from Guesty
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleImport}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#E0DBD4] px-3 py-1.5 text-xs font-medium text-mvr-olive transition-colors hover:bg-mvr-neutral/50 disabled:opacity-50"
+                onClick={() => setPickerOpen(true)}
+                disabled={busy || !hasDriveFolder}
+                title={hasDriveFolder ? 'Pick photos from the unit Drive folder' : 'Attach a unit with a Drive folder first'}
+                className="inline-flex items-center gap-1.5 rounded-full bg-mvr-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-mvr-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <DownloadCloud className="size-3.5" />
-                Import {guestyCount} from Guesty
+                <ImagePlus className="size-3.5" />
+                Add from Drive
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              disabled={busy || !hasDriveFolder}
-              title={hasDriveFolder ? 'Pick photos from the unit Drive folder' : 'Attach a unit with a Drive folder first'}
-              className="inline-flex items-center gap-1.5 rounded-full bg-mvr-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-mvr-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <ImagePlus className="size-3.5" />
-              Add from Drive
-            </button>
-          </div>
-        )}
-      </div>
+            </>
+          ) : undefined
+        }
+      >
+        <div className="space-y-3">
+          {!hasDriveFolder && editable && (
+            <p className="text-xs text-muted-foreground">
+              Attach a unit with a Drive folder to add photos from your library.
+            </p>
+          )}
 
-      {!hasDriveFolder && editable && (
-        <p className="mt-1 text-xs text-muted-foreground">
-          Attach a unit with a Drive folder to add photos from your library.
-        </p>
-      )}
-
-      {photos.length === 0 ? (
-        <div className="mt-4 flex flex-col items-center justify-center rounded-lg border border-dashed border-[#E0DBD4] py-10 text-center">
-          <ImageIcon className="size-6 text-muted-foreground/40" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            {guestyCount > 0 ? 'No photos yet — import them from Guesty to start.' : 'No photos.'}
-          </p>
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={photos.map((p) => p.id)} strategy={rectSortingStrategy}>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {photos.map((p, i) => (
-                <SortablePhoto
-                  key={p.id}
-                  photo={p}
-                  index={i}
-                  editable={editable}
-                  busy={busy}
-                  onRemove={() => handleRemove(p.id)}
-                />
-              ))}
+          {photos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#E0DBD4] py-10 text-center">
+              <ImageIcon className="size-6 text-muted-foreground/40" />
+              <p className="mt-2 text-sm text-muted-foreground">
+                {guestyCount > 0 ? 'No photos yet — import them from Guesty to start.' : 'No photos.'}
+              </p>
             </div>
-          </SortableContext>
-        </DndContext>
-      )}
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={photos.map((p) => p.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {photos.map((p, i) => (
+                    <SortablePhoto
+                      key={p.id}
+                      photo={p}
+                      index={i}
+                      editable={editable}
+                      busy={busy}
+                      onRemove={() => handleRemove(p.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+      </CollapsibleCard>
 
       {pickerOpen && (
         <DrivePicker listingId={listingId} onClose={() => setPickerOpen(false)} onConfirm={handleAddFromDrive} />
       )}
-    </div>
+    </>
   )
 }
 

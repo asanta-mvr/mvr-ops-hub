@@ -115,6 +115,57 @@ export async function uploadToDrive(
   }
 }
 
+/**
+ * Ensures a nested folder path exists under the configured root, creating each
+ * level as needed, and returns the deepest folder's id. e.g.
+ * ensureEntityFolder(['Owners', 'Carlos R (abc123)', 'Cyber Capital LLC']).
+ */
+export async function ensureEntityFolder(path: string[]): Promise<string> {
+  const drive = createDriveClient()
+  let parent = getRootFolderId()
+  for (const raw of path) {
+    // Drive folder names may keep spaces; only strip quote/backslash that would
+    // break the lookup query.
+    const name = raw.replace(/['\\]/g, '').trim() || 'folder'
+    parent = await getOrCreateSubfolder(drive, parent, name)
+  }
+  return parent
+}
+
+/** Uploads a file into a specific Drive folder (works for My Drive and Shared Drives). */
+export async function uploadFileToFolder(
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string,
+  folderId: string
+): Promise<{ fileId: string; webViewLink: string }> {
+  const drive = createDriveClient()
+  const safeName = sanitizeFileName(fileName)
+  // supportsAllDrives is required or the API 404s on folders that live in a
+  // Shared Drive (where the service account shows as "Content manager").
+  const response = await drive.files.create({
+    requestBody: { name: safeName, parents: [folderId] },
+    media: { mimeType, body: Readable.from(buffer) },
+    fields: 'id,webViewLink',
+    supportsAllDrives: true,
+  })
+  const file = response.data
+  if (!file.id) throw new Error('Drive upload failed: no file ID returned')
+  // Best-effort public-read link. Shared Drives often forbid per-file "anyone"
+  // sharing (the file inherits the drive's access instead), so don't fail the
+  // upload if this is rejected.
+  try {
+    await drive.permissions.create({
+      fileId: file.id,
+      requestBody: { role: 'reader', type: 'anyone' },
+      supportsAllDrives: true,
+    })
+  } catch (err) {
+    console.warn('[drive] could not set anyone-reader permission (likely a Shared Drive):', (err as Error).message)
+  }
+  return { fileId: file.id, webViewLink: file.webViewLink ?? getDriveFileViewLink(file.id) }
+}
+
 export async function deleteFromDrive(fileId: string): Promise<void> {
   const drive = createDriveClient()
   await drive.files.delete({ fileId })
@@ -179,6 +230,63 @@ export async function listFolderImageFiles(folderId: string): Promise<Array<{ fi
   return (res.data.files ?? [])
     .filter((f) => f.id)
     .map((f) => ({ fileId: f.id!, name: f.name ?? f.id! }))
+}
+
+/**
+ * Lists every (non-folder) file inside a Drive folder — used to preview the
+ * documents already sitting in a card's linked folder. The folder must be shared
+ * with the service account (or "anyone with the link").
+ */
+export interface DriveFileInfo {
+  id: string
+  name: string
+  mimeType: string
+  modifiedTime: string | null
+  size: number | null
+}
+
+export async function listFolderFiles(folderId: string): Promise<DriveFileInfo[]> {
+  // Defense-in-depth: only URL-safe ids reach the Drive query string.
+  if (!/^[A-Za-z0-9_-]{10,120}$/.test(folderId)) return []
+  const drive = createDriveClient()
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
+    fields: 'files(id,name,mimeType,modifiedTime,size)',
+    spaces: 'drive',
+    orderBy: 'modifiedTime desc',
+    pageSize: 200,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  })
+  return (res.data.files ?? [])
+    .filter((f) => f.id)
+    .map((f) => ({
+      id: f.id!,
+      name: f.name ?? f.id!,
+      mimeType: f.mimeType ?? '',
+      modifiedTime: f.modifiedTime ?? null,
+      size: f.size != null ? Number(f.size) : null,
+    }))
+}
+
+/**
+ * Fetches a Drive folder's display name (for pre-filling the folder-name field
+ * when a user pastes a folder link). Returns null if inaccessible. Works for My
+ * Drive and Shared Drives.
+ */
+export async function getDriveFolderName(folderId: string): Promise<string | null> {
+  if (!/^[A-Za-z0-9_-]{10,120}$/.test(folderId)) return null
+  try {
+    const drive = createDriveClient()
+    const res = await drive.files.get({
+      fileId: folderId,
+      fields: 'name',
+      supportsAllDrives: true,
+    })
+    return res.data.name ?? null
+  } catch {
+    return null
+  }
 }
 
 /** Returns the service account email used for Drive access, for sharing instructions. */

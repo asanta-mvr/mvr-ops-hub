@@ -24,6 +24,7 @@ export const reservationMetaSchema = z.object({
   reservationId: z.string().max(120).nullish(),
   otaReservationId: z.string().max(120).nullish(),
   guestId: z.string().max(120).nullish(),
+  conversationId: z.string().max(120).nullish(), // persisted so the conversation snapshot/refetch resolves without a re-lookup
   property: z.string().max(300).nullish(),
   unit: z.string().max(300).nullish(),
   checkinDate: z.string().max(40).nullish(),
@@ -40,7 +41,9 @@ export const reservationMetaSchema = z.object({
 
 // ─── Analyze (POST /api/v1/disputes/analyze) ─────────────────────────────────
 export const analyzeInputSchema = z.object({
-  caseType: disputeCaseTypeEnum,
+  // Open string: 'review' | 'disputa' or a custom type key. Existence is checked
+  // in the service layer against the case-type definitions.
+  caseType: z.string().min(1).max(60),
   ota: disputeOtaEnum,
   inputText: z.string().min(1, 'Input text is required').max(20000),
   title: z.string().max(200).optional(),
@@ -62,9 +65,21 @@ export const createCaseSchema = analyzeInputSchema.extend({
 
 // ─── Resolve / status change (PATCH /api/v1/disputes/cases/[id]/status) ───────
 export const updateCaseStatusSchema = z.object({
-  status: disputeStatusEnum,
+  status: z.string().min(1).max(60),
   outcomeNote: z.string().max(5000).optional(),
 })
+
+// ─── Case activity log (POST /api/v1/disputes/cases/[id]/log) ─────────────────
+// One History-tab entry: an optional status change and/or a free-text update.
+// At least one of the two must be present.
+export const caseLogSchema = z
+  .object({
+    status: z.string().min(1).max(60).optional(),
+    note: z.string().max(5000).optional(),
+  })
+  .refine((d) => Boolean(d.status) || Boolean(d.note && d.note.trim()), {
+    message: 'Provide a status change or an update note',
+  })
 
 // ─── Policy update (POST /api/v1/disputes/policies/update) ────────────────────
 export const policyUpdateSchema = z.object({
@@ -114,6 +129,9 @@ export const skillSchema = z.object({
 })
 
 // ─── Knowledge base (tagged reference sources) ───────────────────────────────
+// `sectionId` files an entry under a user-created custom section (an OTA beyond
+// the built-in 4). When set, the entry's `ota` is forced null in the service
+// layer (mutually exclusive grouping).
 export const knowledgeSchema = z.object({
   title: z.string().min(1, 'Title is required').max(300),
   body: z.string().min(1, 'Body is required').max(40000),
@@ -121,6 +139,7 @@ export const knowledgeSchema = z.object({
   caseType: disputeCaseTypeEnum.nullish(),
   category: z.string().max(120).nullish(),
   sourceUrl: z.string().max(1000).nullish(),
+  sectionId: z.string().max(40).nullish(),
   enabled: z.boolean().default(true),
 })
 
@@ -128,11 +147,42 @@ export const knowledgeExtractSchema = z.object({
   url: z.string().url('A valid URL is required'),
 })
 
+// ─── Knowledge custom sections (user-created OTA buckets) ─────────────────────
+export const knowledgeSectionSchema = z.object({
+  label: z.string().min(1, 'Section name is required').max(120),
+})
+
+// ─── Custom case types (POST /api/v1/disputes/case-types) ─────────────────────
+const statusToneEnum = z.enum(['neutral', 'active', 'steel', 'success', 'danger', 'warning'])
+
+const caseStatusDefSchema = z.object({
+  key: z.string().min(1).max(40),
+  label: z.string().min(1).max(60),
+  tone: statusToneEnum.default('neutral'),
+  terminal: z.boolean().default(false),
+})
+
+export const caseTypeDefSchema = z
+  .object({
+    label: z.string().min(1, 'Name is required').max(60),
+    statuses: z.array(caseStatusDefSchema).min(1, 'Add at least one status stage').max(12),
+    defaultStatus: z.string().min(1).max(40),
+  })
+  .refine((d) => new Set(d.statuses.map((s) => s.key)).size === d.statuses.length, {
+    message: 'Status keys must be unique',
+  })
+  .refine((d) => d.statuses.some((s) => s.key === d.defaultStatus), {
+    message: 'The starting status must be one of the stages',
+  })
+
+export type CaseTypeDefInput = z.infer<typeof caseTypeDefSchema>
 export type KnowledgeInput = z.infer<typeof knowledgeSchema>
 export type KnowledgeExtractInput = z.infer<typeof knowledgeExtractSchema>
+export type KnowledgeSectionInput = z.infer<typeof knowledgeSectionSchema>
 export type AnalyzeInput = z.infer<typeof analyzeInputSchema>
 export type CreateCaseInput = z.infer<typeof createCaseSchema>
 export type UpdateCaseStatusInput = z.infer<typeof updateCaseStatusSchema>
+export type CaseLogInput = z.infer<typeof caseLogSchema>
 export type PolicyUpdateInput = z.infer<typeof policyUpdateSchema>
 export type PolicyJsonInput = z.infer<typeof policyJsonSchema>
 export type AgentConfigInput = z.infer<typeof agentConfigSchema>

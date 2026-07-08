@@ -74,12 +74,24 @@ export async function POST(req: NextRequest) {
         where: { id: connection.id },
         data: { status: 'connected', lastError: null, lastSyncAt: new Date(), lastSyncCount: synced },
       })
+      await db.guestySyncLog.create({
+        data: {
+          connectionId: connection.id,
+          operation: 'listing_sync',
+          status: 'success',
+          itemCount: synced,
+          message: `Pulled ${synced} listings`,
+        },
+      }).catch((e) => console.error('[guesty sync log]', e))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Guesty sync failed'
       await db.guestyConnection.update({
         where: { id: connection.id },
         data: { status: 'error', lastError: message },
       })
+      await db.guestySyncLog.create({
+        data: { connectionId: connection.id, operation: 'listing_sync', status: 'error', message },
+      }).catch((e) => console.error('[guesty sync log]', e))
       return NextResponse.json({ error: message }, { status: 502 })
     }
 

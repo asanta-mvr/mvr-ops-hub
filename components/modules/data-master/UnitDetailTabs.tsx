@@ -6,11 +6,17 @@ import {
   LayoutDashboard, LayoutList, FileText, ClipboardCheck, Star,
   User, Phone, Mail, ExternalLink, BedDouble, Bath, Maximize2,
   Home, Layers, Users, ChevronLeft, ChevronRight, X, Camera,
-  Building2, Hash, Eye, Calendar, Clock,
+  Building2, Hash, Eye, Calendar, Clock, FolderCheck,
 } from 'lucide-react'
 import { TYPE_LABELS } from '@/lib/constants/units'
+import {
+  DocumentsSection,
+  type FolderView,
+  type FileAlertView,
+  type AlertTypeView,
+} from '@/components/modules/data-master/DocumentsSection'
 
-type Tab = 'detail' | 'listings' | 'contracts' | 'inspections' | 'score'
+type Tab = 'detail' | 'listings' | 'contracts' | 'inspections' | 'score' | 'documents'
 
 export interface UnitDetailTabsProps {
   unitId:          string
@@ -51,6 +57,10 @@ export interface UnitDetailTabsProps {
   ownerPhone:      string | null
   ownerEmail:      string | null
   listings:        { id: string; name: string; nickname: string | null; guestyId: string | null }[]
+  folders:         FolderView[]
+  fileAlerts:      FileAlertView[]
+  alertTypes:      AlertTypeView[]
+  docCanEdit:      boolean
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -214,11 +224,12 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
     hasKitchen, hasBalcony, features, driveFolderUrl, photoQuality, score, notes,
     createdAt, updatedAt, listingCount, contractCount, inspectionCount,
     buildingName, buildingId, ownerId, ownerNickname, ownerPhone, ownerEmail,
-    listings,
+    listings, folders, fileAlerts, alertTypes, docCanEdit,
   } = props
 
   const tabs: { key: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'detail',      label: 'Detail',      Icon: LayoutDashboard },
+    { key: 'documents',   label: 'Documents',   Icon: FolderCheck     },
     { key: 'listings',    label: 'Listings',    Icon: LayoutList      },
     { key: 'contracts',   label: 'Contracts',   Icon: FileText        },
     { key: 'inspections', label: 'Inspections', Icon: ClipboardCheck  },
@@ -231,7 +242,7 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
     <div className="space-y-4">
 
       {/* ── Tab nav ── */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
         {tabs.map(({ key, label, Icon }) => {
           const active = tab === key
           return (
@@ -440,6 +451,17 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
               </Section>
 
             </div>
+          )}
+
+          {/* ── DOCUMENTS ── */}
+          {tab === 'documents' && (
+            <DocumentsSection
+              target={{ unitId }}
+              folders={folders}
+              fileAlerts={fileAlerts}
+              alertTypes={alertTypes}
+              canEdit={docCanEdit}
+            />
           )}
 
           {/* ── LISTINGS ── */}

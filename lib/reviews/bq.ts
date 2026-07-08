@@ -16,6 +16,9 @@ import type {
   DailyVolumePoint,
   TagDistRow,
   UnitSummary,
+  EmergingStrength,
+  PainPointRow,
+  WeeklyResponsePoint,
 } from './types'
 
 const TABLE = '`miami-vr-data.reva_reviews.reviews`'
@@ -694,4 +697,185 @@ export async function fetchFilterOptions(): Promise<ReviewsFilterOptions> {
     )
 
   return { buildings, units, otas, years, yearMonths }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Performance tab — publish-date theme + response metrics
+// ──────────────────────────────────────────────────────────────────────────
+//
+// These read `reva_reviews` by review-publish `date` — the only source of
+// positive/negative tags and `host_response` (the checkout-cohort processed
+// table has neither; see lib/reviews/cohort.ts). They use rolling trailing
+// ISO-week windows independent of the year/month filter so they always reflect
+// "what guests are saying lately"; OTA/building/unit/star scope still applies.
+// Week counts are server-controlled integers, inlined as SQL literals.
+
+// Scope clauses (otas/buildings/units/stars/unitSearch + review_of = 'Unit')
+// WITHOUT the year/month/date filters, so callers layer their own rolling window.
+function scopeOnly(filters: ReviewFilters): BqWhere {
+  return buildWhere({ ...filters, years: [], months: [], dateFrom: undefined, dateTo: undefined })
+}
+
+const ISO_WEEK_END = "DATE_ADD(DATE_TRUNC(CURRENT_DATE(), ISOWEEK), INTERVAL 1 WEEK)"
+function isoWeekStart(weeksBack: number): string {
+  return `DATE_SUB(DATE_TRUNC(CURRENT_DATE(), ISOWEEK), INTERVAL ${Math.max(0, Math.trunc(weeksBack))} WEEK)`
+}
+
+/**
+ * Weekly response rate (PDF page 2, 5th metric) — share of reviews *received*
+ * each ISO week that got a host response. Anchored on publish date because
+ * responding is a publish-time activity (and the cohort table lacks
+ * host_response). Trailing `weeks` ISO weeks.
+ */
+export async function fetchWeeklyResponseRate(
+  filters: ReviewFilters,
+  weeks = 4
+): Promise<WeeklyResponsePoint[]> {
+  const bq = getBigQueryClient()
+  const { sql, params } = scopeOnly(filters)
+
+  const query = `
+    SELECT
+      FORMAT_DATE('%G-W%V',  DATE_TRUNC(date, ISOWEEK)) AS iso_week,
+      FORMAT_DATE('%Y-%m-%d', DATE_TRUNC(date, ISOWEEK)) AS week_start,
+      COUNT(*)                                          AS reviews,
+      SAFE_DIVIDE(COUNTIF(host_response IS TRUE), COUNT(*)) AS response_rate
+    FROM ${TABLE}
+    WHERE ${sql} AND date IS NOT NULL
+      AND date >= ${isoWeekStart(weeks - 1)} AND date < ${ISO_WEEK_END}
+    GROUP BY iso_week, week_start
+    ORDER BY week_start
+  `
+
+  const [rows] = await bq.query({ query, params, useLegacySql: false })
+  return (rows as Array<Record<string, unknown>>).map((r) => ({
+    isoWeek:      String(r.iso_week ?? ''),
+    weekStart:    String(r.week_start ?? ''),
+    reviews:      Number(r.reviews ?? 0),
+    responseRate: r.response_rate == null ? null : Number(r.response_rate),
+  }))
+}
+
+/**
+ * Emerging Strengths (PDF page 4) — positive tags whose share of mentions in
+ * the current window rose vs the trailing baseline. Rule-based (no AI): the
+ * COO only wants *new* strengths, not the evergreen "great location."
+ */
+export async function fetchEmergingStrengths(
+  filters: ReviewFilters,
+  currentWeeks = 4,
+  baselineWeeks = 8,
+  limit = 6
+): Promise<EmergingStrength[]> {
+  const bq = getBigQueryClient()
+  const { sql, params } = scopeOnly(filters)
+
+  const query = `
+    SELECT tag,
+      COUNTIF(win = 'cur')  AS cur_n,
+      COUNTIF(win = 'base') AS base_n
+    FROM (
+      SELECT tag,
+        IF(date >= ${isoWeekStart(currentWeeks - 1)}, 'cur', 'base') AS win
+      FROM ${TABLE}, UNNEST(positive_tags) AS tag
+      WHERE ${sql} AND date IS NOT NULL
+        AND date >= ${isoWeekStart(currentWeeks + baselineWeeks - 1)} AND date < ${ISO_WEEK_END}
+    )
+    GROUP BY tag
+  `
+
+  const [rows] = await bq.query({ query, params, useLegacySql: false })
+
+  let curTotal = 0, baseTotal = 0
+  const parsed = (rows as Array<Record<string, unknown>>).map((r) => {
+    const curN  = Number(r.cur_n ?? 0)
+    const baseN = Number(r.base_n ?? 0)
+    curTotal += curN; baseTotal += baseN
+    return { tag: String(r.tag ?? ''), curN, baseN }
+  })
+
+  return parsed
+    .filter((p) => p.tag && p.curN >= 2) // ignore one-off noise
+    .map((p) => {
+      const currentShare  = curTotal  > 0 ? p.curN  / curTotal  : 0
+      const baselineShare = baseTotal > 0 ? p.baseN / baseTotal : 0
+      return {
+        tag:           p.tag,
+        currentCount:  p.curN,
+        currentShare,
+        baselineShare,
+        delta:         currentShare - baselineShare,
+      }
+    })
+    .filter((e) => e.delta > 0) // only rising themes
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, limit)
+}
+
+/**
+ * Pain Points (PDF page 5, analytics half) — top negative themes with gravity:
+ * how many reviews/guests cite it, what share are rated < 5★, the theme's share
+ * of all reviews, and the prior-window count for a trend arrow. Remediation
+ * status ("what are we doing about it") is deferred to the Support Tickets system.
+ */
+export async function fetchPainPoints(
+  filters: ReviewFilters,
+  weeks = 4,
+  limit = 6
+): Promise<PainPointRow[]> {
+  const bq = getBigQueryClient()
+  const { sql, params } = scopeOnly(filters)
+
+  const curStart  = isoWeekStart(weeks - 1)
+  const prevStart = isoWeekStart(2 * weeks - 1)
+
+  const query = `
+    WITH cur AS (
+      SELECT tag,
+        COUNT(*)                   AS reviews,
+        COUNT(DISTINCT guest_name) AS guests,
+        COUNTIF(rating < 5)        AS below5
+      FROM ${TABLE}, UNNEST(negative_tags) AS tag
+      WHERE ${sql} AND date IS NOT NULL AND date >= ${curStart} AND date < ${ISO_WEEK_END}
+      GROUP BY tag
+    ),
+    prev AS (
+      SELECT tag, COUNT(*) AS reviews
+      FROM ${TABLE}, UNNEST(negative_tags) AS tag
+      WHERE ${sql} AND date IS NOT NULL AND date >= ${prevStart} AND date < ${curStart}
+      GROUP BY tag
+    ),
+    tot AS (
+      SELECT COUNT(*) AS total
+      FROM ${TABLE}
+      WHERE ${sql} AND date IS NOT NULL AND date >= ${curStart} AND date < ${ISO_WEEK_END}
+    )
+    SELECT
+      cur.tag           AS tag,
+      cur.reviews       AS reviews,
+      cur.guests        AS guests,
+      cur.below5        AS below5,
+      IFNULL(prev.reviews, 0) AS prev_reviews,
+      tot.total         AS total
+    FROM cur
+    LEFT JOIN prev ON prev.tag = cur.tag
+    CROSS JOIN tot
+    ORDER BY cur.reviews DESC
+    LIMIT ${Math.max(1, Math.trunc(limit))}
+  `
+
+  const [rows] = await bq.query({ query, params, useLegacySql: false })
+  return (rows as Array<Record<string, unknown>>).map((r) => {
+    const reviews = Number(r.reviews ?? 0)
+    const below5  = Number(r.below5 ?? 0)
+    const total   = Number(r.total ?? 0)
+    return {
+      tag:              String(r.tag ?? ''),
+      reviews,
+      guests:           Number(r.guests ?? 0),
+      belowFiveStarPct: reviews > 0 ? below5 / reviews : null,
+      sharePct:         total > 0 ? reviews / total : null,
+      prevReviews:      Number(r.prev_reviews ?? 0),
+    }
+  })
 }

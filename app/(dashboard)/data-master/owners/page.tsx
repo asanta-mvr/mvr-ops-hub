@@ -9,7 +9,8 @@ export const metadata: Metadata = { title: 'Owners' }
 async function getOwners(): Promise<OwnerFull[]> {
   const owners = await db.owner.findMany({
     include: {
-      _count: { select: { units: true } },
+      _count: { select: { units: true, guestyOwners: true } },
+      guestyOwners: { select: { guestyId: true, fullName: true }, orderBy: { fullName: 'asc' } },
       units: {
         include: { building: { select: { name: true } } },
         orderBy: [{ buildingId: 'asc' }, { number: 'asc' }],
@@ -19,7 +20,7 @@ async function getOwners(): Promise<OwnerFull[]> {
   })
 
   return owners.map((o) => ({
-    id:       o.id,
+    id:             o.id,
     nickname:       o.nickname,
     type:           o.type,
     status:         o.status,
@@ -35,11 +36,15 @@ async function getOwners(): Promise<OwnerFull[]> {
     siteUser:       o.siteUser       ?? null,
     category:       o.category       ?? null,
     personality:    o.personality    ?? null,
+    personalityScore:   o.personalityScore   ?? null,
+    communicationScore: o.communicationScore ?? null,
     documentType:   o.documentType   ?? null,
     documentNumber: o.documentNumber ?? null,
     notes:          o.notes          ?? null,
     unitCount:      o._count.units,
-    units: o.units.map(u => ({
+    guestyOwnerCount: o._count.guestyOwners,
+    guestyAccounts: o.guestyOwners.map((g) => ({ guestyId: g.guestyId, fullName: g.fullName })),
+    units: o.units.map((u) => ({
       id:           u.id,
       number:       u.number,
       buildingName: u.building.name,

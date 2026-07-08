@@ -2,7 +2,7 @@
 // (OTA policies, internal notes) the analyzer can cite. Replaces the old Policies
 // CMS. Matching entries are injected into the analyze prompt by getRelevantKnowledge.
 
-import { type DisputeKnowledge } from '@prisma/client'
+import { type DisputeCaseType, type DisputeKnowledge } from '@prisma/client'
 import { db } from '@/lib/db'
 import { DisputeError } from './cases'
 import { runKnowledgeExtract } from './anthropic'
@@ -89,6 +89,7 @@ function serialize(k: DisputeKnowledge): KnowledgeRecord {
     category: k.category,
     sourceUrl: k.sourceUrl,
     enabled: k.enabled,
+    sectionId: k.sectionId,
     createdAt: k.createdAt.toISOString(),
     updatedAt: k.updatedAt.toISOString(),
   }
@@ -101,7 +102,21 @@ export interface KnowledgeParams {
   caseType?: DisputeCaseTypeT | null
   category?: string | null
   sourceUrl?: string | null
+  sectionId?: string | null
   enabled: boolean
+}
+
+// A custom section and a built-in OTA are mutually exclusive groupings; filing
+// an entry under a custom section forces `ota` to null. Throws if the section id
+// is unknown (FK would otherwise surface as an opaque 500).
+async function resolveGrouping(
+  input: KnowledgeParams
+): Promise<{ ota: DisputeOta | null; sectionId: string | null }> {
+  const sectionId = input.sectionId ?? null
+  if (!sectionId) return { ota: input.ota ?? null, sectionId: null }
+  const section = await db.disputeKnowledgeSection.findUnique({ where: { id: sectionId } })
+  if (!section) throw new DisputeError('not_found', 'Knowledge section not found')
+  return { ota: null, sectionId }
 }
 
 export async function listKnowledge(): Promise<KnowledgeRecord[]> {
@@ -110,14 +125,16 @@ export async function listKnowledge(): Promise<KnowledgeRecord[]> {
 }
 
 export async function createKnowledge(input: KnowledgeParams, userId: string): Promise<KnowledgeRecord> {
+  const { ota, sectionId } = await resolveGrouping(input)
   const row = await db.disputeKnowledge.create({
     data: {
       title: input.title,
       body: input.body,
-      ota: input.ota ?? null,
-      caseType: input.caseType ?? null,
+      ota,
+      caseType: (input.caseType ?? null) as DisputeCaseType | null,
       category: input.category ?? null,
       sourceUrl: input.sourceUrl || null,
+      sectionId,
       enabled: input.enabled,
       createdById: userId,
     },
@@ -128,15 +145,17 @@ export async function createKnowledge(input: KnowledgeParams, userId: string): P
 export async function updateKnowledge(id: string, input: KnowledgeParams, userId: string): Promise<KnowledgeRecord> {
   const existing = await db.disputeKnowledge.findUnique({ where: { id } })
   if (!existing) throw new DisputeError('not_found', 'Knowledge entry not found')
+  const { ota, sectionId } = await resolveGrouping(input)
   const row = await db.disputeKnowledge.update({
     where: { id },
     data: {
       title: input.title,
       body: input.body,
-      ota: input.ota ?? null,
-      caseType: input.caseType ?? null,
+      ota,
+      caseType: (input.caseType ?? null) as DisputeCaseType | null,
       category: input.category ?? null,
       sourceUrl: input.sourceUrl || null,
+      sectionId,
       enabled: input.enabled,
       updatedById: userId,
     },
@@ -158,8 +177,14 @@ export async function getRelevantKnowledge(
   const rows = await db.disputeKnowledge.findMany({
     where: {
       enabled: true,
+      // Custom-section entries are organizational only — never inject them.
+      sectionId: null,
       AND: [
-        { OR: [{ caseType: null }, { caseType }] },
+        // DisputeKnowledge.caseType is an enum (built-ins only); custom types
+        // match only the "any case type" (null) entries.
+        caseType === 'review' || caseType === 'disputa'
+          ? { OR: [{ caseType: null }, { caseType }] }
+          : { caseType: null },
         { OR: [{ ota: null }, { ota }] },
       ],
     },

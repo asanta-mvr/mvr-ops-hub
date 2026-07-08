@@ -3,12 +3,33 @@ import { auth } from '@/lib/auth'
 import { requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import ListingsTableView from '@/components/modules/data-master/ListingsTableView'
-import type { DataMasterListingRow } from '@/components/modules/data-master/ListingsTableView'
+import type { DataMasterListingRow, BuildingFilterOption } from '@/components/modules/data-master/ListingsTableView'
 
 export const metadata: Metadata = { title: 'Listings · Data Master' }
 export const dynamic = 'force-dynamic'
 
 const PAGE_SIZE = 50
+
+// Active buildings with the count of listings attached to their units, for the
+// left-hand building filter. Counts roll up per-unit listing counts in JS since
+// Listing has no direct buildingId (Listing → Unit → Building).
+async function getBuildingFilters(): Promise<BuildingFilterOption[]> {
+  const buildings = await db.building.findMany({
+    where: { status: 'active' },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      units: { select: { _count: { select: { listings: true } } } },
+    },
+  })
+
+  return buildings.map((b) => ({
+    id: b.id,
+    name: b.name,
+    listingCount: b.units.reduce((sum, u) => sum + u._count.listings, 0),
+  }))
+}
 
 async function getInitialListings(): Promise<{ rows: DataMasterListingRow[]; total: number }> {
   const [listings, total] = await Promise.all([
@@ -74,7 +95,7 @@ export default async function ListingsPage() {
   const session = await auth()
   await requireView(session, 'data_master.listings')
 
-  const { rows, total } = await getInitialListings()
+  const [{ rows, total }, buildings] = await Promise.all([getInitialListings(), getBuildingFilters()])
 
   return (
     <div className="space-y-6">
@@ -85,7 +106,12 @@ export default async function ListingsPage() {
         </p>
       </div>
 
-      <ListingsTableView initialRows={rows} initialTotal={total} pageSize={PAGE_SIZE} />
+      <ListingsTableView
+        initialRows={rows}
+        initialTotal={total}
+        pageSize={PAGE_SIZE}
+        buildings={buildings}
+      />
     </div>
   )
 }

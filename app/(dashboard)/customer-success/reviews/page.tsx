@@ -6,13 +6,17 @@ import { requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import {
   fetchDailyVolume,
+  fetchEmergingStrengths,
   fetchFilterOptions,
   fetchHeatmap,
   fetchLatestForBucket,
+  fetchPainPoints,
   fetchReviewsKPIs,
   fetchReviewsList,
   fetchTagDistribution,
+  fetchWeeklyResponseRate,
 } from '@/lib/reviews/bq'
+import { fetchCohortSegments, fetchCohortWeeklyTrend } from '@/lib/reviews/cohort'
 import { getActionsForReviews, getDisputeStats } from '@/lib/reviews/actions'
 import {
   parseReviewFilters,
@@ -121,6 +125,12 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
     overviewLatestBad,
     performanceList,
     performanceSummary,
+    perfWeeklyTrend,
+    perfChannelSegments,
+    perfBuildingSegments,
+    perfResponseTrend,
+    perfStrengths,
+    perfPainPoints,
     disputesList,
     disputesSummary,
     rawDisputeStats,
@@ -135,6 +145,14 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
     fetchLatestForBucket(overviewFilters, { ratingLte: 3, limit: 5 }),
     fetchReviewsList(performanceFilters),
     fetchReviewsKPIs(performanceFilters),
+    // Performance tab — checkout-cohort analytics (PDF pages 2–3) + publish-date
+    // theme/response metrics (pages 4–5). All scoped to the pf_* filter set.
+    fetchCohortWeeklyTrend(performanceFilters),
+    fetchCohortSegments(performanceFilters, 'channel'),
+    fetchCohortSegments(performanceFilters, 'building'),
+    fetchWeeklyResponseRate(performanceFilters),
+    fetchEmergingStrengths(performanceFilters),
+    fetchPainPoints(performanceFilters),
     fetchReviewsList(disputesFilters),
     fetchReviewsKPIs(disputesFilters),
     getDisputeStats(),
@@ -242,9 +260,15 @@ async function renderReviewsPage(searchParams: ReviewsSearchParams) {
           disputeStats:      overviewDisputeStats,
         }}
         performanceData={{
-          rows:       performanceRows,
-          totalCount: performanceList.totalCount,
-          summary:    performanceSummary,
+          rows:           performanceRows,
+          totalCount:     performanceList.totalCount,
+          summary:        performanceSummary,
+          weeklyTrend:    perfWeeklyTrend,
+          channelSegments:  perfChannelSegments,
+          buildingSegments: perfBuildingSegments,
+          responseTrend:  perfResponseTrend,
+          strengths:      perfStrengths,
+          painPoints:     perfPainPoints,
         }}
         disputesData={{
           rows:         disputesRows,

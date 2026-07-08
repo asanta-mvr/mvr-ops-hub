@@ -5,14 +5,8 @@ import { db } from '@/lib/db'
 import { authzView, authzEdit } from '@/lib/auth/permissions'
 import { createCaseSchema } from '@/lib/validations/dispute'
 import { createCase, listCases, serializeCase } from '@/lib/disputes/cases'
-import {
-  DISPUTE_CASE_TYPES,
-  DISPUTE_OTAS,
-  DISPUTE_STATUSES,
-  type DisputeCaseStatusT,
-  type DisputeCaseTypeT,
-  type DisputeOta,
-} from '@/lib/disputes/types'
+import { fetchConversationSnapshot } from '@/lib/disputes/bq'
+import { DISPUTE_OTAS, type DisputeOta } from '@/lib/disputes/types'
 
 // Parses a CSV query param into the subset of `allowed` values present.
 function parseCsv<T extends string>(value: string | null, allowed: readonly T[]): T[] {
@@ -24,6 +18,15 @@ function parseCsv<T extends string>(value: string | null, allowed: readonly T[])
     .filter((s): s is T => set.has(s))
 }
 
+// Parses a CSV of free-form keys (case types / statuses are open strings).
+function parseCsvAny(value: string | null): string[] {
+  if (!value) return []
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
@@ -32,9 +35,9 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const cases = await listCases({
-      status: parseCsv<DisputeCaseStatusT>(searchParams.get('status'), DISPUTE_STATUSES),
+      status: parseCsvAny(searchParams.get('status')),
       ota: parseCsv<DisputeOta>(searchParams.get('ota'), DISPUTE_OTAS),
-      caseType: parseCsv<DisputeCaseTypeT>(searchParams.get('caseType'), DISPUTE_CASE_TYPES),
+      caseType: parseCsvAny(searchParams.get('caseType')),
     })
 
     return NextResponse.json({ data: cases })
@@ -59,7 +62,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const created = await createCase({ ...parsed.data, createdById: session!.user.id })
+    const conversationSnapshot = await fetchConversationSnapshot(
+      parsed.data.reservationMeta?.conversationId
+    )
+    const created = await createCase({
+      ...parsed.data,
+      conversationSnapshot,
+      createdById: session!.user.id,
+    })
 
     db.auditLog
       .create({

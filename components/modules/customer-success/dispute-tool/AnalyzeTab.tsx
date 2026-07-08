@@ -1,22 +1,30 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { AlertTriangle, ImagePlus, Loader2, MessagesSquare, Search, Sparkles, Star, X } from 'lucide-react'
+import { AlertTriangle, Check, ImagePlus, Loader2, MessagesSquare, Plus, Search, Sparkles, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DISPUTE_OTAS,
+  findCaseType,
   type AnalyzeResult,
+  type CaseTypeDef,
   type DisputeCaseTypeT,
   type DisputeOta,
   type ReservationMeta,
+  type StatusTone,
 } from '@/lib/disputes/types'
 import {
   lookupReservationByCode,
   useAnalyze,
+  useCaseTypes,
+  useCreateCase,
+  useCreateCaseType,
   uploadEvidence,
   type ReservationLookupResult,
 } from './useDisputeQueries'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ResultView } from './ResultView'
+import { ConversationInbox } from './ConversationInbox'
 import { OtaIcon } from './OtaIcon'
 
 const INPUT_CLASS =
@@ -51,9 +59,30 @@ function fmtMoney(n: number | null): string | null {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
-export function AnalyzeTab() {
+// Stars on a 1–5 scale; otherwise the raw number (e.g. Booking's 1–10).
+function RatingDisplay({ rating }: { rating: number }) {
+  if (rating > 0 && rating <= 5) {
+    const full = Math.round(rating)
+    return (
+      <span className="inline-flex items-center gap-0.5" title={`${rating} / 5`}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Star key={i} className={`h-4 w-4 ${i <= full ? 'fill-mvr-warning text-mvr-warning' : 'text-mvr-steel'}`} />
+        ))}
+        <span className="ml-1 text-sm font-medium text-mvr-olive">{rating}</span>
+      </span>
+    )
+  }
+  return <span className="font-display text-lg text-mvr-primary">{rating}<span className="text-sm text-muted-foreground"> / 10</span></span>
+}
+
+export function AnalyzeTab({ initialCaseTypes }: { initialCaseTypes: CaseTypeDef[] }) {
   const analyze = useAnalyze()
+  const create = useCreateCase()
+  const { data: caseTypes = [] } = useCaseTypes(initialCaseTypes)
   const [draftId] = useState(newDraftId)
+  // Set once the analyzed result is persisted via "Add to tracker".
+  const [addedCaseId, setAddedCaseId] = useState<string | null>(null)
+  const [newTypeOpen, setNewTypeOpen] = useState(false)
 
   // Lookup state
   const [lookupCode, setLookupCode] = useState('')
@@ -78,7 +107,23 @@ export function AnalyzeTab() {
   const [result, setResult] = useState<(AnalyzeResult & { caseType: DisputeCaseTypeT }) | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const isDispute = caseType === 'disputa'
+  const selectedType = findCaseType(caseTypes, caseType)
+  // Only the built-in OTA dispute carries the amount + timeline inputs.
+  const showAmountTimeline = !!selectedType?.hasAmountTimeline
+
+  // The analyzed text for a looked-up reservation: the review for review cases,
+  // the conversation transcript for OTA disputes and custom types.
+  function primaryTextFor(key: string): string {
+    return key === 'review' ? review?.text ?? '' : conversation?.transcript ?? ''
+  }
+
+  function selectType(key: string) {
+    setCaseType(key)
+    if (reservation) setInputText(primaryTextFor(key))
+    // The prior analysis is type-specific — clear it on a type switch.
+    setResult(null)
+    setAddedCaseId(null)
+  }
 
   async function handleLookup() {
     const code = lookupCode.trim()
@@ -166,26 +211,45 @@ export function AnalyzeTab() {
     }
   }
 
-  async function handleAnalyze() {
-    if (!inputText.trim()) return
-    const res = await analyze.mutateAsync({
+  function analyzePayload() {
+    return {
       caseType,
       ota,
       inputText,
       guestName: guestName || undefined,
       reservationRef: reservationRef || undefined,
-      monto: isDispute ? monto || undefined : undefined,
-      cronologia: isDispute ? cronologia || undefined : undefined,
+      monto: showAmountTimeline ? monto || undefined : undefined,
+      cronologia: showAmountTimeline ? cronologia || undefined : undefined,
       evidencePaths: evidence.map((e) => e.path),
       reservationMeta: buildReservationMeta(),
-    })
+    }
+  }
+
+  async function handleAnalyze() {
+    if (!inputText.trim()) return
+    const res = await analyze.mutateAsync(analyzePayload())
     setResult({ probs: res.probs, resultText: res.resultText, caseType })
+    setAddedCaseId(null) // a fresh analysis hasn't been added to the tracker yet
+  }
+
+  // Persist the analyzed result to the tracker (no AI re-run — the precomputed
+  // verdict + probabilities travel with the payload).
+  async function addToTracker() {
+    if (!result) return
+    const created = await create.mutateAsync({
+      ...analyzePayload(),
+      resultText: result.resultText ?? undefined,
+      probs: result.probs,
+    })
+    setAddedCaseId(created.id)
   }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      {/* ── Input column ───────────────────────────────────────────────── */}
-      <div className="space-y-4 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
+      {/* ── Context column ─────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <h3 className="text-center font-display text-lg text-mvr-primary">Context</h3>
+        <div className="space-y-4 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
         {/* Reservation lookup */}
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -248,41 +312,69 @@ export function AnalyzeTab() {
           </p>
         ) : null}
 
-        {/* Main text */}
-        <div>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {isDispute ? 'Support chat / dispute notice (main input)' : 'Review text (main input)'}
-            </label>
-            {reservation ? (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {conversation ? (
-                  <button type="button" onClick={() => setInputText(conversation.transcript)} className="inline-flex items-center gap-1 rounded-full border border-mvr-primary/30 bg-white px-2.5 py-1 text-[11px] text-mvr-primary hover:bg-mvr-primary-light">
-                    <MessagesSquare className="h-3.5 w-3.5" /> Use conversation ({conversation.messageCount})
-                  </button>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground">No conversation</span>
-                )}
-                {review?.text ? (
-                  <button type="button" onClick={() => setInputText(review.text ?? '')} className="inline-flex items-center gap-1 rounded-full border border-mvr-primary/30 bg-white px-2.5 py-1 text-[11px] text-mvr-primary hover:bg-mvr-primary-light">
-                    <Star className="h-3.5 w-3.5" /> Use review{typeof review.rating === 'number' ? ` (${review.rating}★)` : ''}
-                  </button>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground">No review left</span>
-                )}
-              </div>
-            ) : null}
-          </div>
-          <textarea
-            className={`${INPUT_CLASS} min-h-[160px] resize-y`}
-            placeholder={isDispute ? 'Guest conversation / dispute text — pulled from the booking, or paste manually…' : 'Review text — pulled from the booking, or paste manually…'}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-          />
-        </div>
+        {/* Context — after a lookup: the conversation (inbox view) + the review,
+            as two tabs. The case type decides which one is analyzed. With no
+            reservation, fall back to a manual paste-in textarea. */}
+        {reservation ? (
+          <div>
+            <Tabs defaultValue="conversation" className="flex w-full flex-col gap-0">
+              <TabsList variant="line" className="mb-3 w-full justify-start border-b border-[#E0DBD4]">
+                <TabsTrigger value="conversation" className="gap-1.5 px-3 text-sm">
+                  <MessagesSquare className="h-3.5 w-3.5" /> Conversation
+                </TabsTrigger>
+                <TabsTrigger value="review" className="gap-1.5 px-3 text-sm">
+                  <Star className="h-3.5 w-3.5" /> Review
+                </TabsTrigger>
+              </TabsList>
 
-        {/* Dispute-only fields */}
-        {isDispute && (
+              <TabsContent value="conversation">
+                <ConversationInbox
+                  messages={conversation?.messages ?? []}
+                  isLoading={false}
+                  isError={false}
+                  guestName={reservation.guestName}
+                  emptyHint="No guest conversation is linked to this reservation."
+                  className="min-h-[240px] max-h-[46vh] overflow-y-auto shadow-card"
+                />
+              </TabsContent>
+
+              <TabsContent value="review">
+                {review?.text || review?.rating != null ? (
+                  <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-white p-4 shadow-card">
+                    {review?.rating != null ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Guest rating</span>
+                        <RatingDisplay rating={review.rating} />
+                      </div>
+                    ) : null}
+                    {review?.text ? (
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-mvr-olive">{review.text}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No review text was captured.</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No review is linked to this reservation.</p>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Main input
+            </label>
+            <textarea
+              className={`${INPUT_CLASS} min-h-[160px] resize-y`}
+              placeholder="Paste the review, conversation, or notice to analyze…"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+            />
+          </div>
+        )}
+
+        {/* Amount + timeline — built-in OTA dispute only */}
+        {showAmountTimeline && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input className={INPUT_CLASS} placeholder="Amount in dispute (e.g. $480)" value={monto} onChange={(e) => setMonto(e.target.value)} />
             <input className={INPUT_CLASS} placeholder="Timeline / chronology" value={cronologia} onChange={(e) => setCronologia(e.target.value)} />
@@ -318,26 +410,43 @@ export function AnalyzeTab() {
 
         {/* Case type — last, just before analyzing */}
         <div>
-          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Case type</label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Case type</label>
+            <button
+              type="button"
+              onClick={() => setNewTypeOpen((v) => !v)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-mvr-primary hover:underline"
+            >
+              <Plus className="h-3.5 w-3.5" /> New type
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            {([
-              { v: 'review', label: 'Review removal' },
-              { v: 'disputa', label: 'OTA dispute' },
-            ] as const).map((opt) => (
+            {caseTypes.map((t) => (
               <button
-                key={opt.v}
+                key={t.key}
                 type="button"
-                onClick={() => setCaseType(opt.v)}
+                onClick={() => selectType(t.key)}
                 className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  caseType === opt.v
+                  caseType === t.key
                     ? 'border-mvr-primary bg-mvr-primary-light font-medium text-mvr-primary'
                     : 'border-[#E0DBD4] text-mvr-olive hover:bg-mvr-neutral'
                 }`}
               >
-                {opt.label}
+                {t.label}
               </button>
             ))}
           </div>
+          {newTypeOpen ? (
+            <div className="mt-2">
+              <NewCaseTypeForm
+                onCancel={() => setNewTypeOpen(false)}
+                onCreated={(key) => {
+                  setNewTypeOpen(false)
+                  selectType(key)
+                }}
+              />
+            </div>
+          ) : null}
         </div>
 
         <Button onClick={handleAnalyze} disabled={analyze.isPending || !inputText.trim()} className="w-full" size="lg">
@@ -345,16 +454,27 @@ export function AnalyzeTab() {
           {analyze.isPending ? 'Analyzing…' : 'Analyze case'}
         </Button>
         {analyze.isError ? <p className="text-sm text-mvr-danger">{(analyze.error as Error).message}</p> : null}
+        </div>
       </div>
 
-      {/* ── Result column ──────────────────────────────────────────────── */}
-      <div>
+      {/* ── Analysis column ────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <h3 className="text-center font-display text-lg text-mvr-primary">Analysis</h3>
         {result ? (
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg text-mvr-primary">Analysis</h3>
-              <span className="rounded-full bg-mvr-success-light px-2.5 py-0.5 text-xs text-mvr-success">Saved to tracker</span>
+            <div className="flex justify-center">
+              {addedCaseId ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-mvr-success-light px-3 py-1 text-xs font-medium text-mvr-success">
+                  <Check className="h-3.5 w-3.5" /> Added to tracker
+                </span>
+              ) : (
+                <Button onClick={addToTracker} disabled={create.isPending || !inputText.trim()}>
+                  {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Add to tracker
+                </Button>
+              )}
             </div>
+            {create.isError ? <p className="text-center text-sm text-mvr-danger">{(create.error as Error).message}</p> : null}
             <ResultView probs={result.probs} resultText={result.resultText} caseType={result.caseType} />
           </div>
         ) : (
@@ -368,6 +488,147 @@ export function AnalyzeTab() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── New custom case type form ─────────────────────────────────────────────────
+interface DraftStage {
+  label: string
+  tone: StatusTone
+  terminal: boolean
+}
+
+const TONE_OPTIONS: Array<{ value: StatusTone; label: string }> = [
+  { value: 'active', label: 'In progress' },
+  { value: 'steel', label: 'Info' },
+  { value: 'success', label: 'Positive' },
+  { value: 'danger', label: 'Negative' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'neutral', label: 'Neutral' },
+]
+
+function stageSlug(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+}
+
+function NewCaseTypeForm({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: (key: string) => void
+  onCancel: () => void
+}) {
+  const create = useCreateCaseType()
+  const [label, setLabel] = useState('')
+  const [stages, setStages] = useState<DraftStage[]>([
+    { label: 'Open', tone: 'active', terminal: false },
+    { label: 'Resolved', tone: 'success', terminal: true },
+  ])
+  const [defaultIndex, setDefaultIndex] = useState(0)
+
+  function updateStage(i: number, patch: Partial<DraftStage>) {
+    setStages((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
+  }
+  function addStage() {
+    setStages((prev) => [...prev, { label: '', tone: 'neutral', terminal: false }])
+  }
+  function removeStage(i: number) {
+    setStages((prev) => prev.filter((_, idx) => idx !== i))
+    if (defaultIndex >= i && defaultIndex > 0) setDefaultIndex((d) => d - 1)
+  }
+
+  const namedStages = stages.filter((s) => s.label.trim())
+  const canSave = label.trim().length > 0 && namedStages.length >= 1
+
+  async function save() {
+    if (!canSave) return
+    const seen = new Set<string>()
+    const statuses = namedStages.map((s) => {
+      const base = stageSlug(s.label) || 'status'
+      let key = base
+      for (let n = 2; seen.has(key); n++) key = `${base}-${n}`
+      seen.add(key)
+      return { key, label: s.label.trim(), tone: s.tone, terminal: s.terminal }
+    })
+    const defLabel = stages[defaultIndex]?.label.trim()
+    const defaultStatus = statuses.find((s) => s.label === defLabel)?.key ?? statuses[0].key
+    const created = await create.mutateAsync({ label: label.trim(), statuses, defaultStatus })
+    onCreated(created.key)
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-mvr-steel bg-mvr-cream/60 p-3">
+      <input
+        className={INPUT_CLASS}
+        placeholder="New type name (e.g. Chargeback, Damage claim)"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        autoFocus
+      />
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Status stages
+        </p>
+        {stages.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              name="defaultStage"
+              checked={defaultIndex === i}
+              onChange={() => setDefaultIndex(i)}
+              title="Starting status"
+            />
+            <input
+              className={`${INPUT_CLASS} flex-1`}
+              placeholder="Stage name"
+              value={s.label}
+              onChange={(e) => updateStage(i, { label: e.target.value })}
+            />
+            <select
+              className={`${INPUT_CLASS} w-32 shrink-0`}
+              value={s.tone}
+              onChange={(e) => updateStage(i, { tone: e.target.value as StatusTone })}
+            >
+              {TONE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={s.terminal}
+                onChange={(e) => updateStage(i, { terminal: e.target.checked })}
+              />
+              Closes
+            </label>
+            {stages.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => removeStage(i)}
+                className="rounded p-1 text-mvr-steel hover:text-mvr-danger"
+                aria-label="Remove stage"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+        ))}
+        <button type="button" onClick={addStage} className="text-[11px] font-medium text-mvr-primary hover:underline">
+          + Add stage
+        </button>
+        <p className="text-[10px] text-muted-foreground">
+          The selected radio is the status a new case starts in · &quot;Closes&quot; marks the case resolved.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={save} disabled={create.isPending || !canSave}>
+          {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          Create type
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
+      </div>
+      {create.isError ? <p className="text-xs text-mvr-danger">{(create.error as Error).message}</p> : null}
     </div>
   )
 }

@@ -167,6 +167,22 @@ export async function fetchConversationMessages(
   return out
 }
 
+// Best-effort structured-conversation capture for the create-time snapshot.
+// Never throws — a failure (or missing id) just yields null so case creation is
+// never blocked by a BigQuery hiccup.
+export async function fetchConversationSnapshot(
+  conversationId: string | null | undefined
+): Promise<ConversationMessage[] | null> {
+  if (!conversationId) return null
+  try {
+    const messages = await fetchConversationMessages(conversationId)
+    return messages.length ? messages : null
+  } catch (e) {
+    console.error('[disputes/bq] conversation snapshot failed', e)
+    return null
+  }
+}
+
 /**
  * Pulls the processed review for a reservation and picks the overall rating for
  * the booking's OTA. Returns null fields when no review exists.

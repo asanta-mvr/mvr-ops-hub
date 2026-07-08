@@ -124,12 +124,18 @@ export async function PUT(req: NextRequest) {
           tokenExpiresAt: token.expiresAt,
         },
       })
+      await db.guestySyncLog.create({
+        data: { connectionId: saved.id, operation: 'test_connection', status: 'success', message: 'Connected to Guesty' },
+      }).catch((e) => console.error('[guesty sync log]', e))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to connect to Guesty'
       result = await db.guestyConnection.update({
         where: { id: saved.id },
         data: { status: 'error', lastError: message, accessToken: null, tokenExpiresAt: null },
       })
+      await db.guestySyncLog.create({
+        data: { connectionId: saved.id, operation: 'test_connection', status: 'error', message },
+      }).catch((e) => console.error('[guesty sync log]', e))
     }
 
     db.auditLog

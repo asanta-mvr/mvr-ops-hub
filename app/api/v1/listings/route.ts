@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     ]
 
     const attachedParam = searchParams.get('attached') // 'attached' | 'unattached' | null (all)
+    const buildingId = searchParams.get('buildingId')?.trim() // filter to listings whose unit is in this building
 
     const where: Prisma.ListingWhereInput = {
       ...(q
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest) {
         : attachedParam === 'unattached'
           ? { unitId: null }
           : {}),
+      // A building filter implies the listing is attached to a unit in that building.
+      ...(buildingId ? { unit: { buildingId } } : {}),
     }
 
     const [rows, total] = await Promise.all([

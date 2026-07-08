@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { authzView } from '@/lib/auth/permissions'
 import { lookupReservation } from '@/lib/integrations/bigquery'
-import { fetchConversation, fetchReviewDetail, fetchReservationFinancials } from '@/lib/disputes/bq'
+import {
+  fetchConversation,
+  fetchConversationMessages,
+  fetchReviewDetail,
+  fetchReservationFinancials,
+} from '@/lib/disputes/bq'
 import { DISPUTE_OTAS, type DisputeOta } from '@/lib/disputes/types'
 
 // Aggregated booking lookup for the Dispute Tool Analyze "Search" button:
@@ -29,13 +34,19 @@ export async function GET(req: NextRequest) {
       ? (reservation.source as DisputeOta)
       : 'airbnb'
 
-    const [conversation, review, financials] = await Promise.all([
+    const [conversation, messages, review, financials] = await Promise.all([
       reservation.conversationId
         ? fetchConversation(reservation.conversationId).catch((e) => {
             console.error('[disputes/lookup] conversation fetch failed', e)
             return null
           })
         : Promise.resolve(null),
+      reservation.conversationId
+        ? fetchConversationMessages(reservation.conversationId).catch((e) => {
+            console.error('[disputes/lookup] conversation messages fetch failed', e)
+            return []
+          })
+        : Promise.resolve([]),
       reservation.reservationId
         ? fetchReviewDetail(reservation.reservationId, otaForRating).catch((e) => {
             console.error('[disputes/lookup] review fetch failed', e)
@@ -81,7 +92,12 @@ export async function GET(req: NextRequest) {
           otaReservationId: reservation.otaReservationId,
           guestId: reservation.guestId,
         },
-        conversation: conversation && conversation.messageCount > 0 ? conversation : null,
+        conversation:
+          conversation && conversation.messageCount > 0
+            ? { ...conversation, messages }
+            : messages.length
+              ? { transcript: conversation?.transcript ?? '', messageCount: messages.length, messages }
+              : null,
         review: review && review.text ? review : null,
       },
     })

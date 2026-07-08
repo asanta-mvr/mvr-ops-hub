@@ -1,4 +1,5 @@
 import { MapPin, Users, BedDouble, Bath, Ruler, Lock, Wifi, KeyRound } from 'lucide-react'
+import CollapsibleCard from './CollapsibleCard'
 
 // Presentational, read-only render of the Guesty-derived listing detail, sourced
 // from GuestyListing.raw. Sensitive operational fields are shown only when
@@ -27,12 +28,7 @@ function pick(raw: Raw, path: string): unknown {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
-      <h3 className="font-display text-lg text-mvr-primary">{title}</h3>
-      <div className="mt-3">{children}</div>
-    </div>
-  )
+  return <CollapsibleCard title={title}>{children}</CollapsibleCard>
 }
 
 function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

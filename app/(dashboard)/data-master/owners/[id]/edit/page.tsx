@@ -10,26 +10,36 @@ export default async function EditOwnerPage({ params }: { params: { id: string }
   const owner = await db.owner.findUnique({ where: { id: params.id } })
   if (!owner) notFound()
 
+  // Legacy rows may only have `nickname`; split it as a fallback for first/last.
+  const nameParts = owner.nickname.trim().split(/\s+/)
+  const fallbackFirst = nameParts[0] ?? ''
+  const fallbackLast = nameParts.slice(1).join(' ')
+
   const defaultValues = {
-    id:       owner.id,
-    nickname:       owner.nickname,
-    type:           owner.type,
-    status:         owner.status,
-    category:       owner.category       ?? '',
-    personality:    owner.personality    ?? '',
-    documentType:   owner.documentType   ?? '',
-    documentNumber: owner.documentNumber ?? '',
-    phone:          owner.phone          ?? '',
-    address:        owner.address        ?? '',
-    email:          owner.email          ?? '',
-    otherEmail:     owner.otherEmail     ?? '',
-    photoUrl:       owner.photoUrl       ?? '',
-    linkedin:       owner.linkedin       ?? '',
-    age:            owner.age            ? String(owner.age) : '',
-    nationality:    owner.nationality    ?? '',
-    language:       owner.language,
-    siteUser:       owner.siteUser       ?? '',
-    notes:          owner.notes          ?? '',
+    firstName:          owner.firstName ?? fallbackFirst,
+    lastName:           owner.lastName ?? fallbackLast,
+    type:               owner.type            ?? '',
+    status:             (owner.status === 'active' ? 'active' : 'inactive') as 'active' | 'inactive',
+    category:           owner.category        ?? '',
+    personalityScore:   owner.personalityScore   ?? 50,
+    communicationScore: owner.communicationScore ?? 50,
+    documentType:       owner.documentType    ?? '',
+    documentNumber:     owner.documentNumber  ?? '',
+    phone:              owner.phone           ?? '',
+    address:            owner.address         ?? '',
+    city:               owner.city            ?? '',
+    state:              owner.state           ?? '',
+    postalCode:         owner.postalCode      ?? '',
+    country:            owner.country         ?? '',
+    email:              owner.email           ?? '',
+    otherEmail:         owner.otherEmail      ?? '',
+    photoUrl:           owner.photoUrl        ?? '',
+    linkedin:           owner.linkedin        ?? '',
+    dateOfBirth:        owner.dateOfBirth ? owner.dateOfBirth.toISOString().slice(0, 10) : '',
+    nationality:        owner.nationality     ?? '',
+    language:           owner.language,
+    siteUser:           owner.siteUser        ?? '',
+    notes:              owner.notes           ?? '',
   }
 
   return (

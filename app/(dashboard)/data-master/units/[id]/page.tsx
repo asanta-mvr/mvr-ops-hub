@@ -3,8 +3,15 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronRight, Pencil } from 'lucide-react'
 import { db } from '@/lib/db'
+import { auth } from '@/lib/auth'
+import { canEdit } from '@/lib/auth/permissions'
 import { Button } from '@/components/ui/button'
 import { UnitDetailTabs } from '@/components/modules/data-master/UnitDetailTabs'
+import type {
+  FolderView,
+  FileAlertView,
+  AlertTypeView,
+} from '@/components/modules/data-master/DocumentsSection'
 
 export const metadata: Metadata = { title: 'Unit Detail' }
 
@@ -18,17 +25,50 @@ const STATUS_STYLES: Record<string, string> = {
 function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 
 export default async function UnitDetailPage({ params }: { params: { id: string } }) {
-  const unit = await db.unit.findUnique({
-    where: { id: params.id },
-    include: {
-      building: { select: { id: true, name: true } },
-      owner:    { select: { id: true, nickname: true, phone: true, email: true } },
-      listings: { orderBy: { name: 'asc' }, select: { id: true, name: true, nickname: true, guestyId: true } },
-      _count:   { select: { listings: true, contracts: true, inspections: true } },
-    },
-  })
+  const session = await auth()
+  const docCanEdit = session ? await canEdit(session, 'data_master.owners') : false
+
+  const [unit, alertTypes] = await Promise.all([
+    db.unit.findUnique({
+      where: { id: params.id },
+      include: {
+        building: { select: { id: true, name: true } },
+        owner:    { select: { id: true, nickname: true, phone: true, email: true } },
+        listings: { orderBy: { name: 'asc' }, select: { id: true, name: true, nickname: true, guestyId: true } },
+        documentFolders: { orderBy: { createdAt: 'asc' } },
+        fileAlerts: {
+          include: { alertType: true, folder: { select: { id: true, name: true } } },
+          orderBy: { expirationDate: 'asc' },
+        },
+        _count:   { select: { listings: true, contracts: true, inspections: true } },
+      },
+    }),
+    db.alertType.findMany({ orderBy: { createdAt: 'asc' } }),
+  ])
 
   if (!unit) notFound()
+
+  const folders: FolderView[] = unit.documentFolders.map((f) => ({
+    id: f.id, name: f.name, driveFolderId: f.driveFolderId,
+  }))
+  const alertTypeViews: AlertTypeView[] = alertTypes.map((t) => ({
+    id: t.id, name: t.name, leadTimeDays: t.leadTimeDays, sendHour: t.sendHour,
+    notifyInternal: t.notifyInternal, slackChannel: t.slackChannel, slackChannelId: t.slackChannelId,
+    slackTemplate: t.slackTemplate, notifyOwner: t.notifyOwner, emailSubject: t.emailSubject, emailTemplate: t.emailTemplate,
+  }))
+  const fileAlerts: FileAlertView[] = unit.fileAlerts.map((a) => ({
+    id: a.id,
+    driveFileId: a.driveFileId,
+    fileName: a.fileName,
+    expirationDate: a.expirationDate.toISOString(),
+    folderId: a.folderId,
+    folderName: a.folder?.name ?? null,
+    alertType: {
+      id: a.alertType.id, name: a.alertType.name, leadTimeDays: a.alertType.leadTimeDays, sendHour: a.alertType.sendHour,
+      notifyInternal: a.alertType.notifyInternal, slackChannel: a.alertType.slackChannel, slackChannelId: a.alertType.slackChannelId,
+      slackTemplate: a.alertType.slackTemplate, notifyOwner: a.alertType.notifyOwner, emailSubject: a.alertType.emailSubject, emailTemplate: a.alertType.emailTemplate,
+    },
+  }))
 
   return (
     <div className="space-y-4">
@@ -102,6 +142,10 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
         ownerPhone={unit.owner?.phone ?? null}
         ownerEmail={unit.owner?.email ?? null}
         listings={unit.listings}
+        folders={folders}
+        fileAlerts={fileAlerts}
+        alertTypes={alertTypeViews}
+        docCanEdit={docCanEdit}
       />
     </div>
   )

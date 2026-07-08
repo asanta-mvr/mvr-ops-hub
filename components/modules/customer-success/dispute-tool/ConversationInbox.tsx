@@ -65,14 +65,14 @@ function MessageRow({ m, guestName }: { m: ConversationMessage; guestName: strin
   return (
     <div className={`flex items-end gap-2 ${isGuest ? 'justify-start' : 'flex-row-reverse justify-start'}`}>
       <Avatar kind={avatarKind} label={initials(isGuest ? guestName : m.userName, isGuest ? 'G' : 'H')} />
-      <div className={`flex max-w-[78%] flex-col ${isGuest ? 'items-start' : 'items-end'}`}>
+      <div className={`flex min-w-0 max-w-[78%] flex-col ${isGuest ? 'items-start' : 'items-end'}`}>
         <div className={`mb-0.5 flex items-center gap-1.5 ${isGuest ? '' : 'flex-row-reverse'}`}>
           <span className="text-[11px] font-medium text-mvr-primary">{senderName}</span>
           <ChannelBadge channel={m.channel} />
           <span className="text-[10px] text-muted-foreground">{fmtTime(m.createdAt)}</span>
         </div>
         <div
-          className={`whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-card ${
+          className={`whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3 py-2 text-sm shadow-card ${
             isGuest
               ? 'rounded-bl-sm bg-white text-mvr-olive'
               : 'rounded-br-sm bg-mvr-primary-light text-mvr-primary'
@@ -112,9 +112,12 @@ interface Props {
   isError: boolean
   guestName: string | null
   emptyHint?: string
+  // Extra classes for the message-list container (e.g. responsive height + scroll
+  // when embedded in a fixed-size panel). Defaults to none.
+  className?: string
 }
 
-export function ConversationInbox({ messages, isLoading, isError, guestName, emptyHint }: Props) {
+export function ConversationInbox({ messages, isLoading, isError, guestName, emptyHint, className }: Props) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
@@ -136,7 +139,7 @@ export function ConversationInbox({ messages, isLoading, isError, guestName, emp
 
   let lastDay = ''
   return (
-    <div className="space-y-3 rounded-xl border border-[#E0DBD4] bg-mvr-cream/50 p-4">
+    <div className={`space-y-3 rounded-xl border border-[#E0DBD4] bg-mvr-cream/50 p-4 ${className ?? ''}`}>
       {messages.map((m) => {
         const day = dayKey(m.createdAt)
         const showDay = day && day !== lastDay

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-23T19:44:21.486Z",
+  "timestamp": "2026-07-08T00:46:05.508Z",
   "source": "auto-postool",
   "partial": false,
   "phase": null,
@@ -22,7 +22,39 @@
     },
     {
       "status": "M",
+      "path": ".planning/HANDOFF.json"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/customer-success/dispute-tool/page.tsx"
+    },
+    {
+      "status": "M",
       "path": "app/(dashboard)/customer-success/reviews/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/data-master/listings/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/data-master/owners/[id]/edit/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/data-master/owners/[id]/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/data-master/owners/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/data-master/units/[id]/page.tsx"
+    },
+    {
+      "status": "M",
+      "path": "app/(dashboard)/integrations/guesty/page.tsx"
     },
     {
       "status": "M",
@@ -30,27 +62,71 @@
     },
     {
       "status": "M",
-      "path": "app/api/v1/reservations/lookup/route.ts"
+      "path": "app/api/v1/disputes/analyze/route.ts"
     },
     {
       "status": "M",
-      "path": "app/api/v1/reviews/cell/route.ts"
+      "path": "app/api/v1/disputes/cases/[id]/conversation/route.ts"
     },
     {
       "status": "M",
-      "path": "components/modules/customer-success/chargebacks/MultiSelectFilter.tsx"
+      "path": "app/api/v1/disputes/cases/route.ts"
     },
     {
       "status": "M",
-      "path": "components/modules/customer-success/reviews/CellDetailPanel.tsx"
+      "path": "app/api/v1/disputes/lookup/route.ts"
     },
     {
       "status": "M",
-      "path": "components/modules/customer-success/reviews/DailyVolumeChart.tsx"
+      "path": "app/api/v1/integrations/guesty/connection/route.ts"
     },
     {
       "status": "M",
-      "path": "components/modules/customer-success/reviews/MetricHeatmap.tsx"
+      "path": "app/api/v1/integrations/guesty/connection/sync/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/integrations/guesty/owners/sync/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/listings/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/owners/[id]/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "app/api/v1/owners/route.ts"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/AnalyzeTab.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/ConversationInbox.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/DisputeToolClient.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/KnowledgeTab.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/ResultView.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/TrackerTab.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/customer-success/dispute-tool/useDisputeQueries.ts"
     },
     {
       "status": "M",
@@ -58,11 +134,31 @@
     },
     {
       "status": "M",
-      "path": "components/modules/customer-success/reviews/ReviewsFilterBar.tsx"
+      "path": "components/modules/data-master/GuestyListingDetail.tsx"
     },
     {
       "status": "M",
-      "path": "components/modules/data-master/UnitForm.tsx"
+      "path": "components/modules/data-master/ListingPhotoGallery.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/data-master/ListingsTableView.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/data-master/OwnerForm.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/data-master/OwnersTableView.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/data-master/UnitDetailTabs.tsx"
+    },
+    {
+      "status": "M",
+      "path": "components/modules/integrations/guesty/GuestyConnectionForm.tsx"
     },
     {
       "status": "M",
@@ -70,15 +166,31 @@
     },
     {
       "status": "M",
-      "path": "lib/auth/crypto.ts"
+      "path": "lib/disputes/agent.ts"
     },
     {
       "status": "M",
-      "path": "lib/auth/resources.ts"
+      "path": "lib/disputes/bq.ts"
     },
     {
       "status": "M",
-      "path": "lib/integrations/bigquery.ts"
+      "path": "lib/disputes/cases.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/disputes/knowledge.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/disputes/prompts.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/disputes/types.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/email/index.ts"
     },
     {
       "status": "M",
@@ -90,15 +202,7 @@
     },
     {
       "status": "M",
-      "path": "lib/reviews/filters.ts"
-    },
-    {
-      "status": "M",
       "path": "lib/reviews/types.ts"
-    },
-    {
-      "status": "M",
-      "path": "lib/reviews/weekly-brief.ts"
     },
     {
       "status": "M",
@@ -106,7 +210,11 @@
     },
     {
       "status": "M",
-      "path": "next.config.mjs"
+      "path": "lib/validations/dispute.ts"
+    },
+    {
+      "status": "M",
+      "path": "lib/validations/owner.ts"
     },
     {
       "status": "M",
@@ -122,145 +230,209 @@
     },
     {
       "status": "??",
-      "path": ".planning/"
+      "path": "Trellis-Issues-Log-2026-06-23.md"
     },
     {
       "status": "??",
-      "path": "app/(dashboard)/customer-success/dispute-tool/"
+      "path": "app/(dashboard)/integrations/slack/"
     },
     {
       "status": "??",
-      "path": "app/(dashboard)/data-master/listings/"
+      "path": "app/api/v1/alert-types/"
     },
     {
       "status": "??",
-      "path": "app/(dashboard)/integrations/guesty/"
+      "path": "app/api/v1/cron/"
     },
     {
       "status": "??",
-      "path": "app/(dashboard)/operations/"
+      "path": "app/api/v1/disputes/case-types/"
     },
     {
       "status": "??",
-      "path": "app/api/v1/disputes/"
+      "path": "app/api/v1/disputes/cases/[id]/log/"
     },
     {
       "status": "??",
-      "path": "app/api/v1/integrations/"
+      "path": "app/api/v1/disputes/knowledge/sections/"
     },
     {
       "status": "??",
-      "path": "app/api/v1/listings/"
+      "path": "app/api/v1/documents/"
     },
     {
       "status": "??",
-      "path": "components/modules/customer-success/dispute-tool/"
+      "path": "app/api/v1/drive/folder/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/GuestyListingDetail.tsx"
+      "path": "app/api/v1/drive/service-account/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/ListingDataMasterPanel.tsx"
+      "path": "app/api/v1/file-alerts/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/ListingPhotoGallery.tsx"
+      "path": "app/api/v1/integrations/slack/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/ListingRecordDrift.tsx"
+      "path": "app/api/v1/owners/[id]/documents/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/ListingUnitCockpit.tsx"
+      "path": "app/api/v1/owners/documents/"
     },
     {
       "status": "??",
-      "path": "components/modules/data-master/ListingsTableView.tsx"
+      "path": "app/api/v1/owners/field-options/"
     },
     {
       "status": "??",
-      "path": "components/modules/integrations/"
+      "path": "components/modules/customer-success/reviews/EmergingStrengths.tsx"
     },
     {
       "status": "??",
-      "path": "components/modules/operations/"
+      "path": "components/modules/customer-success/reviews/PainPoints.tsx"
     },
     {
       "status": "??",
-      "path": "docs/dispute-sources-bq-schema.md"
+      "path": "components/modules/customer-success/reviews/PerformancePanel.tsx"
     },
     {
       "status": "??",
-      "path": "docs/guesty-listing-api-map.md"
+      "path": "components/modules/customer-success/reviews/SegmentPerformance.tsx"
     },
     {
       "status": "??",
-      "path": "docs/maintenance-bq-schema.md"
+      "path": "components/modules/customer-success/reviews/WeeklyPulse.tsx"
     },
     {
       "status": "??",
-      "path": "lib/disputes/"
+      "path": "components/modules/customer-success/reviews/performanceShared.tsx"
     },
     {
       "status": "??",
-      "path": "lib/integrations/guesty.ts"
+      "path": "components/modules/data-master/CollapsibleCard.tsx"
     },
     {
       "status": "??",
-      "path": "lib/maintenance/"
+      "path": "components/modules/data-master/DocumentsSection.tsx"
     },
     {
       "status": "??",
-      "path": "lib/validations/dispute.ts"
+      "path": "components/modules/data-master/EditOwnerModal.tsx"
     },
     {
       "status": "??",
-      "path": "lib/validations/guesty.ts"
+      "path": "components/modules/data-master/OwnerDocumentsCard.tsx"
     },
     {
       "status": "??",
-      "path": "lib/validations/listing.ts"
+      "path": "components/modules/data-master/OwnerTagSelect.tsx"
     },
     {
       "status": "??",
-      "path": "prisma/seed-agent.ts"
+      "path": "components/modules/integrations/slack/"
     },
     {
       "status": "??",
-      "path": "prisma/seed-knowledge.ts"
+      "path": "components/ui/searchable-select.tsx"
     },
     {
       "status": "??",
-      "path": "prisma/seed-policies.ts"
+      "path": "grep.exe.stackdump"
     },
     {
       "status": "??",
-      "path": "reviews-brief-sample.pdf"
+      "path": "lib/alerts/"
     },
     {
       "status": "??",
-      "path": "scripts/inspect-breeze-tables.ts"
+      "path": "lib/data/"
     },
     {
       "status": "??",
-      "path": "scripts/inspect-breezeway-bq.ts"
+      "path": "lib/disputes/caseTypes.ts"
     },
     {
       "status": "??",
-      "path": "scripts/inspect-dispute-sources.ts"
+      "path": "lib/disputes/sections.ts"
     },
     {
       "status": "??",
-      "path": "scripts/inspect-guesty-listing.ts"
+      "path": "lib/integrations/slack.ts"
     },
     {
       "status": "??",
-      "path": "svg_files/aribnb2.png"
+      "path": "lib/owners/"
+    },
+    {
+      "status": "??",
+      "path": "lib/reviews/cohort.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/alerts.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/documentConfig.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/documentFolder.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/ownerDocument.ts"
+    },
+    {
+      "status": "??",
+      "path": "lib/validations/slack.ts"
+    },
+    {
+      "status": "??",
+      "path": "prisma/seed-documents.ts"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-breezeway.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-brivo.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-guesty.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-n8n.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-slack.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-stripe.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-suiteop.png"
+    },
+    {
+      "status": "??",
+      "path": "public/icons/integration-trellis.png"
+    },
+    {
+      "status": "??",
+      "path": "vercel.json"
     }
   ],
   "next_action": null,
-  "context_notes": "Recent commits:\n832aeb9 fix(middleware): allow static assets through without auth redirect\neaed048 fix(invitations): inline crown logo via CID, simplify invite landing, centered email header\n8600963 refactor(email): translate invitation email to English, drop permissions list, swap SVG logo for hosted PNG\nb1658cc fix(invitations): point email links at PUBLIC_APP_URL when set\n7a38d18 feat(reviews): per-tab filter scoping, Search button, tab icons + rename to MVR-OS"
+  "context_notes": "Recent commits:\na2b391f feat(modules): WIP disputes, operations, integrations, guesty listings before repo relocation\n832aeb9 fix(middleware): allow static assets through without auth redirect\neaed048 fix(invitations): inline crown logo via CID, simplify invite landing, centered email header\n8600963 refactor(email): translate invitation email to English, drop permissions list, swap SVG logo for hosted PNG\nb1658cc fix(invitations): point email links at PUBLIC_APP_URL when set"
 }

@@ -52,9 +52,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const existing = await db.owner.findUnique({ where: { id: params.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    // Stamp (or clear) the deactivation date when status transitions.
+    const data: Prisma.OwnerUpdateInput = { ...validated.data }
+    if (validated.data.status && validated.data.status !== existing.status) {
+      data.inactivatedAt = validated.data.status === 'inactive' ? new Date() : null
+    }
+
+    // Keep the combined display name in sync when either name part changes.
+    if (validated.data.firstName !== undefined || validated.data.lastName !== undefined) {
+      const fn = validated.data.firstName ?? existing.firstName ?? ''
+      const ln = validated.data.lastName ?? existing.lastName ?? ''
+      const combined = [fn, ln].filter(Boolean).join(' ').trim()
+      if (combined) data.nickname = combined
+    }
+
     const owner = await db.owner.update({
       where: { id: params.id },
-      data: validated.data,
+      data,
     })
 
     db.auditLog.create({
@@ -91,7 +105,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     const owner = await db.owner.update({
       where: { id: params.id },
-      data: { status: 'churned' },
+      data: { status: 'inactive', inactivatedAt: existing.inactivatedAt ?? new Date() },
     })
 
     db.auditLog.create({

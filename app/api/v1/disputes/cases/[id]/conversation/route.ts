@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { authzView } from '@/lib/auth/permissions'
-import { getCaseReservationMeta, DisputeError } from '@/lib/disputes/cases'
+import { getCaseConversationSource, DisputeError } from '@/lib/disputes/cases'
 import { fetchConversationMessages } from '@/lib/disputes/bq'
 import { lookupReservation } from '@/lib/integrations/bigquery'
 
-// Live guest-conversation pull for the Tracker inbox view. The case only stores a
-// flat transcript (no direction), so we re-fetch the structured messages from
-// BigQuery via the conversationId saved in reservationMeta. Read-only (no audit).
+// Guest-conversation source for the Tracker inbox view. Prefers the frozen
+// snapshot captured at create/dispute time (self-contained history, no live
+// re-query). Falls back to a live BigQuery fetch for older cases that have no
+// snapshot. Read-only (no audit).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await auth()
     const authz = await authzView(session, 'customer_success.dispute_tool')
     if (!authz.ok) return NextResponse.json({ error: authz.message }, { status: authz.status })
 
-    const meta = await getCaseReservationMeta(params.id)
-    // Prefer the stored conversationId (new cases); fall back to resolving it from
-    // the confirmation code so cases created before this field existed still work.
-    let conversationId = meta?.conversationId ?? null
-    if (!conversationId && meta?.confirmationCode) {
-      const reservation = await lookupReservation(meta.confirmationCode).catch(() => null)
+    const src = await getCaseConversationSource(params.id)
+    // Frozen snapshot wins — this is the record the dispute was based on.
+    if (src.snapshot) {
+      return NextResponse.json({
+        data: { conversationId: src.conversationId, messages: src.snapshot },
+      })
+    }
+
+    // Fallback (older cases): resolve a conversationId and fetch live.
+    let conversationId = src.conversationId
+    if (!conversationId && src.confirmationCode) {
+      const reservation = await lookupReservation(src.confirmationCode).catch(() => null)
       conversationId = reservation?.conversationId ?? null
     }
     if (!conversationId) {

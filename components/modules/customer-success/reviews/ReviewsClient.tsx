@@ -6,16 +6,22 @@ import { Gavel, LayoutDashboard, TrendingUp } from 'lucide-react'
 import type { OtaSource } from '@prisma/client'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type {
+  CohortSegmentRow,
+  CohortWeekPoint,
   DailyVolumePoint,
   DisputeStats,
+  EmergingStrength,
   HeatmapRow,
+  PainPointRow,
   ReviewsSummary,
   ReviewWithAction,
   TagDistRow,
+  WeeklyResponsePoint,
 } from '@/lib/reviews/types'
 import { DisputesPanel } from './DisputesPanel'
 import { OverviewPanel } from './OverviewPanel'
-import { PerformanceList, buildPerformanceKpis } from './PerformanceList'
+import { buildPerformanceKpis } from './PerformanceList'
+import { PerformancePanel } from './PerformancePanel'
 import { ReviewsFilterBar } from './ReviewsFilterBar'
 
 interface TabFilters {
@@ -54,9 +60,15 @@ interface Props {
     disputeStats:      DisputeStats
   }
   performanceData: {
-    rows:       ReviewWithAction[]
-    totalCount: number
-    summary:    ReviewsSummary
+    rows:             ReviewWithAction[]
+    totalCount:       number
+    summary:          ReviewsSummary
+    weeklyTrend:      CohortWeekPoint[]
+    channelSegments:  CohortSegmentRow[]
+    buildingSegments: CohortSegmentRow[]
+    responseTrend:    WeeklyResponsePoint[]
+    strengths:        EmergingStrength[]
+    painPoints:       PainPointRow[]
   }
   disputesData: {
     rows:         ReviewWithAction[]
@@ -173,13 +185,18 @@ export function ReviewsClient({
             unitOptions={unitOptions}
             otaOptions={otaOptions}
           />
-          <PerformanceList
+          <PerformancePanel
+            weeklyTrend={performanceData.weeklyTrend}
+            channelSegments={performanceData.channelSegments}
+            buildingSegments={performanceData.buildingSegments}
+            responseTrend={performanceData.responseTrend}
+            strengths={performanceData.strengths}
+            painPoints={performanceData.painPoints}
             rows={perfRows}
             totalCount={performanceData.totalCount}
             page={performanceFilters.page}
             pageSize={performanceFilters.pageSize}
             topKpis={perfKpis}
-            paramPrefix="pf_"
             assigneeOptions={assigneeOptions}
             onActionSaved={patchRow}
           />

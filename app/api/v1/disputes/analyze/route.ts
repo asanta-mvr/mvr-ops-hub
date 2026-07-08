@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
-import { db } from '@/lib/db'
 import { authzEdit } from '@/lib/auth/permissions'
 import { analyzeInputSchema, type AnalyzeInput } from '@/lib/validations/dispute'
 import { checkAnalyzeRateLimit } from '@/lib/disputes/rate-limit'
 import { getSystemPrompt, buildAnalyzeSystemPrompt } from '@/lib/disputes/prompts'
 import { runAnalyze, type AnalyzeImage, type VisionMediaType } from '@/lib/disputes/anthropic'
 import { parseProbs, cleanText } from '@/lib/disputes/parse'
-import { createCase } from '@/lib/disputes/cases'
 import { getAgentConfigRecord, getRelevantSkills } from '@/lib/disputes/agent'
 import { getRelevantKnowledge } from '@/lib/disputes/knowledge'
 import { downloadFile } from '@/lib/storage/gcs'
@@ -138,39 +135,10 @@ export async function POST(req: NextRequest) {
     const probs = parseProbs(raw)
     const resultText = cleanText(raw)
 
-    const created = await createCase({
-      caseType: input.caseType,
-      ota: input.ota,
-      inputText: input.inputText,
-      title: input.title,
-      guestName: input.guestName,
-      reservationRef: input.reservationRef,
-      monto: input.monto,
-      cronologia: input.cronologia,
-      evidencePaths: input.evidencePaths,
-      resultText,
-      probs,
-      reservationMeta: input.reservationMeta ?? null,
-      createdById: session!.user.id,
-    })
-
-    db.auditLog
-      .create({
-        data: {
-          userId: session!.user.id,
-          action: 'CREATE',
-          tableName: 'dispute_cases',
-          recordId: created.id,
-          newData: JSON.parse(
-            JSON.stringify({ caseType: input.caseType, ota: input.ota, status: created.status })
-          ) as Prisma.InputJsonValue,
-          ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
-          userAgent: req.headers.get('user-agent') ?? undefined,
-        },
-      })
-      .catch((e) => console.error('[audit] dispute analyze CREATE', e))
-
-    return NextResponse.json({ data: { caseId: created.id, probs, resultText } })
+    // Analysis is ephemeral — nothing is persisted here. The user reviews the
+    // result and explicitly clicks "Add to tracker" (POST /api/v1/disputes/cases)
+    // to create the case, so low-probability analyses don't clutter the tracker.
+    return NextResponse.json({ data: { probs, resultText } })
   } catch (error) {
     console.error('[POST /api/v1/disputes/analyze]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -48,6 +48,20 @@ const OWNER_SELECT = {
 
 const PAGE_SIZE = 50
 
+// Format a last-sync timestamp in Miami time (the team + owners are ET), so it
+// reads correctly regardless of the server's timezone.
+function fmtLastSync(d: Date | null | undefined): string {
+  if (!d) return 'Never synced'
+  return `Last synced ${d.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`
+}
+
 export default async function GuestyIntegrationPage() {
   const session = await auth()
   await requireView(session, 'integrations')
@@ -56,7 +70,15 @@ export default async function GuestyIntegrationPage() {
   const connection = await getOrCreateConnection()
   const envManaged = isEnvManaged()
 
-  const [listingRows, listingTotal, ownerRows, ownerTotal] = await Promise.all([
+  const [
+    listingRows,
+    listingTotal,
+    ownerRows,
+    ownerTotal,
+    listingSyncAgg,
+    ownerSyncAgg,
+    syncLogs,
+  ] = await Promise.all([
     db.guestyListing.findMany({
       select: LISTING_SELECT,
       orderBy: [{ createdAtGuesty: 'desc' }, { id: 'asc' }],
@@ -69,6 +91,9 @@ export default async function GuestyIntegrationPage() {
       take: PAGE_SIZE,
     }),
     db.guestyOwner.count(),
+    db.guestyListing.aggregate({ _max: { syncedAt: true } }),
+    db.guestyOwner.aggregate({ _max: { syncedAt: true } }),
+    db.guestySyncLog.findMany({ orderBy: { createdAt: 'desc' }, take: 12 }),
   ])
 
   // Resolve suggested-owner names for the first page of owners.
@@ -109,6 +134,17 @@ export default async function GuestyIntegrationPage() {
     syncedAt: r.syncedAt.toISOString(),
   }))
 
+  const listingsSubtitle = fmtLastSync(listingSyncAgg._max.syncedAt)
+  const ownersSubtitle = fmtLastSync(ownerSyncAgg._max.syncedAt)
+  const initialLogs = syncLogs.map((l) => ({
+    id: l.id,
+    operation: l.operation,
+    status: l.status,
+    message: l.message,
+    itemCount: l.itemCount,
+    createdAt: l.createdAt.toISOString(),
+  }))
+
   const connected = safeConnection?.status === 'connected'
 
   return (
@@ -127,10 +163,10 @@ export default async function GuestyIntegrationPage() {
         </p>
       </div>
 
-      <GuestyConnectionForm connection={safeConnection} editable={editable} envManaged={envManaged} />
+      <GuestyConnectionForm connection={safeConnection} editable={editable} envManaged={envManaged} logs={initialLogs} />
 
       <div className="space-y-4">
-        <CollapsibleSection title="Listings" count={listingTotal} subtitle="active & inactive" defaultOpen>
+        <CollapsibleSection title="Listings" count={listingTotal} subtitle={listingsSubtitle} defaultOpen>
           <GuestyListingsTable
             initialRows={initialListings}
             initialTotal={listingTotal}
@@ -141,7 +177,7 @@ export default async function GuestyIntegrationPage() {
           />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Owners" count={ownerTotal} subtitle="map to Data Master owners">
+        <CollapsibleSection title="Owners" count={ownerTotal} subtitle={ownersSubtitle}>
           <GuestyOwnersTable
             initialRows={initialOwners}
             initialTotal={ownerTotal}
