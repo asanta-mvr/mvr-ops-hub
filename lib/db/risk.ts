@@ -11,13 +11,17 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { PrismaClient } from '@/lib/generated/risk-client'
+import { boundPoolUrl } from './pool'
 
-const globalForRiskPrisma = globalThis as unknown as { riskPrisma: PrismaClient }
+const globalForRiskPrisma = globalThis as unknown as { riskPrisma?: PrismaClient }
 
 export const riskDb =
   globalForRiskPrisma.riskPrisma ??
   new PrismaClient({
+    datasources: { db: { url: boundPoolUrl(process.env.RISK_DATABASE_URL, 3) } },
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
   })
 
-if (process.env.NODE_ENV !== 'production') globalForRiskPrisma.riskPrisma = riskDb
+// Cache on globalThis in every environment so warm serverless instances reuse
+// a single pooled client instead of opening fresh Cloud SQL connections.
+globalForRiskPrisma.riskPrisma = riskDb
