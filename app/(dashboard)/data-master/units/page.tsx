@@ -55,18 +55,40 @@ export default async function UnitsPage({
 }: {
   searchParams: { buildingId?: string }
 }) {
-  const [units, buildings] = await Promise.all([
+  const [units, buildings, owners, allOptions] = await Promise.all([
     getUnits(),
     db.building.findMany({
       select:  { id: true, name: true },
       orderBy: { name: 'asc' },
     }),
+    db.owner.findMany({
+      select:  { id: true, nickname: true },
+      where:   { status: 'active' },
+      orderBy: { nickname: 'asc' },
+    }),
+    db.unitFieldOption.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    }),
   ])
+
+  // Split field options by group and trim to what the form needs (the edit modal
+  // reuses these instead of refetching on every open).
+  const pick = (field: string) =>
+    allOptions.filter(o => o.field === field).map(o => ({ id: o.id, value: o.value, label: o.label }))
+  const options = {
+    type:     pick('type'),
+    view:     pick('view'),
+    feature:  pick('feature'),
+    bathType: pick('bath_type'),
+    status:   pick('status'),
+  }
 
   return (
     <UnitsTableView
       units={units}
       buildings={buildings}
+      owners={owners}
+      options={options}
       initialBuildingId={searchParams.buildingId}
     />
   )

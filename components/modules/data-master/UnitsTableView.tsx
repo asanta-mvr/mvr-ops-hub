@@ -10,6 +10,7 @@ import {
   Eye, Hash, Plus, Camera,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { EditUnitModal, type UnitFormOptions } from '@/components/modules/data-master/EditUnitModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -527,12 +528,13 @@ interface UnitDetailPanelProps {
   onConfirmDelete: () => void
   onCancelDelete:  () => void
   onDelete:        (id: string) => void
+  onEdit:          () => void
 }
 
 function UnitDetailPanel({
   unit, index, total,
   onClose, onPrev, onNext,
-  confirmDelete, onConfirmDelete, onCancelDelete, onDelete,
+  confirmDelete, onConfirmDelete, onCancelDelete, onDelete, onEdit,
 }: UnitDetailPanelProps) {
   const [commentText, setCommentText] = useState('')
   const [savedComments, setSavedComments] = useState<Array<{ id: string; text: string; date: string }>>([])
@@ -595,12 +597,12 @@ function UnitDetailPanel({
             </div>
           ) : (
             <>
-              <Link
-                href={`/data-master/units/${unit.id}/edit`}
+              <button
+                onClick={onEdit}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-mvr-primary hover:bg-mvr-primary-light transition-colors font-medium"
               >
                 <Pencil className="w-3 h-3" />Edit
-              </Link>
+              </button>
               <button
                 onClick={onConfirmDelete}
                 className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-mvr-danger hover:bg-mvr-danger-light transition-colors font-medium"
@@ -812,15 +814,21 @@ function UnitDetailPanel({
 interface UnitsTableViewProps {
   units:              UnitFull[]
   buildings:          { id: string; name: string }[]
+  owners:             { id: string; nickname: string }[]
+  options:            UnitFormOptions
   initialBuildingId?: string
 }
 
-export default function UnitsTableView({ units, initialBuildingId }: UnitsTableViewProps) {
+export default function UnitsTableView({ units, buildings, owners, options, initialBuildingId }: UnitsTableViewProps) {
   const router = useRouter()
 
   const [displayUnits, setDisplayUnits]       = useState<UnitFull[]>(units)
   const [selectedId, setSelectedId]           = useState<string | null>(null)
+  const [editId, setEditId]                   = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Keep the client list in sync after router.refresh() (e.g. after an edit).
+  useEffect(() => { setDisplayUnits(units) }, [units])
   const [sortKey, setSortKey]                 = useState<SortKey>('number')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [search, setSearch]                   = useState('')
@@ -992,10 +1000,22 @@ export default function UnitsTableView({ units, initialBuildingId }: UnitsTableV
               onConfirmDelete={() => setConfirmDeleteId(selectedUnit.id)}
               onCancelDelete={() => setConfirmDeleteId(null)}
               onDelete={handleDelete}
+              onEdit={() => setEditId(selectedUnit.id)}
             />
           </div>
         )}
       </div>
+
+      {/* Edit unit — centered modal on top of the list */}
+      {editId && (
+        <EditUnitModal
+          unitId={editId}
+          buildings={buildings}
+          owners={owners}
+          options={options}
+          onClose={() => setEditId(null)}
+        />
+      )}
     </div>
   )
 }

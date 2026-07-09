@@ -7,13 +7,36 @@ import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { Button } from '@/components/ui/button'
 import { UnitDetailTabs } from '@/components/modules/data-master/UnitDetailTabs'
+import type { ListingCustomField } from '@/lib/integrations/guesty'
 import type {
   FolderView,
   FileAlertView,
   AlertTypeView,
 } from '@/components/modules/data-master/DocumentsSection'
+import type { ListingView } from '@/components/modules/data-master/UnitDetailTabs'
 
 export const metadata: Metadata = { title: 'Unit Detail' }
+
+// ── Guesty raw projection helpers (read-only; mirror GuestyListingDetail) ──────
+type Raw = Record<string, unknown>
+function rec(v: unknown): Raw | null {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null
+}
+function rawStr(v: unknown): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null
+}
+function rawNum(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+function pick(raw: Raw, path: string): unknown {
+  let cur: unknown = raw
+  for (const key of path.split('.')) {
+    const r = rec(cur)
+    if (!r) return undefined
+    cur = r[key]
+  }
+  return cur
+}
 
 const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
@@ -34,7 +57,14 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
       include: {
         building: { select: { id: true, name: true } },
         owner:    { select: { id: true, nickname: true, phone: true, email: true } },
-        listings: { orderBy: { name: 'asc' }, select: { id: true, name: true, nickname: true, guestyId: true } },
+        listings: {
+          orderBy: { name: 'asc' },
+          select: {
+            id: true, name: true, nickname: true, guestyId: true,
+            urlAirbnb: true, urlBooking: true, urlVrbo: true, urlExpedia: true, urlVacasa: true,
+            customFields: true,
+          },
+        },
         documentFolders: { orderBy: { createdAt: 'asc' } },
         fileAlerts: {
           include: { alertType: true, folder: { select: { id: true, name: true } } },
@@ -47,6 +77,61 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
   ])
 
   if (!unit) notFound()
+
+  // Access codes are sensitive — gate behind listing edit rights, matching the
+  // listing detail page's `privileged` treatment.
+  const listingsCanViewAccess = session ? await canEdit(session, 'data_master.listings') : false
+
+  // Pull the Guesty raw payloads for the unit's listings to project read-only
+  // pricing/terms + access sections (same source as the listing detail page).
+  const guestyIds = unit.listings.map((l) => l.guestyId).filter((g): g is string => !!g)
+  const guestyRaws = guestyIds.length
+    ? await db.guestyListing.findMany({
+        where: { guestyId: { in: guestyIds } },
+        select: { guestyId: true, raw: true },
+      })
+    : []
+  const rawByGuestyId = new Map(guestyRaws.map((g) => [g.guestyId, rec(g.raw)]))
+
+  const listingViews: ListingView[] = unit.listings.map((l) => {
+    const raw = l.guestyId ? rawByGuestyId.get(l.guestyId) ?? null : null
+    const channels = [
+      { key: 'airbnb', label: 'Airbnb', url: l.urlAirbnb },
+      { key: 'booking', label: 'Booking.com', url: l.urlBooking },
+      { key: 'vrbo', label: 'Vrbo', url: l.urlVrbo },
+      { key: 'expedia', label: 'Expedia', url: l.urlExpedia },
+      { key: 'vacasa', label: 'Vacasa', url: l.urlVacasa },
+    ].filter((c): c is { key: string; label: string; url: string } => !!c.url)
+
+    return {
+      id: l.id,
+      name: l.name,
+      nickname: l.nickname,
+      guestyId: l.guestyId,
+      channels,
+      pricing: raw
+        ? {
+            currency: rawStr(pick(raw, 'prices.currency')) ?? '',
+            basePrice: rawNum(pick(raw, 'prices.basePrice')),
+            cleaningFee: rawNum(pick(raw, 'prices.cleaningFee')),
+            securityDeposit: rawNum(pick(raw, 'prices.securityDepositFee')),
+            minNights: rawNum(pick(raw, 'terms.minNights')),
+            maxNights: rawNum(pick(raw, 'terms.maxNights')),
+            checkIn: rawStr(pick(raw, 'defaultCheckInTime')),
+            checkOut: rawStr(pick(raw, 'defaultCheckOutTime')),
+          }
+        : null,
+      access: raw
+        ? {
+            wifiName: rawStr(raw.wifiName),
+            wifiPassword: rawStr(raw.wifiPassword),
+          }
+        : null,
+      customFields: Array.isArray(l.customFields)
+        ? (l.customFields as unknown as ListingCustomField[])
+        : [],
+    }
+  })
 
   const folders: FolderView[] = unit.documentFolders.map((f) => ({
     id: f.id, name: f.name, driveFolderId: f.driveFolderId,
@@ -141,7 +226,8 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
         ownerNickname={unit.owner?.nickname ?? null}
         ownerPhone={unit.owner?.phone ?? null}
         ownerEmail={unit.owner?.email ?? null}
-        listings={unit.listings}
+        listings={listingViews}
+        listingsCanViewAccess={listingsCanViewAccess}
         folders={folders}
         fileAlerts={fileAlerts}
         alertTypes={alertTypeViews}

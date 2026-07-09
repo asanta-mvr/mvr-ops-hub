@@ -41,9 +41,26 @@ const formSchema = z.object({
   totalBeds:      z.string().optional(),
   otherBeds:      z.string().max(200).optional(),
   features:       z.array(z.string()),
+  // MVR taxonomy mirrored from Guesty listing custom fields.
+  category:       z.string().optional(),
+  typeOfProperty: z.string().optional(),
+  parkingSpot:    z.string().optional(),
+  keyType:        z.string().optional(),
+  ekey:           z.string().optional(),
+  mvrPortfolio:   z.boolean().optional(),
+  unitTypes:      z.string().optional(),
   driveFolderUrl: z.string().optional(),
   photoQuality:   z.enum(['pro', 'preliminary', 'low_quality']).optional(),
   notes:          z.string().optional(),
+  // Linked-listing fields (only present when a `listing` is passed) so a single
+  // Save persists both the unit and its Data Master listing record.
+  listingName:       z.string().optional(),
+  listingNickname:   z.string().optional(),
+  listingUrlAirbnb:  z.string().optional(),
+  listingUrlBooking: z.string().optional(),
+  listingUrlVrbo:    z.string().optional(),
+  listingUrlExpedia: z.string().optional(),
+  listingUrlVacasa:  z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -61,9 +78,26 @@ interface UnitFormProps {
   featureOptions:   FieldOption[]
   bathTypeOptions:  FieldOption[]
   statusOptions:    FieldOption[]
+  // When provided, the form also edits + saves this Data Master listing's fields
+  // (name, nickname, channel URLs) with a single unified "Save Changes".
+  listing?:         {
+    id: string
+    name: string
+    nickname: string | null
+    urlAirbnb: string | null
+    urlBooking: string | null
+    urlVrbo: string | null
+    urlExpedia: string | null
+    urlVacasa: string | null
+  }
   // When provided, called after a successful save INSTEAD of navigating to the
   // unit page — lets the form be embedded inline (e.g. the listing cockpit).
   onSaved?:         (unitId: string) => void
+  // Serializable alternative to onSaved for server-component embedders: when true,
+  // a successful save just refreshes in place (no navigation, no callback).
+  stayOnPage?:      boolean
+  // When provided, Cancel calls this (e.g. close a modal) instead of router.back().
+  onCancel?:        () => void
 }
 
 // ── Micro-components ──────────────────────────────────────────────────────────
@@ -392,7 +426,10 @@ export default function UnitForm({
   featureOptions: initialFeatureOptions,
   bathTypeOptions: initialBathTypeOptions,
   statusOptions: initialStatusOptions,
+  listing,
   onSaved,
+  stayOnPage,
+  onCancel,
 }: UnitFormProps) {
   const router = useRouter()
   const [serverError, setServerError] = useState('')
@@ -436,9 +473,23 @@ export default function UnitForm({
       totalBeds:      '0',
       otherBeds:      '',
       features:       [],
+      category:       '',
+      typeOfProperty: '',
+      parkingSpot:    '',
+      keyType:        '',
+      ekey:           '',
+      mvrPortfolio:   false,
+      unitTypes:      '',
       driveFolderUrl: '',
       photoQuality:   undefined,
       notes:          '',
+      listingName:       listing?.name ?? '',
+      listingNickname:   listing?.nickname ?? '',
+      listingUrlAirbnb:  listing?.urlAirbnb ?? '',
+      listingUrlBooking: listing?.urlBooking ?? '',
+      listingUrlVrbo:    listing?.urlVrbo ?? '',
+      listingUrlExpedia: listing?.urlExpedia ?? '',
+      listingUrlVacasa:  listing?.urlVacasa ?? '',
       ...defaultValues,
     },
   })
@@ -500,6 +551,13 @@ export default function UnitForm({
       hasKitchen:     features.includes('kitchen'),
       hasBalcony:     features.includes('balcony'),
       features:       features,
+      category:       values.category       || undefined,
+      typeOfProperty: values.typeOfProperty || undefined,
+      parkingSpot:    values.parkingSpot    || undefined,
+      keyType:        values.keyType        || undefined,
+      ekey:           toInt(values.ekey),
+      mvrPortfolio:   values.mvrPortfolio ?? false,
+      unitTypes:      values.unitTypes      || undefined,
       driveFolderUrl: values.driveFolderUrl || undefined,
       photoQuality:   values.photoQuality   || undefined,
       notes:          values.notes          || undefined,
@@ -537,10 +595,36 @@ export default function UnitForm({
 
     const data = await res.json()
     const targetId = isEdit ? unitId! : (data.data as { id: string }).id
-    toast.success(isEdit ? 'Unit updated successfully' : 'Unit created successfully')
+
+    // Unified save — also persist the linked listing's editable fields.
+    if (listing) {
+      const lres = await fetch(`/api/v1/listings/${listing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: values.listingName?.trim() || listing.name,
+          nickname: values.listingNickname ?? '',
+          urlAirbnb: values.listingUrlAirbnb ?? '',
+          urlBooking: values.listingUrlBooking ?? '',
+          urlVrbo: values.listingUrlVrbo ?? '',
+          urlExpedia: values.listingUrlExpedia ?? '',
+          urlVacasa: values.listingUrlVacasa ?? '',
+        }),
+      })
+      if (!lres.ok) {
+        const ld = await lres.json().catch(() => ({}))
+        setServerError((ld as { error?: string }).error ?? 'Unit saved, but the listing fields could not be saved')
+        return
+      }
+    }
+
+    toast.success(isEdit ? 'Changes saved' : 'Unit created successfully')
     if (onSaved) {
       // Embedded mode (e.g. listing cockpit): let the parent decide what's next.
       onSaved(targetId)
+      router.refresh()
+    } else if (stayOnPage) {
+      // Server-embedded (e.g. listing Data Master tab): refresh in place.
       router.refresh()
     } else {
       router.push(`/data-master/units/${targetId}`)
@@ -554,6 +638,44 @@ export default function UnitForm({
         <div className="bg-mvr-danger-light text-mvr-danger text-sm rounded-lg px-4 py-3">
           {serverError}
         </div>
+      )}
+
+      {/* ── Listing details (only when editing a listing's linked unit) ── */}
+      {listing && (
+        <SectionCard title="Listing details">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label required>Name</Label>
+              <Input {...register('listingName')} placeholder="Listing name" />
+            </div>
+            <div>
+              <Label>Nickname</Label>
+              <Input {...register('listingNickname')} placeholder="Nickname" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Airbnb URL</Label>
+              <Input {...register('listingUrlAirbnb')} type="url" placeholder="https://…" />
+            </div>
+            <div>
+              <Label>Booking.com URL</Label>
+              <Input {...register('listingUrlBooking')} type="url" placeholder="https://…" />
+            </div>
+            <div>
+              <Label>Vrbo URL</Label>
+              <Input {...register('listingUrlVrbo')} type="url" placeholder="https://…" />
+            </div>
+            <div>
+              <Label>Expedia URL</Label>
+              <Input {...register('listingUrlExpedia')} type="url" placeholder="https://…" />
+            </div>
+            <div>
+              <Label>Vacasa URL</Label>
+              <Input {...register('listingUrlVacasa')} type="url" placeholder="https://…" />
+            </div>
+          </div>
+        </SectionCard>
       )}
 
       {/* ── Basic Info ── */}
@@ -750,6 +872,55 @@ export default function UnitForm({
         />
       </SectionCard>
 
+      {/* ── Guesty attributes ── */}
+      <SectionCard title="Guesty Attributes">
+        <p className="text-xs text-muted-foreground -mt-1">
+          MVR taxonomy compared against Guesty custom fields. Data Master is the source of truth.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <Label>Category</Label>
+            <Input {...register('category')} placeholder="e.g. 1 Bedroom" />
+          </div>
+          <div>
+            <Label>Type of Property</Label>
+            <Input {...register('typeOfProperty')} placeholder="e.g. Studio" />
+          </div>
+          <div>
+            <Label>Unit Types</Label>
+            <NativeSelect {...register('unitTypes')}>
+              <option value="">— Select —</option>
+              <option value="Combined">Combined</option>
+              <option value="Individual">Individual</option>
+            </NativeSelect>
+          </div>
+          <div>
+            <Label>Parking Spot</Label>
+            <Input {...register('parkingSpot')} placeholder="e.g. P2-114" />
+          </div>
+          <div>
+            <Label>Key Type</Label>
+            <NativeSelect {...register('keyType')}>
+              <option value="">— Select —</option>
+              <option value="Key Card">Key Card</option>
+              <option value="Key Fob">Key Fob</option>
+            </NativeSelect>
+          </div>
+          <div>
+            <Label>eKey</Label>
+            <Input {...register('ekey')} type="number" min="0" placeholder="0" />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            {...register('mvrPortfolio')}
+            className="w-4 h-4 rounded border-gray-300 text-mvr-primary focus:ring-mvr-primary/30"
+          />
+          <span className="text-sm">MVR Portfolio</span>
+        </label>
+      </SectionCard>
+
       {/* ── Media & Notes ── */}
       <SectionCard title="Media & Notes">
         {/* 1. Google Drive Folder — must be set before photos can be uploaded */}
@@ -804,7 +975,7 @@ export default function UnitForm({
         >
           {isSubmitting ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Unit'}
         </Button>
-        <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
+        <Button type="button" variant="outline" onClick={onCancel ?? (() => router.back())} disabled={isSubmitting}>
           Cancel
         </Button>
       </div>

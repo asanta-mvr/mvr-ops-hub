@@ -7,6 +7,7 @@ import {
   User, Phone, Mail, ExternalLink, BedDouble, Bath, Maximize2,
   Home, Layers, Users, ChevronLeft, ChevronRight, X, Camera,
   Building2, Hash, Eye, Calendar, Clock, FolderCheck,
+  Wifi, DollarSign, Moon, LogIn, LogOut,
 } from 'lucide-react'
 import { TYPE_LABELS } from '@/lib/constants/units'
 import {
@@ -17,6 +18,40 @@ import {
 } from '@/components/modules/data-master/DocumentsSection'
 
 type Tab = 'detail' | 'listings' | 'contracts' | 'inspections' | 'score' | 'documents'
+
+export interface ListingPricingView {
+  currency:        string
+  basePrice:       number | null
+  cleaningFee:     number | null
+  securityDeposit: number | null
+  minNights:       number | null
+  maxNights:       number | null
+  checkIn:         string | null
+  checkOut:        string | null
+}
+
+export interface ListingAccessView {
+  wifiName:     string | null
+  wifiPassword: string | null
+}
+
+export interface ListingCustomFieldView {
+  fieldId: string
+  name:    string
+  type:    string | null
+  value:   string | number | boolean | null
+}
+
+export interface ListingView {
+  id:           string
+  name:         string
+  nickname:     string | null
+  guestyId:     string | null
+  channels:     { key: string; label: string; url: string }[]
+  pricing:      ListingPricingView | null
+  access:       ListingAccessView | null
+  customFields: ListingCustomFieldView[]
+}
 
 export interface UnitDetailTabsProps {
   unitId:          string
@@ -56,7 +91,8 @@ export interface UnitDetailTabsProps {
   ownerNickname:   string | null
   ownerPhone:      string | null
   ownerEmail:      string | null
-  listings:        { id: string; name: string; nickname: string | null; guestyId: string | null }[]
+  listings:        ListingView[]
+  listingsCanViewAccess: boolean
   folders:         FolderView[]
   fileAlerts:      FileAlertView[]
   alertTypes:      AlertTypeView[]
@@ -213,6 +249,144 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+// ── Listings tab: read-only per-listing card ───────────────────────────────────
+
+// OTA channel logos live in public/icons/ota-* (see CLAUDE.md). Vacasa has no
+// dedicated icon → generic fallback.
+const OTA_ICON: Record<string, string> = {
+  airbnb:  '/icons/ota-airbnb.jpg',
+  booking: '/icons/ota-booking.png',
+  vrbo:    '/icons/ota-vrbo.png',
+  expedia: '/icons/ota-expedia.png',
+  vacasa:  '/icons/ota-other.png',
+}
+
+function ListingCard({ listing, canViewAccess }: { listing: ListingView; canViewAccess: boolean }) {
+  const { name, nickname, guestyId, channels, pricing, access, customFields } = listing
+
+  const money = (v: number | null) =>
+    v == null ? null : `${pricing?.currency ? `${pricing.currency} ` : ''}${v.toLocaleString()}`
+
+  const hasPricing =
+    !!pricing &&
+    (pricing.basePrice != null || pricing.cleaningFee != null || pricing.securityDeposit != null ||
+      pricing.minNights != null || pricing.maxNights != null || !!pricing.checkIn || !!pricing.checkOut)
+
+  const hasAccess =
+    !!access && (!!access.wifiName || !!access.wifiPassword)
+
+  return (
+    <div className="bg-white rounded-xl border p-5 space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 border-b border-[#E0DBD4] pb-3">
+        <div className="min-w-0">
+          <Link href={`/data-master/listings/${listing.id}`} className="font-semibold text-mvr-primary hover:underline">
+            {nickname || name}
+          </Link>
+          {nickname && <p className="text-xs text-muted-foreground truncate">{name}</p>}
+        </div>
+        {guestyId && (
+          <Link
+            href={`/data-master/listings/${listing.id}`}
+            className="shrink-0 font-mono text-xs text-mvr-primary hover:underline"
+          >
+            {guestyId}
+          </Link>
+        )}
+      </div>
+
+      {/* Pricing & Terms */}
+      <Section title="Pricing & Terms">
+        {hasPricing ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Field label="Base"       value={money(pricing!.basePrice)}       icon={DollarSign} />
+            <Field label="Cleaning"   value={money(pricing!.cleaningFee)}     icon={DollarSign} />
+            <Field label="Deposit"    value={money(pricing!.securityDeposit)} icon={DollarSign} />
+            <Field label="Min nights" value={pricing!.minNights}              icon={Moon} />
+            <Field label="Max nights" value={pricing!.maxNights}              icon={Moon} />
+            <Field label="Check-in"   value={pricing!.checkIn}                icon={LogIn} />
+            <Field label="Check-out"  value={pricing!.checkOut}               icon={LogOut} />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No pricing or terms available from Guesty.</p>
+        )}
+      </Section>
+
+      {/* Access — sensitive, gated by listing edit rights */}
+      {canViewAccess && (
+        <Section title="Access">
+          {hasAccess ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <Field label="Wi-Fi network"  value={access!.wifiName}     icon={Wifi} />
+              <Field label="Wi-Fi password" value={access!.wifiPassword} icon={Wifi} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No access details recorded.</p>
+          )}
+        </Section>
+      )}
+
+      {/* Custom fields — promoted from Guesty, tied to this listing */}
+      {customFields.length > 0 && (
+        <Section title="Custom fields">
+          <dl className="space-y-2 text-sm">
+            {customFields.map((cf) => (
+              <div key={cf.fieldId} className="flex flex-col gap-0.5 border-t border-[#E0DBD4]/60 pt-2 first:border-0 first:pt-0 sm:flex-row sm:justify-between sm:gap-4">
+                <dt className="shrink-0 text-muted-foreground">{cf.name}</dt>
+                <dd className="text-mvr-olive sm:max-w-[60%] sm:text-right">
+                  {cf.value == null || cf.value === '' ? (
+                    <span className="text-muted-foreground/60">—</span>
+                  ) : typeof cf.value === 'boolean' ? (
+                    cf.value ? 'Yes' : 'No'
+                  ) : /^https?:\/\//i.test(String(cf.value)) ? (
+                    <a
+                      href={String(cf.value)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all text-mvr-primary underline underline-offset-2 hover:text-mvr-primary/80"
+                    >
+                      {String(cf.value)}
+                    </a>
+                  ) : (
+                    <span className="break-words">{String(cf.value)}</span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      )}
+
+      {/* Channel URLs — clickable hyperlinks to the live listings */}
+      <Section title="Channel URLs">
+        {channels.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {channels.map(c => (
+              <a
+                key={c.key}
+                href={c.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group inline-flex items-center gap-2.5 text-sm text-mvr-primary hover:underline w-fit"
+              >
+                <img
+                  src={OTA_ICON[c.key] ?? '/icons/ota-other.png'}
+                  alt=""
+                  className="w-5 h-5 rounded shrink-0 object-contain"
+                />
+                {c.label}
+                <ExternalLink className="w-3 h-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No channel URLs recorded.</p>
+        )}
+      </Section>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function UnitDetailTabs(props: UnitDetailTabsProps) {
@@ -224,7 +398,7 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
     hasKitchen, hasBalcony, features, driveFolderUrl, photoQuality, score, notes,
     createdAt, updatedAt, listingCount, contractCount, inspectionCount,
     buildingName, buildingId, ownerId, ownerNickname, ownerPhone, ownerEmail,
-    listings, folders, fileAlerts, alertTypes, docCanEdit,
+    listings, listingsCanViewAccess, folders, fileAlerts, alertTypes, docCanEdit,
   } = props
 
   const tabs: { key: Tab; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
@@ -306,18 +480,18 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
             <div className="bg-white rounded-xl border p-5 space-y-6">
 
               <Section title="Identity">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <Field label="Unit #"    value={number}                                    icon={Hash} />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Field label="Building"
                     value={<Link href={`/data-master/buildings/${buildingId}`} className="text-mvr-primary hover:underline">{buildingName}</Link>}
                     icon={Building2}
                   />
+                  <Field label="Floor"    value={floor}                                       icon={Layers} />
+                  <Field label="Line"     value={line}                                        icon={Layers} />
                   <Field label="Status"
                     value={<span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] ?? STATUS_STYLES.inactive}`}>{cap(status)}</span>}
                   />
+                  <Field label="Unit #"    value={number}                                    icon={Hash} />
                   <Field label="Type"     value={type ? (TYPE_LABELS[type] ?? type) : null}  icon={Home} />
-                  <Field label="Floor"    value={floor}                                       icon={Layers} />
-                  <Field label="Line"     value={line}                                        icon={Layers} />
                   <Field label="View"     value={view ? cap(view) : null}                     icon={Eye} />
                 </div>
               </Section>
@@ -466,31 +640,18 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
 
           {/* ── LISTINGS ── */}
           {tab === 'listings' && (
-            <div className="bg-white rounded-xl border overflow-hidden">
-              <div className="px-5 py-4 border-b">
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border px-5 py-4">
                 <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">Listings ({listingCount})</h2>
               </div>
               {listings.length === 0 ? (
-                <p className="text-sm text-muted-foreground p-5">No listings yet.</p>
+                <div className="bg-white rounded-xl border p-5">
+                  <p className="text-sm text-muted-foreground">No listings yet.</p>
+                </div>
               ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-mvr-cream border-b">
-                    <tr>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nickname</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Guesty ID</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E0DBD4]">
-                    {listings.map(l => (
-                      <tr key={l.id} className="hover:bg-mvr-neutral/50 transition-colors">
-                        <td className="px-4 py-2.5 font-medium">{l.name}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{l.nickname ?? '—'}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{l.guestyId ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                listings.map(l => (
+                  <ListingCard key={l.id} listing={l} canViewAccess={listingsCanViewAccess} />
+                ))
               )}
             </div>
           )}
