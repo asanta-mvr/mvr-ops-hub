@@ -49,65 +49,76 @@ export default function GuestyCustomFieldsTable({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Custom field definitions from Guesty. Values are attached per listing and appear on the
-          listing and its unit after a push to Data Master.
-        </p>
+      <div className="flex flex-col gap-3 border-b border-[#E0DBD4] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">{initialRows.length} custom fields pulled from Guesty</p>
         {editable && (
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={!connected || refreshing}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-mvr-primary px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-mvr-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={refreshing || !connected}
+            title={connected ? 'Pull all custom fields from Guesty' : 'Connect Guesty first'}
+            className="inline-flex items-center gap-2 rounded-full bg-mvr-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-mvr-primary/90 focus-visible:ring-2 focus-visible:ring-mvr-primary/30 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
           >
             <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh custom fields
+            {refreshing ? 'Refreshing…' : 'Refresh custom fields'}
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-[#E0DBD4] bg-white shadow-card">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E0DBD4] text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3 font-medium">Field</th>
+              <th className="px-6 py-3 font-medium">Field</th>
               <th className="px-4 py-3 font-medium">Key</th>
               <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium">Object</th>
               <th className="px-4 py-3 font-medium">Options</th>
-              <th className="px-4 py-3 font-medium">Visibility</th>
+              <th className="px-6 py-3 font-medium">Visibility</th>
             </tr>
           </thead>
           <tbody>
             {initialRows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground">
                   No custom fields yet. Click <span className="font-medium">Refresh custom fields</span> to pull them from Guesty.
                 </td>
               </tr>
             )}
             {initialRows.map((row) => (
-              <tr key={row.id} className="border-b border-[#E0DBD4]/60">
-                <td className="px-4 py-3">
+              <tr key={row.id} className="border-b border-[#E0DBD4]/60 transition-colors hover:bg-mvr-neutral/40">
+                <td className="px-6 py-3 align-top">
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="size-4 shrink-0 text-mvr-steel" />
                     <span className="font-medium text-mvr-olive">{row.displayName}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-4 py-3 align-top text-muted-foreground">
                   {row.key ? <span className="font-mono text-xs">{row.key}</span> : '—'}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-top">
                   <span className="inline-flex rounded-full bg-mvr-neutral px-2 py-0.5 text-xs text-mvr-olive">
                     {row.type}
                   </span>
                 </td>
-                <td className="px-4 py-3 capitalize text-muted-foreground">{row.objectType}</td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {row.options.length ? row.options.join(', ') : '—'}
+                <td className="px-4 py-3 align-top capitalize text-muted-foreground">{row.objectType}</td>
+                <td className="px-4 py-3 align-top">
+                  {row.options.length ? (
+                    <div className="flex max-w-md flex-wrap gap-1.5">
+                      {row.options.map((option, index) => (
+                        <span
+                          key={`${row.id}-option-${index}`}
+                          className="inline-flex items-center rounded-full bg-mvr-sand-light px-2 py-0.5 text-xs text-mvr-olive"
+                        >
+                          {option}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-6 py-3 align-top text-muted-foreground">
                   {row.isPublic == null ? '—' : row.isPublic ? 'Public' : 'Private'}
                 </td>
               </tr>
