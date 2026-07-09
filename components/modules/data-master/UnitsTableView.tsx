@@ -7,7 +7,7 @@ import {
   Pencil, Trash2, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
   BedDouble, Bath, Maximize2, Users, Star, Layers,
-  Eye, Hash, Plus, Camera,
+  Eye, Hash, Plus, Camera, Check, SlidersHorizontal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EditUnitModal, type UnitFormOptions } from '@/components/modules/data-master/EditUnitModal'
@@ -69,6 +69,8 @@ const STATUS_LABELS: Record<string, string> = {
   renovation: 'Renovation',
   inactive:   'Inactive',
   off_board:  'Off Board',
+  churn:      'Churn',
+  churned:    'Churned',
 }
 
 function statusLabel(s: string): string {
@@ -80,6 +82,9 @@ const STATUS_DOT: Record<string, string> = {
   onboarding: 'bg-mvr-warning',
   renovation: 'bg-blue-400',
   inactive:   'bg-[#ccc]',
+  off_board:  'bg-mvr-danger',
+  churn:      'bg-mvr-danger',
+  churned:    'bg-mvr-danger',
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────
@@ -118,39 +123,22 @@ function SortIndicator({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortK
 interface BuildingTreeNavProps {
   allUnits:         UnitFull[]
   filterBuilding:   string
-  filterStatus:     string
-  onSelectBuilding: (buildingId: string, status?: string) => void
+  onSelectBuilding: (buildingId: string) => void
 }
 
-function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuilding }: BuildingTreeNavProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
+function BuildingTreeNav({ allUnits, filterBuilding, onSelectBuilding }: BuildingTreeNavProps) {
   const buildings = useMemo(() => {
-    const map = new Map<string, {
-      id: string; name: string; nickname: string | null
-      count: number; statuses: Record<string, number>
-    }>()
+    const map = new Map<string, { id: string; name: string; nickname: string | null; count: number }>()
     for (const u of allUnits) {
       if (!map.has(u.buildingId)) {
-        map.set(u.buildingId, { id: u.buildingId, name: u.buildingName, nickname: u.buildingNickname, count: 0, statuses: {} })
+        map.set(u.buildingId, { id: u.buildingId, name: u.buildingName, nickname: u.buildingNickname, count: 0 })
       }
-      const entry = map.get(u.buildingId)!
-      entry.count++
-      entry.statuses[u.status] = (entry.statuses[u.status] ?? 0) + 1
+      map.get(u.buildingId)!.count++
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [allUnits])
 
-  function toggleExpand(id: string) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const isAllActive = !filterBuilding && !filterStatus
+  const isAllActive = !filterBuilding
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden">
@@ -162,7 +150,7 @@ function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuild
       <div className="py-1">
         {/* All row */}
         <button
-          onClick={() => onSelectBuilding('', '')}
+          onClick={() => onSelectBuilding('')}
           className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors hover:bg-mvr-steel-light ${
             isAllActive ? 'bg-mvr-primary-light text-mvr-primary font-semibold' : 'text-foreground'
           }`}
@@ -177,67 +165,87 @@ function BuildingTreeNav({ allUnits, filterBuilding, filterStatus, onSelectBuild
 
         {/* Per-building rows */}
         {buildings.map((b) => {
-          const isBuildingActive = filterBuilding === b.id && !filterStatus
-          const isExpanded = expanded.has(b.id)
-          const displayName = b.name
-
+          const isBuildingActive = filterBuilding === b.id
           return (
-            <div key={b.id}>
-              <div className={`flex items-center gap-1 px-3 py-2 text-xs transition-colors hover:bg-mvr-steel-light ${
-                isBuildingActive ? 'bg-mvr-primary-light' : ''
+            <button
+              key={b.id}
+              onClick={() => onSelectBuilding(b.id)}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors hover:bg-mvr-steel-light ${
+                isBuildingActive ? 'bg-mvr-primary-light text-mvr-primary font-semibold' : 'text-foreground'
+              }`}
+            >
+              <span className="truncate">{b.name}</span>
+              <span className={`ml-1.5 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                isBuildingActive ? 'bg-mvr-primary text-white' : 'bg-mvr-neutral text-muted-foreground'
               }`}>
-                <button
-                  onClick={() => toggleExpand(b.id)}
-                  className="shrink-0 p-0.5 rounded hover:bg-mvr-neutral transition-colors"
-                >
-                  {isExpanded
-                    ? <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                    : <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                  }
-                </button>
-                <button
-                  onClick={() => onSelectBuilding(b.id)}
-                  className={`flex-1 flex items-center justify-between min-w-0 ${
-                    isBuildingActive ? 'text-mvr-primary font-semibold' : 'text-foreground'
-                  }`}
-                >
-                  <span className="truncate">{displayName}</span>
-                  <span className={`ml-1.5 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                    isBuildingActive ? 'bg-mvr-primary text-white' : 'bg-mvr-neutral text-muted-foreground'
-                  }`}>
-                    {b.count}
-                  </span>
-                </button>
-              </div>
+                {b.count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
-              {/* Status sub-items */}
-              {isExpanded && (
-                <div className="pl-6 pb-1">
-                  {Object.entries(b.statuses)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .map(([s, count]) => {
-                      const isStatusActive = filterBuilding === b.id && filterStatus === s
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => onSelectBuilding(b.id, s)}
-                          className={`w-full flex items-center justify-between px-3 py-1.5 text-xs rounded-lg transition-colors hover:bg-mvr-steel-light ${
-                            isStatusActive ? 'bg-mvr-primary-light text-mvr-primary font-semibold' : 'text-muted-foreground'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${STATUS_DOT[s] ?? 'bg-[#ccc]'}`} />
-                            <span>{statusLabel(s)}</span>
-                          </div>
-                          <span className="rounded-full px-1.5 py-0.5 text-[10px] bg-mvr-neutral text-muted-foreground">
-                            {count}
-                          </span>
-                        </button>
-                      )
-                    })}
-                </div>
-              )}
-            </div>
+// ── Status filter ─────────────────────────────────────────────────────────
+
+interface StatusFilterProps {
+  statuses:  UnitFormOptions['status']
+  selected:  string[]
+  counts:    Record<string, number>
+  onToggle:  (value: string) => void
+  onShowAll: () => void
+}
+
+function StatusFilter({ statuses, selected, counts, onToggle, onShowAll }: StatusFilterProps) {
+  const isAllActive = selected.length === 0
+
+  return (
+    <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="px-3 py-3 border-b bg-mvr-neutral flex items-center gap-1.5">
+        <SlidersHorizontal className="w-3.5 h-3.5 text-mvr-primary/60" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
+      </div>
+
+      <div className="py-1">
+        {/* All row — clears the filter (show everything) */}
+        <button
+          onClick={onShowAll}
+          className={`w-full flex items-center px-3 py-2 text-xs transition-colors hover:bg-mvr-steel-light ${
+            isAllActive ? 'bg-mvr-primary-light text-mvr-primary font-semibold' : 'text-foreground'
+          }`}
+        >
+          All Statuses
+        </button>
+
+        {/* Per-status toggles */}
+        {statuses.map((s) => {
+          const isOn = selected.includes(s.value)
+          return (
+            <button
+              key={s.id}
+              onClick={() => onToggle(s.value)}
+              aria-pressed={isOn}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors hover:bg-mvr-steel-light ${
+                isOn ? 'bg-mvr-primary-light text-mvr-primary font-semibold' : 'text-muted-foreground'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-3.5 h-3.5 shrink-0 rounded border flex items-center justify-center transition-colors ${
+                  isOn ? 'bg-mvr-primary border-mvr-primary' : 'bg-white border-[#CBCBCB]'
+                }`}>
+                  {isOn && <Check className="w-2.5 h-2.5 text-white" />}
+                </span>
+                <span className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${STATUS_DOT[s.value] ?? 'bg-[#ccc]'}`} />
+                <span className="truncate">{s.label}</span>
+              </div>
+              <span className={`ml-1.5 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                isOn ? 'bg-mvr-primary text-white' : 'bg-mvr-neutral text-muted-foreground'
+              }`}>
+                {counts[s.value] ?? 0}
+              </span>
+            </button>
           )
         })}
       </div>
@@ -550,7 +558,9 @@ function UnitDetailPanel({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl border overflow-hidden shadow-panel">
+    <>
+    {/* Card 1 — unit preview */}
+    <div className="flex flex-col bg-white rounded-xl border overflow-hidden shadow-panel">
       {/* Gallery hero */}
       <div className="shrink-0 overflow-hidden rounded-t-xl">
         <UnitPanelGallery unit={unit} />
@@ -621,7 +631,7 @@ function UnitDetailPanel({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto">
+      <div>
         {/* 2-column grid: Unit Detail | Accommodation */}
         <div className="grid grid-cols-2 gap-x-5 p-4 pb-3">
           {/* ── Left: Unit Detail ── */}
@@ -738,74 +748,80 @@ function UnitDetailPanel({
           </div>
         )}
 
-        {/* Activity & Comments */}
-        <div className="px-4 pt-3 pb-4 space-y-3 border-t">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-foreground/70">Activity & Comments</p>
-          {/* Saved comments list */}
-          {savedComments.length > 0 && (
-            <div className="space-y-2">
-              {savedComments.map((c) => (
-                <div key={c.id} className="group relative bg-mvr-neutral rounded-xl px-3 py-2.5">
-                  <p className="text-xs text-foreground leading-relaxed pr-6">{c.text}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{c.date}</p>
-                  <button
-                    onClick={() => setSavedComments(prev => prev.filter(x => x.id !== c.id))}
-                    className="absolute top-2 right-2 p-0.5 rounded text-muted-foreground/40 hover:text-mvr-danger hover:bg-mvr-danger-light opacity-0 group-hover:opacity-100 transition-all"
-                    title="Delete comment"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Input */}
-          <div className="space-y-2">
-            <textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Add a comment or note…"
-              rows={3}
-              className="w-full text-xs border border-[#E0DBD4] rounded-xl px-3 py-2.5 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary"
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={!commentText.trim()}
-              className="w-full py-2 text-xs rounded-xl bg-mvr-primary text-white hover:bg-mvr-primary/90 disabled:opacity-40 transition-colors font-semibold tracking-wide"
+        {/* Relationships */}
+        <div className="px-4 pb-3 pt-1 space-y-1.5 border-t">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-foreground/70 pt-3">Relationships</p>
+          <div className="flex gap-2">
+            <Link
+              href={`/data-master/units/${unit.id}#listings`}
+              className="flex-1 text-center text-xs py-1.5 rounded-lg border border-[#E0DBD4] hover:bg-mvr-steel-light transition-colors text-muted-foreground hover:text-mvr-primary"
             >
-              Add Comment
-            </button>
+              Listings ({unit.listingCount})
+            </Link>
+            <Link
+              href={`/data-master/units/${unit.id}#documentation`}
+              className="flex-1 text-center text-xs py-1.5 rounded-lg border border-[#E0DBD4] hover:bg-mvr-steel-light transition-colors text-muted-foreground hover:text-mvr-primary flex items-center justify-center gap-1.5"
+            >
+              Documentation
+              <span className="inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full bg-mvr-neutral text-[10px] font-semibold">
+                {unit.documentCount ?? 0}
+              </span>
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="shrink-0 border-t p-3 space-y-2">
+      {/* Footer — Full Details */}
+      <div className="shrink-0 border-t p-3">
         <Link href={`/data-master/units/${unit.id}`} className="block">
           <Button size="sm" className="w-full bg-mvr-primary hover:bg-mvr-primary/90">
             Full Details
             <ChevronRight className="w-3.5 h-3.5 ml-1" />
           </Button>
         </Link>
-        <div className="flex gap-2">
-          <Link
-            href={`/data-master/units/${unit.id}#listings`}
-            className="flex-1 text-center text-xs py-1.5 rounded-lg border border-[#E0DBD4] hover:bg-mvr-steel-light transition-colors text-muted-foreground hover:text-mvr-primary"
-          >
-            Listings ({unit.listingCount})
-          </Link>
-          <Link
-            href={`/data-master/units/${unit.id}#documentation`}
-            className="flex-1 text-center text-xs py-1.5 rounded-lg border border-[#E0DBD4] hover:bg-mvr-steel-light transition-colors text-muted-foreground hover:text-mvr-primary flex items-center justify-center gap-1.5"
-          >
-            Documentation
-            <span className="inline-flex items-center justify-center min-w-[1rem] h-4 px-1 rounded-full bg-mvr-neutral text-[10px] font-semibold">
-              {unit.documentCount ?? 0}
-            </span>
-          </Link>
-        </div>
       </div>
     </div>
+
+    {/* Card 2 — Activity & Comments */}
+    <div className="bg-white rounded-xl border shadow-panel px-4 py-4 space-y-3">
+      <p className="text-[11px] font-bold uppercase tracking-widest text-foreground/70">Activity & Comments</p>
+      {/* Saved comments list */}
+      {savedComments.length > 0 && (
+        <div className="space-y-2">
+          {savedComments.map((c) => (
+            <div key={c.id} className="group relative bg-mvr-neutral rounded-xl px-3 py-2.5">
+              <p className="text-xs text-foreground leading-relaxed pr-6">{c.text}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{c.date}</p>
+              <button
+                onClick={() => setSavedComments(prev => prev.filter(x => x.id !== c.id))}
+                className="absolute top-2 right-2 p-0.5 rounded text-muted-foreground/40 hover:text-mvr-danger hover:bg-mvr-danger-light opacity-0 group-hover:opacity-100 transition-all"
+                title="Delete comment"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Input */}
+      <div className="space-y-2">
+        <textarea
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="Add a comment or note…"
+          rows={3}
+          className="w-full text-xs border border-[#E0DBD4] rounded-xl px-3 py-2.5 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-mvr-primary/20 focus:border-mvr-primary"
+        />
+        <button
+          onClick={handleAddComment}
+          disabled={!commentText.trim()}
+          className="w-full py-2 text-xs rounded-xl bg-mvr-primary text-white hover:bg-mvr-primary/90 disabled:opacity-40 transition-colors font-semibold tracking-wide"
+        >
+          Add Comment
+        </button>
+      </div>
+    </div>
+    </>
   )
 }
 
@@ -833,12 +849,19 @@ export default function UnitsTableView({ units, buildings, owners, options, init
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [search, setSearch]                   = useState('')
   const [filterBuilding, setFilterBuilding]   = useState(initialBuildingId ?? '')
-  const [filterStatus, setFilterStatus]       = useState('')
+  const [statusFilter, setStatusFilter]       = useState<string[]>([])
 
-  function handleSelectBuilding(buildingId: string, status?: string) {
+  function handleSelectBuilding(buildingId: string) {
     setFilterBuilding(buildingId)
-    setFilterStatus(status ?? '')
     setSelectedId(null)
+  }
+
+  function toggleStatus(value: string) {
+    setStatusFilter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]))
+  }
+
+  function showAllStatuses() {
+    setStatusFilter([])
   }
 
   function handleSelect(id: string) {
@@ -867,7 +890,7 @@ export default function UnitsTableView({ units, buildings, owners, options, init
   const filtered = useMemo(() => {
     return displayUnits.filter((u) => {
       if (filterBuilding && u.buildingId !== filterBuilding) return false
-      if (filterStatus   && u.status    !== filterStatus)   return false
+      if (statusFilter.length > 0 && !statusFilter.includes(u.status)) return false
       if (search) {
         const q = search.toLowerCase()
         const typeLabel = u.type ? (TYPE_LABELS[u.type] ?? u.type) : ''
@@ -887,7 +910,18 @@ export default function UnitsTableView({ units, buildings, owners, options, init
       }
       return true
     })
-  }, [displayUnits, filterBuilding, filterStatus, search])
+  }, [displayUnits, filterBuilding, statusFilter, search])
+
+  // Per-status counts within the current building context (ignores the status
+  // filter itself so the toggle counts stay stable while selecting).
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const u of displayUnits) {
+      if (filterBuilding && u.buildingId !== filterBuilding) continue
+      counts[u.status] = (counts[u.status] ?? 0) + 1
+    }
+    return counts
+  }, [displayUnits, filterBuilding])
 
   const sortedUnits = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -964,13 +998,19 @@ export default function UnitsTableView({ units, buildings, owners, options, init
 
       {/* 3-column layout: tree nav | floor tables | detail panel */}
       <div className="flex gap-4 items-start">
-        {/* Left: building tree nav */}
-        <div className="w-52 shrink-0 sticky top-4">
+        {/* Left: building tree nav + status filter */}
+        <div className="w-52 shrink-0 sticky top-4 space-y-4">
           <BuildingTreeNav
             allUnits={displayUnits}
             filterBuilding={filterBuilding}
-            filterStatus={filterStatus}
             onSelectBuilding={handleSelectBuilding}
+          />
+          <StatusFilter
+            statuses={options.status}
+            selected={statusFilter}
+            counts={statusCounts}
+            onToggle={toggleStatus}
+            onShowAll={showAllStatuses}
           />
         </div>
 
@@ -984,7 +1024,7 @@ export default function UnitsTableView({ units, buildings, owners, options, init
 
         {/* Right: detail panel */}
         {selectedUnit && (
-          <div className="w-[440px] shrink-0 sticky top-4" style={{ maxHeight: 'calc(100vh - 5rem)' }}>
+          <div className="w-[440px] shrink-0 sticky top-4 flex flex-col gap-3 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 5rem)' }}>
             <UnitDetailPanel
               unit={selectedUnit}
               index={selectedIndex}

@@ -184,7 +184,8 @@ export default async function GuestyIntegrationPage() {
       <GuestyConnectionForm connection={safeConnection} editable={editable} envManaged={envManaged} logs={initialLogs} />
 
       <div className="space-y-4">
-        <CollapsibleSection title="Listings" count={listingTotal} subtitle={listingsSubtitle} defaultOpen>
+        <h2 className="font-display text-2xl text-mvr-primary">Endpoints</h2>
+        <CollapsibleSection title="Listings" count={listingTotal} subtitle={listingsSubtitle}>
           <GuestyListingsTable
             initialRows={initialListings}
             initialTotal={listingTotal}

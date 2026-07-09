@@ -65,7 +65,8 @@ function SyncActivityLog({ logs }: { logs: GuestySyncLogEntry[] }) {
       </button>
 
       {open && (
-        <ul className="mt-3 space-y-2">
+        // Show ~5 latest entries (newest first); scroll for older ones.
+        <ul className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
           {logs.map((l) => {
             const error = l.status === 'error'
             const Icon = error ? AlertCircle : CheckCircle2
@@ -135,6 +136,7 @@ export default function GuestyConnectionForm({
 }) {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
+  const [formOpen, setFormOpen] = useState(false) // collapsed on every page load
 
   const {
     register,
@@ -193,11 +195,20 @@ export default function GuestyConnectionForm({
 
   return (
     <div className="rounded-xl border border-[#E0DBD4] bg-white shadow-card">
-      <div className="flex items-center justify-between border-b border-[#E0DBD4] px-6 py-4">
+      <button
+        type="button"
+        onClick={() => setFormOpen((o) => !o)}
+        aria-expanded={formOpen}
+        className="flex w-full items-center justify-between gap-3 border-b border-[#E0DBD4] px-6 py-4 text-left transition-colors hover:bg-mvr-neutral/30"
+      >
         <h2 className="font-display text-xl text-mvr-primary">Guesty Distribution Account</h2>
-        <StatusBadge status={connection?.status ?? 'disconnected'} />
-      </div>
+        <span className="flex items-center gap-3">
+          <StatusBadge status={connection?.status ?? 'disconnected'} />
+          <ChevronDown className={`size-5 shrink-0 text-muted-foreground transition-transform duration-200 ${formOpen ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
 
+      {formOpen && (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 px-6 py-6">
         <div>
           <label htmlFor="g-name" className="mb-1.5 block text-sm font-medium text-mvr-olive">
@@ -294,6 +305,7 @@ export default function GuestyConnectionForm({
           </button>
         </div>
       </form>
+      )}
 
       <SyncActivityLog logs={logs} />
     </div>
