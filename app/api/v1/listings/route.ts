@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
+import { computeUnitSuggestions } from '@/lib/data-master/listing-suggestions'
 
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 200
@@ -69,11 +70,16 @@ export async function GET(req: NextRequest) {
           sqrFeet: true,
           totalOccupancy: true,
           unitId: true,
+          customFields: true,
           unit: { select: { id: true, number: true, building: { select: { name: true } } } },
         },
       }),
       db.listing.count({ where }),
     ])
+
+    const suggestions = await computeUnitSuggestions(
+      rows.map((r) => ({ id: r.id, unitId: r.unitId, name: r.name, nickname: r.nickname, customFields: r.customFields }))
+    )
 
     // Merge each Listing with its source GuestyListing projection (thumbnail,
     // status, beds/baths) by guestyId for display.
@@ -106,6 +112,8 @@ export async function GET(req: NextRequest) {
         unitId: r.unitId,
         unitNumber: r.unit ? r.unit.number : null,
         buildingName: r.unit?.building?.name ?? null,
+        suggestedUnitId: suggestions.get(r.id)?.suggestedUnitId ?? null,
+        suggestedUnitLabel: suggestions.get(r.id)?.suggestedUnitLabel ?? null,
         pictureUrl: p?.pictureUrl ?? null,
         active: p?.active ?? null,
         propertyType: p?.propertyType ?? null,

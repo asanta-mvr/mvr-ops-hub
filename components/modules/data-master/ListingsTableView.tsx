@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Search, ImageIcon, ChevronLeft, ChevronRight, Building2, LayoutGrid } from 'lucide-react'
+import { Search, ImageIcon, ChevronLeft, ChevronRight, Building2, LayoutGrid, Check, Sparkles } from 'lucide-react'
 
 export interface DataMasterListingRow {
   id: string
@@ -15,6 +15,8 @@ export interface DataMasterListingRow {
   unitId: string | null
   unitNumber: string | null
   buildingName: string | null
+  suggestedUnitId: string | null
+  suggestedUnitLabel: string | null
   pictureUrl: string | null
   active: boolean | null
   propertyType: string | null
@@ -57,6 +59,7 @@ export default function ListingsTableView({
   const [attached, setAttached] = useState<AttachedFilter>('all')
   const [buildingId, setBuildingId] = useState<BuildingFilter>(null)
   const [loading, setLoading] = useState(false)
+  const [attachingId, setAttachingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -83,6 +86,29 @@ export default function ListingsTableView({
     },
     [pageSize]
   )
+
+  const attachUnit = async (listingId: string, unitId: string) => {
+    setAttachingId(listingId)
+    try {
+      const res = await fetch(`/api/v1/listings/${listingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        toast.error(j?.error ?? 'Could not attach the unit')
+        return
+      }
+      toast.success('Listing attached to unit')
+      await fetchListings(page, q, attached, buildingId)
+      router.refresh()
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setAttachingId(null)
+    }
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -196,15 +222,15 @@ export default function ListingsTableView({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[calc(100vh-16rem)]">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[#E0DBD4] text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-6 py-3 font-medium">Listing</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">Beds / Baths</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-6 py-3 font-medium">Unit</th>
+            <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="sticky top-0 z-10 border-b border-[#E0DBD4] bg-white px-6 py-3 font-medium">Listing</th>
+              <th className="sticky top-0 z-10 border-b border-[#E0DBD4] bg-white px-4 py-3 font-medium">Type</th>
+              <th className="sticky top-0 z-10 border-b border-[#E0DBD4] bg-white px-4 py-3 font-medium">Beds / Baths</th>
+              <th className="sticky top-0 z-10 border-b border-[#E0DBD4] bg-white px-4 py-3 font-medium">Status</th>
+              <th className="sticky top-0 z-10 border-b border-[#E0DBD4] bg-white px-6 py-3 font-medium">Unit</th>
             </tr>
           </thead>
           <tbody>
@@ -256,12 +282,37 @@ export default function ListingsTableView({
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-3">
+                <td className="px-6 py-3" onClick={(e) => e.stopPropagation()}>
                   {row.unitId ? (
                     <span className="text-xs text-mvr-success">
                       {row.buildingName ? `${row.buildingName} · ` : ''}
                       {row.unitNumber}
                     </span>
+                  ) : row.suggestedUnitId && row.suggestedUnitLabel ? (
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Sparkles className="size-3 text-mvr-primary" />
+                        Suggested · <span className="text-mvr-olive">{row.suggestedUnitLabel}</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => attachUnit(row.id, row.suggestedUnitId!)}
+                          disabled={attachingId === row.id}
+                          className="inline-flex items-center gap-1 rounded-full bg-mvr-primary px-2.5 py-0.5 text-xs font-medium text-white transition-colors hover:bg-mvr-primary/90 disabled:opacity-50"
+                        >
+                          <Check className="size-3" />
+                          {attachingId === row.id ? 'Attaching…' : 'Attach'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/data-master/listings/${row.id}`)}
+                          className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-mvr-olive"
+                        >
+                          not it?
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <span className="text-xs text-muted-foreground/60">Unattached</span>
                   )}

@@ -5,13 +5,26 @@ import { ChevronLeft } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { canEdit, requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { projectListingToUnitBaseline, projectListingToDataMaster } from '@/lib/integrations/guesty'
+import {
+  projectListingToUnitBaseline,
+  projectListingToDataMaster,
+  projectListingCustomFields,
+  type ListingCustomField,
+} from '@/lib/integrations/guesty'
 import GuestyListingDetail from '@/components/modules/data-master/GuestyListingDetail'
 import ListingPhotoGallery, { type GalleryPhoto } from '@/components/modules/data-master/ListingPhotoGallery'
 import ListingUnitCockpit from '@/components/modules/data-master/ListingUnitCockpit'
 import ListingDataMasterPanel from '@/components/modules/data-master/ListingDataMasterPanel'
-import ListingRecordDrift, { type DriftRow } from '@/components/modules/data-master/ListingRecordDrift'
-import type { UnitFormValues } from '@/components/modules/data-master/UnitForm'
+import ListingComparisonCard, {
+  type DmDriftRow,
+  type UnitDriftRow,
+  type CfDriftRow,
+} from '@/components/modules/data-master/ListingComparisonCard'
+import OwnershipCard from '@/components/modules/data-master/OwnershipCard'
+import ListingCustomFieldsCard from '@/components/modules/data-master/ListingCustomFieldsCard'
+import { ListingDetailTabs } from '@/components/modules/data-master/ListingDetailTabs'
+import { computeUnitSuggestions } from '@/lib/data-master/listing-suggestions'
+import UnitForm, { type UnitFormValues } from '@/components/modules/data-master/UnitForm'
 
 export const metadata: Metadata = { title: 'Listing · Data Master' }
 export const dynamic = 'force-dynamic'
@@ -42,6 +55,9 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
     db.unitFieldOption.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
   ])
   const raw = (source?.raw as Raw | undefined) ?? {}
+  const listingCustomFields: ListingCustomField[] = Array.isArray(listing.customFields)
+    ? (listing.customFields as unknown as ListingCustomField[])
+    : []
 
   const prereqs = {
     buildings,
@@ -96,6 +112,45 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
       }
     : null
 
+  // Unit ↔ Guesty custom-field comparison rows (only when a unit is attached).
+  // Guesty values are resolved live from the raw payload via the synced
+  // definitions catalog (fieldId → displayName), then matched to Unit fields.
+  const cfRows: CfDriftRow[] = []
+  if (unit) {
+    const cfDefs = await db.guestyCustomField.findMany({
+      where: { objectType: 'listing' },
+      select: { guestyId: true, displayName: true, type: true },
+    })
+    const cfDefsMap = new Map(cfDefs.map((d) => [d.guestyId, { displayName: d.displayName, type: d.type }]))
+    const cfByName = new Map(projectListingCustomFields(raw, cfDefsMap).map((f) => [f.name, f]))
+    const g = (key: string) => cfByName.get(key)?.value ?? null
+    cfRows.push(
+      { label: 'Category', unitField: 'category', kind: 'text', unitVal: unit.category, guestyVal: g('category') },
+      { label: 'Type of property', unitField: 'typeOfProperty', kind: 'text', unitVal: unit.typeOfProperty, guestyVal: g('type_of_property') },
+      { label: 'View', unitField: 'view', kind: 'text', unitVal: unit.view, guestyVal: g('view_type') },
+      { label: 'Kitchen', unitField: 'hasKitchen', kind: 'boolEnum', unitVal: unit.hasKitchen, guestyVal: g('kitchen_type') },
+      { label: 'Balcony', unitField: 'hasBalcony', kind: 'bool', unitVal: unit.hasBalcony, guestyVal: g('balcony') },
+      { label: 'Parking spot', unitField: 'parkingSpot', kind: 'text', unitVal: unit.parkingSpot, guestyVal: g('parking_spot') },
+      { label: 'Key type', unitField: 'keyType', kind: 'text', unitVal: unit.keyType, guestyVal: g('key_type') },
+      { label: 'eKey', unitField: 'ekey', kind: 'number', unitVal: unit.ekey, guestyVal: g('ekey') },
+      { label: 'MVR portfolio', unitField: 'mvrPortfolio', kind: 'bool', unitVal: unit.mvrPortfolio, guestyVal: g('mvr_portfolio') },
+      { label: 'Unit types', unitField: 'unitTypes', kind: 'text', unitVal: unit.unitTypes, guestyVal: g('unit_types') },
+    )
+  }
+
+  // Suggested unit match (only when this listing isn't attached yet).
+  const unitSuggestion = !unit
+    ? (
+        await computeUnitSuggestions([
+          { id: listing.id, unitId: listing.unitId, name: listing.name, nickname: listing.nickname, customFields: listing.customFields },
+        ])
+      ).get(listing.id)
+    : null
+  const suggestedUnit =
+    unitSuggestion?.suggestedUnitId && unitSuggestion.suggestedUnitLabel
+      ? { id: unitSuggestion.suggestedUnitId, label: unitSuggestion.suggestedUnitLabel }
+      : null
+
   const unitFormDefaults: Partial<UnitFormValues> | null = unit
     ? (() => {
         const features = [...(unit.features ?? [])]
@@ -123,6 +178,13 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
           totalBeds: unit.totalBeds != null ? String(unit.totalBeds) : '0',
           otherBeds: unit.otherBeds ?? '',
           features,
+          category: unit.category ?? '',
+          typeOfProperty: unit.typeOfProperty ?? '',
+          parkingSpot: unit.parkingSpot ?? '',
+          keyType: unit.keyType ?? '',
+          ekey: unit.ekey != null ? String(unit.ekey) : '',
+          mvrPortfolio: unit.mvrPortfolio ?? false,
+          unitTypes: unit.unitTypes ?? '',
           driveFolderUrl: unit.driveFolderUrl ?? '',
           photoQuality: (unit.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
           notes: unit.notes ?? '',
@@ -167,15 +229,28 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
 
   // Listing record drift: Data Master (source of truth) vs the Guesty snapshot.
   const gdm = projectListingToDataMaster(raw)
-  const listingDrift: DriftRow[] = [
+  // Only fields that can be pushed to update the Guesty listing (channel URLs are
+  // channel-derived / read-only, so they're excluded from the comparison).
+  const listingDrift: DmDriftRow[] = [
     { label: 'Name', field: 'name', dmVal: listing.name, guestyVal: gdm.name },
     { label: 'Nickname', field: 'nickname', dmVal: listing.nickname, guestyVal: gdm.nickname },
     { label: 'Sq ft', field: 'sqrFeet', dmVal: listing.sqrFeet, guestyVal: gdm.sqrFeet },
     { label: 'Occupancy', field: 'totalOccupancy', dmVal: listing.totalOccupancy, guestyVal: gdm.totalOccupancy },
-    { label: 'Airbnb URL', field: 'urlAirbnb', dmVal: listing.urlAirbnb, guestyVal: gdm.urlAirbnb },
-    { label: 'Booking URL', field: 'urlBooking', dmVal: listing.urlBooking, guestyVal: gdm.urlBooking },
-    { label: 'Vrbo URL', field: 'urlVrbo', dmVal: listing.urlVrbo, guestyVal: gdm.urlVrbo },
   ]
+
+  // Unit vs Guesty structural comparison rows (only when a unit is attached).
+  const unitRows: UnitDriftRow[] = unitSummary
+    ? [
+        { label: 'Bedrooms', field: 'bedrooms', unitVal: unitSummary.bedrooms, guestyVal: guesty.bedrooms },
+        { label: 'Bathrooms', field: 'bathrooms', unitVal: unitSummary.bathrooms, guestyVal: guesty.bathrooms },
+        { label: 'Capacity', field: 'capacity', unitVal: unitSummary.capacity, guestyVal: guesty.capacity },
+        { label: 'Total beds', field: 'totalBeds', unitVal: unitSummary.totalBeds, guestyVal: guesty.totalBeds },
+        { label: 'Sq ft', field: 'sqft', unitVal: unitSummary.sqft, guestyVal: guesty.sqft },
+        { label: 'King beds', field: 'kings', unitVal: unitSummary.kings, guestyVal: guesty.kings },
+        { label: 'Queen beds', field: 'queens', unitVal: unitSummary.queens, guestyVal: guesty.queens },
+        { label: 'Twin beds', field: 'twins', unitVal: unitSummary.twins, guestyVal: guesty.twins },
+      ]
+    : []
 
   return (
     <div className="space-y-6">
@@ -194,41 +269,104 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <ListingPhotoGallery
-            listingId={listing.id}
-            editable={editable}
-            initialPhotos={initialPhotos}
-            guestyCount={guestyPhotoCount}
-            hasDriveFolder={hasDriveFolder}
+        {/* Left: tabbed info + editable Data Master */}
+        <div className="lg:col-span-2">
+          <ListingDetailTabs
+            basicInfo={
+              <>
+                <ListingUnitCockpit
+                  listingId={listing.id}
+                  editable={editable}
+                  unit={unitSummary}
+                  unitFormDefaults={unitFormDefaults}
+                  createDefaults={createDefaults}
+                  guesty={guesty}
+                  prereqs={prereqs}
+                  suggestedUnit={suggestedUnit}
+                  showEditor={false}
+                />
+                <GuestyListingDetail raw={raw} privileged={editable} part="basic" />
+                <ListingCustomFieldsCard customFields={listingCustomFields} />
+                <OwnershipCard owners={ownersForDetail} />
+                <GuestyListingDetail raw={raw} privileged={editable} part="access" />
+              </>
+            }
+            description={<GuestyListingDetail raw={raw} privileged={editable} part="description" />}
+            photos={
+              <ListingPhotoGallery
+                listingId={listing.id}
+                editable={editable}
+                initialPhotos={initialPhotos}
+                guestyCount={guestyPhotoCount}
+                hasDriveFolder={hasDriveFolder}
+              />
+            }
+            dataMaster={
+              unit && unitFormDefaults ? (
+                // Attached: one unified editor saves the unit AND the listing fields.
+                <UnitForm
+                  key={listing.updatedAt.toISOString()}
+                  unitId={unit.id}
+                  buildings={prereqs.buildings}
+                  owners={prereqs.owners}
+                  defaultValues={unitFormDefaults}
+                  currentScore={unit.score != null ? String(Number(unit.score)) : undefined}
+                  typeOptions={prereqs.typeOptions}
+                  viewOptions={prereqs.viewOptions}
+                  featureOptions={prereqs.featureOptions}
+                  bathTypeOptions={prereqs.bathTypeOptions}
+                  statusOptions={prereqs.statusOptions}
+                  listing={{
+                    id: listing.id,
+                    name: listing.name,
+                    nickname: listing.nickname,
+                    urlAirbnb: listing.urlAirbnb,
+                    urlBooking: listing.urlBooking,
+                    urlVrbo: listing.urlVrbo,
+                    urlExpedia: listing.urlExpedia,
+                    urlVacasa: listing.urlVacasa,
+                  }}
+                  stayOnPage
+                />
+              ) : (
+                // Not attached: no unit to edit — just the listing's editable fields.
+                <ListingDataMasterPanel
+                  key={listing.updatedAt.toISOString()}
+                  listing={{
+                    id: listing.id,
+                    name: listing.name,
+                    nickname: listing.nickname,
+                    urlAirbnb: listing.urlAirbnb,
+                    urlBooking: listing.urlBooking,
+                    urlVrbo: listing.urlVrbo,
+                    urlExpedia: listing.urlExpedia,
+                    urlVacasa: listing.urlVacasa,
+                  }}
+                  editable={editable}
+                />
+              )
+            }
           />
-          <GuestyListingDetail raw={raw} privileged={editable} owners={ownersForDetail} />
         </div>
-        <div className="space-y-4">
-          <ListingUnitCockpit
-            listingId={listing.id}
-            editable={editable}
-            unit={unitSummary}
-            unitFormDefaults={unitFormDefaults}
-            createDefaults={createDefaults}
-            guesty={guesty}
-            prereqs={prereqs}
-          />
-          <ListingDataMasterPanel
-            key={listing.updatedAt.toISOString()}
-            listing={{
-              id: listing.id,
-              name: listing.name,
-              nickname: listing.nickname,
-              urlAirbnb: listing.urlAirbnb,
-              urlBooking: listing.urlBooking,
-              urlVrbo: listing.urlVrbo,
-              urlExpedia: listing.urlExpedia,
-              urlVacasa: listing.urlVacasa,
-            }}
-            editable={editable}
-          />
-          <ListingRecordDrift listingId={listing.id} editable={editable} rows={listingDrift} />
+
+        {/* Right: comparison card only (pushable-to-Guesty fields) */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          {/* Title aligned with the tab bar; card sits below */}
+          <div className="flex h-12 items-center justify-center gap-2 border-b border-[#E0DBD4] pb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/guesty.png" alt="Guesty" className="size-5 rounded-sm" />
+            <h2 className="font-display text-lg text-mvr-primary">Guesty Comparison</h2>
+          </div>
+          <div className="mt-4">
+            <ListingComparisonCard
+              listingId={listing.id}
+              unitId={unit?.id ?? null}
+              editable={editable}
+              dmRows={listingDrift}
+              unitRows={unitRows}
+              cfRows={cfRows}
+            />
+          </div>
         </div>
       </div>
     </div>

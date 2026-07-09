@@ -45,11 +45,13 @@ function Fact({ icon, label, value }: { icon: React.ReactNode; label: string; va
 export default function GuestyListingDetail({
   raw,
   privileged,
-  owners,
+  part = 'basic',
 }: {
   raw: Raw
   privileged: boolean
-  owners: Array<{ guestyId: string; name: string; mapped: boolean }>
+  // Which group of sections to render (the listing detail splits these across tabs).
+  // 'basic' = Overview/Address/Pricing · 'description' = Description/Amenities · 'access' = restricted.
+  part?: 'basic' | 'description' | 'access'
 }) {
   const amenities = (Array.isArray(raw.amenities) ? raw.amenities : []).filter(
     (a): a is string => typeof a === 'string'
@@ -70,6 +72,7 @@ export default function GuestyListingDetail({
   return (
     <div className="space-y-4">
       {/* Key facts */}
+      {part === 'basic' && (
       <Section title="Overview">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {num(raw.accommodates) != null && (
@@ -89,9 +92,10 @@ export default function GuestyListingDetail({
           )}
         </div>
       </Section>
+      )}
 
       {/* Address */}
-      {str(pick(raw, 'address.full')) && (
+      {part === 'basic' && str(pick(raw, 'address.full')) && (
         <Section title="Address">
           <div className="flex items-start gap-2 text-sm text-mvr-olive">
             <MapPin className="mt-0.5 size-4 shrink-0 text-mvr-steel" />
@@ -107,7 +111,7 @@ export default function GuestyListingDetail({
       )}
 
       {/* Descriptions */}
-      {descKeys.some(([k]) => str(pick(raw, `publicDescription.${k}`))) && (
+      {part === 'description' && descKeys.some(([k]) => str(pick(raw, `publicDescription.${k}`))) && (
         <Section title="Description">
           <div className="space-y-3">
             {descKeys.map(([k, label]) => {
@@ -125,7 +129,7 @@ export default function GuestyListingDetail({
       )}
 
       {/* Amenities */}
-      {amenities.length > 0 && (
+      {part === 'description' && amenities.length > 0 && (
         <Section title={`Amenities (${amenities.length})`}>
           <div className="flex flex-wrap gap-1.5">
             {amenities.map((a) => (
@@ -138,6 +142,7 @@ export default function GuestyListingDetail({
       )}
 
       {/* Pricing & terms */}
+      {part === 'basic' && (
       <Section title="Pricing & terms">
         <div className="grid grid-cols-2 gap-3 text-sm text-mvr-olive sm:grid-cols-3">
           {fmtMoney(num(pick(raw, 'prices.basePrice'))) && (
@@ -178,25 +183,10 @@ export default function GuestyListingDetail({
           )}
         </div>
       </Section>
-
-      {/* Ownership */}
-      {owners.length > 0 && (
-        <Section title="Ownership">
-          <ul className="space-y-1 text-sm">
-            {owners.map((o) => (
-              <li key={o.guestyId} className="flex items-center justify-between">
-                <span className="text-mvr-olive">{o.name}</span>
-                <span className={`text-xs ${o.mapped ? 'text-mvr-success' : 'text-muted-foreground/60'}`}>
-                  {o.mapped ? 'Mapped' : 'Unmapped'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Section>
       )}
 
       {/* Sensitive — privileged roles only */}
-      {privileged &&
+      {part === 'access' && privileged &&
         (str(raw.wifiName) || str(raw.wifiPassword) || str(raw.doorCode) || str(raw.lockCode)) && (
           <Section title="Access (restricted)">
             <div className="space-y-2 text-sm text-mvr-olive">

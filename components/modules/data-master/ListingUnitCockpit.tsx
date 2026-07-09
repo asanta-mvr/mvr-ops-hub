@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Link2, X, ArrowLeftRight, Plus, Building2, Check } from 'lucide-react'
+import { Link2, X, Plus, Building2, Check, Sparkles } from 'lucide-react'
 import UnitForm, { type FieldOption, type UnitFormValues } from './UnitForm'
 
 // Guesty-derived structural values (comparison "Guesty side"). Plain shape so we
@@ -55,10 +55,14 @@ interface Props {
   createDefaults: Partial<UnitFormValues>
   guesty: GuestyUnitBaseline
   prereqs: FormPrereqs
+  // Cards injected by the page: ownership (below the Unit card) and the Data
+  // Master vs Guesty drift table (below the Unit vs Guesty comparison).
+  // Suggested unit match (from the listing name) shown above the picker when unattached.
+  suggestedUnit?: { id: string; label: string } | null
+  // When false, the attached-state "Complete unit data" editor is hidden (it lives
+  // in the Data Master tab instead). Defaults to true.
+  showEditor?: boolean
 }
-
-// Numeric fields that can be copied from Guesty into the unit (one click each).
-type CopyField = 'bedrooms' | 'bathrooms' | 'capacity' | 'totalBeds' | 'sqft' | 'kings' | 'queens' | 'twins'
 
 export default function ListingUnitCockpit({
   listingId,
@@ -66,8 +70,9 @@ export default function ListingUnitCockpit({
   unit,
   unitFormDefaults,
   createDefaults,
-  guesty,
   prereqs,
+  suggestedUnit,
+  showEditor = true,
 }: Props) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -95,32 +100,10 @@ export default function ListingUnitCockpit({
     }
   }
 
-  async function copyField(field: CopyField, value: number) {
-    if (!unit) return
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/v1/units/${unit.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value }),
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        toast.error(json?.error ?? 'Could not update the unit')
-        return
-      }
-      toast.success('Unit updated from Guesty')
-      router.refresh()
-    } catch {
-      toast.error('Network error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   // ── Not attached ──────────────────────────────────────────────────────────
   if (!unit) {
     return (
+      <div className="space-y-4">
       <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
         <h3 className="font-display text-lg text-mvr-primary">Unit</h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -130,6 +113,23 @@ export default function ListingUnitCockpit({
 
         {editable && !creating && (
           <div className="mt-4 space-y-4">
+            {suggestedUnit && (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-mvr-primary/30 bg-mvr-primary-light/50 px-3 py-2">
+                <span className="flex items-center gap-1.5 text-sm text-mvr-olive">
+                  <Sparkles className="size-4 shrink-0 text-mvr-primary" />
+                  Suggested match: <span className="font-medium text-mvr-primary">{suggestedUnit.label}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => patchListing(suggestedUnit.id)}
+                  disabled={busy}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-mvr-primary px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-mvr-primary/90 disabled:opacity-50"
+                >
+                  <Check className="size-3" />
+                  Attach
+                </button>
+              </div>
+            )}
             <UnitPicker disabled={busy} onPick={(id) => patchListing(id)} />
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-[#E0DBD4]" />
@@ -177,31 +177,11 @@ export default function ListingUnitCockpit({
 
         {!editable && <p className="mt-4 text-sm text-muted-foreground/70">You don&rsquo;t have edit access.</p>}
       </div>
+      </div>
     )
   }
 
   // ── Attached ──────────────────────────────────────────────────────────────
-  const rows: Array<{ label: string; field: CopyField | null; unitVal: number | string | null; guestyVal: number | string | null }> = [
-    { label: 'Bedrooms', field: 'bedrooms', unitVal: unit.bedrooms, guestyVal: guesty.bedrooms },
-    { label: 'Bathrooms', field: 'bathrooms', unitVal: unit.bathrooms, guestyVal: guesty.bathrooms },
-    { label: 'Capacity', field: 'capacity', unitVal: unit.capacity, guestyVal: guesty.capacity },
-    { label: 'Total beds', field: 'totalBeds', unitVal: unit.totalBeds, guestyVal: guesty.totalBeds },
-    { label: 'Sq ft', field: 'sqft', unitVal: unit.sqft, guestyVal: guesty.sqft },
-    { label: 'King beds', field: 'kings', unitVal: unit.kings, guestyVal: guesty.kings },
-    { label: 'Queen beds', field: 'queens', unitVal: unit.queens, guestyVal: guesty.queens },
-    { label: 'Twin beds', field: 'twins', unitVal: unit.twins, guestyVal: guesty.twins },
-    { label: 'Property type', field: null, unitVal: unit.type, guestyVal: guesty.propertyType },
-  ]
-
-  const isDifferent = (u: number | string | null, g: number | string | null): boolean => {
-    if (g === null || g === undefined || g === '') return false // nothing to compare against
-    if (u === null || u === undefined || u === '') return true // unit missing a value Guesty has
-    if (typeof u === 'number' || typeof g === 'number') return Number(u) !== Number(g)
-    return String(u).trim().toLowerCase() !== String(g).trim().toLowerCase()
-  }
-
-  const diffCount = rows.filter((r) => isDifferent(r.unitVal, r.guestyVal)).length
-
   return (
     <div className="space-y-4">
       {/* Attached unit + detach */}
@@ -231,64 +211,8 @@ export default function ListingUnitCockpit({
         </div>
       </div>
 
-      {/* Comparison */}
-      <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg text-mvr-primary">Unit vs Guesty</h3>
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-              diffCount > 0 ? 'bg-mvr-warning-light text-mvr-warning' : 'bg-mvr-success-light text-mvr-success'
-            }`}
-          >
-            <ArrowLeftRight className="size-3" />
-            {diffCount > 0 ? `${diffCount} difference${diffCount > 1 ? 's' : ''}` : 'In sync'}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          The unit is the source of truth. Copy a Guesty value only if you want to change the unit.
-        </p>
-
-        <table className="mt-3 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="py-1.5 font-medium">Field</th>
-              <th className="py-1.5 font-medium">Unit</th>
-              <th className="py-1.5 font-medium">Guesty</th>
-              <th className="py-1.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const differ = isDifferent(r.unitVal, r.guestyVal)
-              return (
-                <tr key={r.label} className={`border-t border-[#E0DBD4]/60 ${differ ? 'bg-mvr-warning-light/40' : ''}`}>
-                  <td className="py-2 text-mvr-olive">{r.label}</td>
-                  <td className="py-2 font-medium text-mvr-olive">{r.unitVal ?? '—'}</td>
-                  <td className={`py-2 ${differ ? 'text-mvr-warning' : 'text-muted-foreground'}`}>
-                    {r.guestyVal ?? '—'}
-                  </td>
-                  <td className="py-2 text-right">
-                    {editable && differ && r.field && typeof r.guestyVal === 'number' && (
-                      <button
-                        type="button"
-                        onClick={() => copyField(r.field as CopyField, r.guestyVal as number)}
-                        disabled={busy}
-                        title="Copy this Guesty value into the unit"
-                        className="inline-flex items-center gap-1 rounded-full border border-[#E0DBD4] px-2 py-0.5 text-xs text-mvr-olive transition-colors hover:bg-mvr-neutral/50 disabled:opacity-50"
-                      >
-                        use Guesty
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
       {/* Complete unit data (full editor, inline) */}
-      {editable && unitFormDefaults && (
+      {showEditor && editable && unitFormDefaults && (
         <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
           <h3 className="font-display text-lg text-mvr-primary">Complete unit data</h3>
           <p className="mt-1 mb-4 text-xs text-muted-foreground">
