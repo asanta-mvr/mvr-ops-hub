@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
+import { withDbRetry } from '@/lib/db/retry'
 import {
   fetchAllListingsFull,
   getOrCreateConnection,
@@ -61,19 +62,26 @@ export async function POST(req: NextRequest) {
               syncedAt: new Date(),
             }
             synced += 1
-            return db.guestyListing.upsert({
-              where: { guestyId: projected.guestyId },
-              create: { guestyId: projected.guestyId, ...data },
-              update: data,
-            })
+            // Upsert keyed on guestyId → existing listings are overwritten in
+            // place, new ones inserted; never duplicated. Retried so a dropped
+            // idle connection after the long fetch doesn't abort the sync.
+            return withDbRetry(() =>
+              db.guestyListing.upsert({
+                where: { guestyId: projected.guestyId },
+                create: { guestyId: projected.guestyId, ...data },
+                update: data,
+              })
+            )
           })
         )
       }
 
-      await db.guestyConnection.update({
-        where: { id: connection.id },
-        data: { status: 'connected', lastError: null, lastSyncAt: new Date(), lastSyncCount: synced },
-      })
+      await withDbRetry(() =>
+        db.guestyConnection.update({
+          where: { id: connection.id },
+          data: { status: 'connected', lastError: null, lastSyncAt: new Date(), lastSyncCount: synced },
+        })
+      )
       await db.guestySyncLog.create({
         data: {
           connectionId: connection.id,
@@ -85,10 +93,12 @@ export async function POST(req: NextRequest) {
       }).catch((e) => console.error('[guesty sync log]', e))
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Guesty sync failed'
-      await db.guestyConnection.update({
-        where: { id: connection.id },
-        data: { status: 'error', lastError: message },
-      })
+      await withDbRetry(() =>
+        db.guestyConnection.update({
+          where: { id: connection.id },
+          data: { status: 'error', lastError: message },
+        })
+      ).catch((e) => console.error('[guesty sync] failed to persist error state', e))
       await db.guestySyncLog.create({
         data: { connectionId: connection.id, operation: 'listing_sync', status: 'error', message },
       }).catch((e) => console.error('[guesty sync log]', e))

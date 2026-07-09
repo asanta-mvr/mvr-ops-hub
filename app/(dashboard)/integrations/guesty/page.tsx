@@ -8,6 +8,7 @@ import { getOrCreateConnection, isEnvManaged } from '@/lib/integrations/guesty'
 import GuestyConnectionForm from '@/components/modules/integrations/guesty/GuestyConnectionForm'
 import GuestyListingsTable from '@/components/modules/integrations/guesty/GuestyListingsTable'
 import GuestyOwnersTable from '@/components/modules/integrations/guesty/GuestyOwnersTable'
+import GuestyCustomFieldsTable from '@/components/modules/integrations/guesty/GuestyCustomFieldsTable'
 import CollapsibleSection from '@/components/modules/integrations/guesty/CollapsibleSection'
 
 export const metadata: Metadata = { title: 'Guesty · Integrations' }
@@ -78,6 +79,8 @@ export default async function GuestyIntegrationPage() {
     listingSyncAgg,
     ownerSyncAgg,
     syncLogs,
+    customFieldRows,
+    customFieldSyncAgg,
   ] = await Promise.all([
     db.guestyListing.findMany({
       select: LISTING_SELECT,
@@ -93,7 +96,9 @@ export default async function GuestyIntegrationPage() {
     db.guestyOwner.count(),
     db.guestyListing.aggregate({ _max: { syncedAt: true } }),
     db.guestyOwner.aggregate({ _max: { syncedAt: true } }),
-    db.guestySyncLog.findMany({ orderBy: { createdAt: 'desc' }, take: 12 }),
+    db.guestySyncLog.findMany({ orderBy: { createdAt: 'desc' }, take: 30 }),
+    db.guestyCustomField.findMany({ orderBy: [{ objectType: 'asc' }, { displayName: 'asc' }] }),
+    db.guestyCustomField.aggregate({ _max: { syncedAt: true } }),
   ])
 
   // Resolve suggested-owner names for the first page of owners.
@@ -134,8 +139,21 @@ export default async function GuestyIntegrationPage() {
     syncedAt: r.syncedAt.toISOString(),
   }))
 
+  const initialCustomFields = customFieldRows.map((r) => ({
+    id: r.id,
+    guestyId: r.guestyId,
+    displayName: r.displayName,
+    key: r.key,
+    objectType: r.objectType,
+    type: r.type,
+    options: r.options,
+    isPublic: r.isPublic,
+    syncedAt: r.syncedAt.toISOString(),
+  }))
+
   const listingsSubtitle = fmtLastSync(listingSyncAgg._max.syncedAt)
   const ownersSubtitle = fmtLastSync(ownerSyncAgg._max.syncedAt)
+  const customFieldsSubtitle = fmtLastSync(customFieldSyncAgg._max.syncedAt)
   const initialLogs = syncLogs.map((l) => ({
     id: l.id,
     operation: l.operation,
@@ -184,6 +202,14 @@ export default async function GuestyIntegrationPage() {
             connected={connected}
             editable={editable}
             pageSize={PAGE_SIZE}
+          />
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Custom fields" count={initialCustomFields.length} subtitle={customFieldsSubtitle}>
+          <GuestyCustomFieldsTable
+            initialRows={initialCustomFields}
+            connected={connected}
+            editable={editable}
           />
         </CollapsibleSection>
       </div>

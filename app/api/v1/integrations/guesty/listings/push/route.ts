@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { projectListingToDataMaster, projectListingPhotos } from '@/lib/integrations/guesty'
+import { withDbRetry } from '@/lib/db/retry'
+import { projectListingToDataMaster, projectListingPhotos, projectListingCustomFields } from '@/lib/integrations/guesty'
 
 // Pushing many listings runs many upserts — give it room.
 export const maxDuration = 300
@@ -33,6 +34,9 @@ const pushSchema = z.object({
  * API calls. Listings are created UNATTACHED (a Unit is attached later).
  */
 export async function POST(req: NextRequest) {
+  // Tracked across try/catch so both the success and failure sync-activity
+  // entries can link back to the connection.
+  let connectionId: string | null = null
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -78,8 +82,18 @@ export async function POST(req: NextRequest) {
 
     const sources = await db.guestyListing.findMany({
       where,
-      select: { id: true, guestyId: true, raw: true },
+      select: { id: true, guestyId: true, raw: true, connectionId: true },
     })
+    connectionId = sources[0]?.connectionId ?? null
+
+    // Definitions map (fieldId → label/type) to resolve each listing's raw
+    // custom field values into labeled, promotable fields. Empty if the custom
+    // fields have not been synced yet — names then fall back to the fieldId.
+    const defs = await db.guestyCustomField.findMany({
+      where: { objectType: 'listing' },
+      select: { guestyId: true, displayName: true, type: true },
+    })
+    const defsMap = new Map(defs.map((d) => [d.guestyId, { displayName: d.displayName, type: d.type }]))
 
     let pushed = 0
     const listingIds: string[] = []
@@ -92,20 +106,28 @@ export async function POST(req: NextRequest) {
           const fields = projectListingToDataMaster(raw)
           // Seed the curated photo set from the Guesty published photos (create only).
           const photos = JSON.parse(JSON.stringify(projectListingPhotos(raw)))
+          // Promote the listing's custom field values, labeled via the definitions map.
+          const customFields = JSON.parse(JSON.stringify(projectListingCustomFields(raw, defsMap)))
           // Key on the stable Guesty id → re-push updates the SAME record, never
-          // duplicates. Data Master is the source of truth: seed editable fields
-          // ONLY on first create; on re-push leave them untouched (just ensure the
-          // link) so manual edits are never overwritten. Drift is surfaced in the
-          // listing detail instead.
-          const listing = await db.listing.upsert({
-            where: { guestyId: gl.guestyId },
-            create: { ...fields, guestyId: gl.guestyId, guestyListingId: gl.id, photos },
-            update: { guestyListingId: gl.id },
-          })
-          await db.guestyListing.update({
-            where: { id: gl.id },
-            data: { promoted: true, promotedAt: new Date(), listingId: listing.id },
-          })
+          // duplicates. Current behavior: every push OVERWRITES the Guesty-derived
+          // fields with the latest values, so a refresh replaces the Data Master
+          // listing with the updated Guesty version. The unit attachment (unitId)
+          // and the separately-curated photo gallery are NOT in `fields`, so they
+          // survive a re-push. (Future: drift comparison to selectively choose
+          // which side wins instead of a blanket overwrite.)
+          const listing = await withDbRetry(() =>
+            db.listing.upsert({
+              where: { guestyId: gl.guestyId },
+              create: { ...fields, guestyId: gl.guestyId, guestyListingId: gl.id, photos, customFields },
+              update: { ...fields, guestyListingId: gl.id, customFields },
+            })
+          )
+          await withDbRetry(() =>
+            db.guestyListing.update({
+              where: { id: gl.id },
+              data: { promoted: true, promotedAt: new Date(), listingId: listing.id },
+            })
+          )
           return listing.id
         })
       )
@@ -127,9 +149,25 @@ export async function POST(req: NextRequest) {
       })
       .catch((e) => console.error('[audit] guesty listing push', e))
 
+    await db.guestySyncLog
+      .create({
+        data: {
+          connectionId,
+          operation: 'listing_push',
+          status: 'success',
+          itemCount: pushed,
+          message: `Pushed ${pushed} listing${pushed === 1 ? '' : 's'} to Data Master`,
+        },
+      })
+      .catch((e) => console.error('[guesty push log]', e))
+
     return NextResponse.json({ data: { pushed } })
   } catch (error) {
     console.error('[POST /api/v1/integrations/guesty/listings/push]', error)
+    const message = error instanceof Error ? error.message : 'Push to Data Master failed'
+    await db.guestySyncLog
+      .create({ data: { connectionId, operation: 'listing_push', status: 'error', message } })
+      .catch((e) => console.error('[guesty push log]', e))
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

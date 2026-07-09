@@ -584,3 +584,102 @@ export function projectListingToUnitBaseline(raw: RawListing): UnitBaselineFromG
     propertyType: asString(raw.propertyType) ?? asString(raw.type),
   }
 }
+
+// ─── custom fields ───────────────────────────────────────────────────────────
+// Guesty splits custom fields into account-level DEFINITIONS (the schema: which
+// fields exist, their label/type) and per-listing VALUES. The values already
+// arrive inside each listing's raw payload as `customFields[].{ _id, fieldId,
+// value }` (fieldId is opaque). We pull the definitions once to resolve
+// `fieldId → displayName/type`, then combine on push.
+
+type RawCustomFieldDef = Record<string, unknown>
+
+// The definitions endpoint may return a bare array or an envelope; tolerate both.
+interface CustomFieldDefsEnvelope {
+  results?: RawCustomFieldDef[]
+  data?: RawCustomFieldDef[]
+  customFields?: RawCustomFieldDef[]
+  fields?: RawCustomFieldDef[]
+}
+
+/**
+ * Fetch every account-level custom field definition.
+ * GET /v1/accounts/{accountId}/custom-fields → definitions (listing + reservation).
+ */
+export async function fetchCustomFieldDefinitions(token: string, accountId: string): Promise<RawCustomFieldDef[]> {
+  const body = await guestyGet<RawCustomFieldDef[] | CustomFieldDefsEnvelope>(
+    token,
+    `/v1/accounts/${accountId}/custom-fields`
+  )
+  if (Array.isArray(body)) return body
+  return body.results ?? body.data ?? body.customFields ?? body.fields ?? []
+}
+
+export interface ProjectedCustomFieldDef {
+  guestyId: string // the Guesty fieldId
+  displayName: string
+  key: string | null
+  objectType: string // "listing" | "reservation"
+  type: string
+  options: string[]
+  isPublic: boolean | null
+}
+
+/** Map a raw Guesty custom field definition to typed columns, or null if it has no id. */
+export function projectCustomFieldDefinition(raw: RawCustomFieldDef): ProjectedCustomFieldDef | null {
+  const guestyId = asString(raw.fieldId) ?? asString(raw._id)
+  const displayName = asString(raw.displayName) ?? asString(raw.key)
+  if (!guestyId || !displayName) return null
+  const options = Array.isArray(raw.options)
+    ? raw.options.filter((o): o is string => typeof o === 'string')
+    : []
+  return {
+    guestyId,
+    displayName,
+    key: asString(raw.key),
+    objectType: asString(raw.object) ?? 'listing',
+    type: asString(raw.type) ?? 'text',
+    options,
+    isPublic: asBool(raw.isPublic),
+  }
+}
+
+// A promoted custom field on a Data Master Listing (stored on Listing.customFields).
+export interface ListingCustomField {
+  fieldId: string
+  name: string // resolved from the definition; falls back to the fieldId
+  type: string | null
+  value: string | number | boolean | null
+}
+
+/**
+ * Combine a listing's raw `customFields[]` values with the account definitions
+ * map to produce labeled, promotable custom fields for Data Master.
+ */
+export function projectListingCustomFields(
+  raw: RawListing,
+  defs: Map<string, { displayName: string; type: string }>
+): ListingCustomField[] {
+  const list = Array.isArray(raw.customFields) ? raw.customFields : []
+  const out: ListingCustomField[] = []
+  for (const item of list) {
+    const rec = asRecord(item)
+    if (!rec) continue
+    const fieldId = asString(rec.fieldId)
+    if (!fieldId) continue
+    const def = defs.get(fieldId)
+    const value = rec.value
+    out.push({
+      fieldId,
+      name: def?.displayName ?? fieldId,
+      type: def?.type ?? null,
+      value:
+        typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+          ? value
+          : value == null
+            ? null
+            : String(value),
+    })
+  }
+  return out
+}

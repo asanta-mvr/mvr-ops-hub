@@ -31,7 +31,9 @@ export interface GuestySyncLogEntry {
 
 const OP_LABEL: Record<string, string> = {
   listing_sync: 'Listing refresh',
+  listing_push: 'Push to Data Master',
   owner_sync: 'Owner refresh',
+  custom_field_sync: 'Custom fields refresh',
   test_connection: 'Test connection',
 }
 
@@ -49,7 +51,6 @@ function fmtLogTime(iso: string): string {
 function SyncActivityLog({ logs }: { logs: GuestySyncLogEntry[] }) {
   const [open, setOpen] = useState(true)
   if (logs.length === 0) return null
-  const failures = logs.filter((l) => l.status === 'error').length
 
   return (
     <div className="border-t border-[#E0DBD4] px-6 py-4">
@@ -59,14 +60,7 @@ function SyncActivityLog({ logs }: { logs: GuestySyncLogEntry[] }) {
         aria-expanded={open}
         className="flex w-full items-center justify-between text-left"
       >
-        <span className="flex items-center gap-2 text-sm font-medium text-mvr-olive">
-          Sync activity
-          {failures > 0 && (
-            <span className="rounded-full bg-mvr-danger-light px-2 py-0.5 text-xs font-medium text-mvr-danger">
-              {failures} failed
-            </span>
-          )}
-        </span>
+        <span className="text-sm font-medium text-mvr-olive">Sync activity</span>
         <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
