@@ -373,6 +373,15 @@ model Unit {
   hasKitchen     Boolean  @default(false)
   hasBalcony     Boolean  @default(false)
   features       String[]
+  // MVR taxonomy mirrored from Guesty listing custom fields (for comparison /
+  // future push-to-Guesty). Data Master is the source of truth.
+  category       String?
+  typeOfProperty String?
+  parkingSpot    String?
+  keyType        String?
+  ekey           Int?
+  mvrPortfolio   Boolean  @default(false)
+  unitTypes      String?
   driveFolderUrl String?
   driveFolderId  String? // Google Drive folder for this unit's property docs
   status         String   @default("onboarding")
@@ -428,6 +437,7 @@ model Listing {
   guestyListingId String?   @unique // source GuestyListing.id when pushed from the integration
   unitId          String? // optional — a listing can exist in Data Master before being attached to a Unit
   photos          Json? // curated ListingPhoto[]: { id, kind: 'guesty'|'drive', src, order }
+  customFields    Json? // promoted Guesty custom fields: [{ fieldId, name, type, value }]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1322,11 +1332,36 @@ model GuestyConnection {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  listings GuestyListing[]
-  owners   GuestyOwner[]
-  syncLogs GuestySyncLog[]
+  listings     GuestyListing[]
+  owners       GuestyOwner[]
+  syncLogs     GuestySyncLog[]
+  customFields GuestyCustomField[]
 
   @@map("guesty_connections")
+}
+
+// Account-level custom field DEFINITIONS pulled from Guesty
+// (GET /accounts/{id}/custom-fields). These map an opaque `fieldId` to a human
+// label/type so the values stored inside each GuestyListing.raw.customFields[]
+// can be rendered meaningfully and promoted to Data Master.
+model GuestyCustomField {
+  id           String   @id @default(cuid())
+  guestyId     String   @unique // Guesty custom field `fieldId`
+  connectionId String?
+  displayName  String
+  key          String?
+  objectType   String // "listing" | "reservation"
+  type         String // text | longtext | boolean | enum | date | time | number | contact | user
+  options      String[] // allowed values when type = enum
+  isPublic     Boolean?
+  raw          Json?
+  syncedAt     DateTime @default(now())
+
+  connection GuestyConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([connectionId])
+  @@index([objectType])
+  @@map("guesty_custom_fields")
 }
 
 // Append-only activity log for Guesty operations (listing refresh, owner refresh,
