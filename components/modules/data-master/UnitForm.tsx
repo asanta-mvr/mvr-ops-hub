@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SuperAdminSaveNotice } from '@/components/modules/data-master/SuperAdminSaveNotice'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -432,6 +434,10 @@ export default function UnitForm({
   onCancel,
 }: UnitFormProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  // Super admins can save with blank required fields (for DB cleanup); everyone
+  // else keeps the normal required-field validation.
+  const isSuperAdmin = session?.user?.role === 'super_admin'
   const [serverError, setServerError] = useState('')
   const isEdit = !!unitId
 
@@ -450,7 +456,7 @@ export default function UnitForm({
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: standardSchemaResolver(formSchema),
+    resolver: isSuperAdmin ? undefined : standardSchemaResolver(formSchema),
     defaultValues: {
       number:         '',
       type:           '',
@@ -634,6 +640,7 @@ export default function UnitForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {isSuperAdmin && <SuperAdminSaveNotice />}
       {serverError && (
         <div className="bg-mvr-danger-light text-mvr-danger text-sm rounded-lg px-4 py-3">
           {serverError}

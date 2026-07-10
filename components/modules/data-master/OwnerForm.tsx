@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useForm } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
@@ -10,6 +11,7 @@ import { Country, State, City } from 'country-state-city'
 import { Button } from '@/components/ui/button'
 import { SearchableSelect, type SelectOption } from '@/components/ui/searchable-select'
 import { OwnerTagSelect } from '@/components/modules/data-master/OwnerTagSelect'
+import { SuperAdminSaveNotice } from '@/components/modules/data-master/SuperAdminSaveNotice'
 import { LANGUAGES } from '@/lib/data/languages'
 
 const DOC_TYPES = ['Passport', 'National ID', "Driver's License", 'Other']
@@ -194,6 +196,11 @@ export function OwnerForm({ ownerId, defaultValues, onSuccess, onCancel }: Owner
   const [phoneIso, setPhoneIso] = useState(initPhone.iso)
   const [phoneNumber, setPhoneNumber] = useState(initPhone.number)
 
+  const { data: session } = useSession()
+  // Super admins can save with blank required fields (for DB cleanup); everyone
+  // else keeps the normal required-field validation.
+  const isSuperAdmin = session?.user?.role === 'super_admin'
+
   const {
     register,
     handleSubmit,
@@ -201,7 +208,7 @@ export function OwnerForm({ ownerId, defaultValues, onSuccess, onCancel }: Owner
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: standardSchemaResolver(formSchema),
+    resolver: isSuperAdmin ? undefined : standardSchemaResolver(formSchema),
     defaultValues: {
       firstName: '', lastName: '', type: '', status: 'active', category: '',
       personalityScore: 50, communicationScore: 50, documentType: '', documentNumber: '',
@@ -339,6 +346,7 @@ export function OwnerForm({ ownerId, defaultValues, onSuccess, onCancel }: Owner
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {isSuperAdmin && <SuperAdminSaveNotice />}
       {serverError && (
         <div className="bg-mvr-danger-light text-mvr-danger text-sm rounded-lg px-4 py-3">{serverError}</div>
       )}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
@@ -9,6 +10,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Plus, Check, X, Info } from 'lucide-react'
 import HouseRulesFormEditor from './HouseRulesFormEditor'
+import { SuperAdminSaveNotice } from '@/components/modules/data-master/SuperAdminSaveNotice'
 
 const formSchema = z.object({
   name:           z.string().min(1, 'Building name is required').max(200),
@@ -284,6 +286,10 @@ function AmenitiesTagPicker({
 
 export default function BuildingForm({ buildingId, defaultValues, zones = [], serviceAccountEmail }: BuildingFormProps) {
   const router    = useRouter()
+  const { data: session } = useSession()
+  // Super admins can save with blank required fields (for DB cleanup); everyone
+  // else keeps the normal required-field validation.
+  const isSuperAdmin = session?.user?.role === 'super_admin'
   const [serverError, setServerError] = useState('')
   const isEdit    = !!buildingId
 
@@ -296,7 +302,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: standardSchemaResolver(formSchema),
+    resolver: isSuperAdmin ? undefined : standardSchemaResolver(formSchema),
     defaultValues: {
       name:          '',
       nickname:      '',
@@ -381,6 +387,7 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {isSuperAdmin && <SuperAdminSaveNotice />}
       {serverError && (
         <div className="bg-mvr-danger-light text-mvr-danger text-sm rounded-lg px-4 py-3">
           {serverError}
