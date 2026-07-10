@@ -86,6 +86,18 @@ export async function PUT(req: NextRequest) {
           { status: 400 }
         )
       }
+      // Storing credentials in the DB requires the encryption key. Fail fast
+      // with an actionable message instead of a generic 500 when it's missing.
+      const key = process.env[KEY_ENV]
+      if (!key || !/^[0-9a-fA-F]{64}$/.test(key)) {
+        return NextResponse.json(
+          {
+            error:
+              'Server is missing its credential-encryption key (INTEGRATION_SECRET_KEY). Set it in the Vercel environment and redeploy, then reconnect.',
+          },
+          { status: 503 }
+        )
+      }
       clientId = bodyClientId
       if (bodySecret) {
         plaintextSecret = bodySecret

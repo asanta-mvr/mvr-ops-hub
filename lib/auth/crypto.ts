@@ -22,7 +22,7 @@ const DEFAULT_KEY_ENV = 'GMAIL_TOKEN_SECRET'
 
 function loadKey(keyEnv: string = DEFAULT_KEY_ENV): Buffer {
   const hex = process.env[keyEnv]
-  if (!hex || hex.length !== 64) {
+  if (!hex || !/^[0-9a-fA-F]{64}$/.test(hex)) {
     throw new Error(
       `${keyEnv} must be a 32-byte hex string (64 chars). Generate one with \`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"\``
     )
