@@ -2,9 +2,8 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
-  Pencil, Trash2, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
+  Pencil, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
   BedDouble, Bath, Maximize2, Users, Star, Layers,
   Eye, Hash, Plus, Camera, Check, SlidersHorizontal,
@@ -532,17 +531,12 @@ interface UnitDetailPanelProps {
   onClose:         () => void
   onPrev:          () => void
   onNext:          () => void
-  confirmDelete:   boolean
-  onConfirmDelete: () => void
-  onCancelDelete:  () => void
-  onDelete:        (id: string) => void
   onEdit:          () => void
 }
 
 function UnitDetailPanel({
   unit, index, total,
-  onClose, onPrev, onNext,
-  confirmDelete, onConfirmDelete, onCancelDelete, onDelete, onEdit,
+  onClose, onPrev, onNext, onEdit,
 }: UnitDetailPanelProps) {
   const [commentText, setCommentText] = useState('')
   const [savedComments, setSavedComments] = useState<Array<{ id: string; text: string; date: string }>>([])
@@ -589,38 +583,12 @@ function UnitDetailPanel({
 
         {/* Action buttons */}
         <div className="flex items-center gap-1">
-          {confirmDelete ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-mvr-danger font-medium">Delete?</span>
-              <button
-                onClick={() => onDelete(unit.id)}
-                className="px-2 py-0.5 text-xs rounded bg-mvr-danger text-white hover:bg-mvr-danger/90 transition-colors"
-              >
-                Yes
-              </button>
-              <button
-                onClick={onCancelDelete}
-                className="px-2 py-0.5 text-xs rounded bg-mvr-neutral text-foreground hover:bg-mvr-steel-light transition-colors"
-              >
-                No
-              </button>
-            </div>
-          ) : (
-            <>
-              <button
-                onClick={onEdit}
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-mvr-primary hover:bg-mvr-primary-light transition-colors font-medium"
-              >
-                <Pencil className="w-3 h-3" />Edit
-              </button>
-              <button
-                onClick={onConfirmDelete}
-                className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-mvr-danger hover:bg-mvr-danger-light transition-colors font-medium"
-              >
-                <Trash2 className="w-3 h-3" />Delete
-              </button>
-            </>
-          )}
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg text-mvr-primary hover:bg-mvr-primary-light transition-colors font-medium"
+          >
+            <Pencil className="w-3 h-3" />Edit
+          </button>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-mvr-steel-light transition-colors ml-0.5"
@@ -836,14 +804,11 @@ interface UnitsTableViewProps {
 }
 
 export default function UnitsTableView({ units, buildings, owners, options, initialBuildingId }: UnitsTableViewProps) {
-  const router = useRouter()
-
   const [displayUnits, setDisplayUnits]       = useState<UnitFull[]>(units)
   const [selectedId, setSelectedId]           = useState<string | null>(null)
   const [editId, setEditId]                   = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-  // Keep the client list in sync after router.refresh() (e.g. after an edit).
+  // Keep the client list in sync after the server refetches (e.g. once an edit saves).
   useEffect(() => { setDisplayUnits(units) }, [units])
   const [sortKey, setSortKey]                 = useState<SortKey>('number')
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
@@ -871,20 +836,6 @@ export default function UnitsTableView({ units, buildings, owners, options, init
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir('asc') }
-  }
-
-  async function handleDelete(id: string) {
-    try {
-      const res = await fetch(`/api/v1/units/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Delete failed')
-      setDisplayUnits((prev) => prev.filter((u) => u.id !== id))
-      setConfirmDeleteId(null)
-      if (selectedId === id) setSelectedId(null)
-      router.refresh()
-    } catch {
-      alert('Failed to delete unit. Please try again.')
-      setConfirmDeleteId(null)
-    }
   }
 
   const filtered = useMemo(() => {
@@ -1036,10 +987,6 @@ export default function UnitsTableView({ units, buildings, owners, options, init
               onNext={() => {
                 if (selectedIndex < sortedUnits.length - 1) setSelectedId(sortedUnits[selectedIndex + 1].id)
               }}
-              confirmDelete={confirmDeleteId === selectedUnit.id}
-              onConfirmDelete={() => setConfirmDeleteId(selectedUnit.id)}
-              onCancelDelete={() => setConfirmDeleteId(null)}
-              onDelete={handleDelete}
               onEdit={() => setEditId(selectedUnit.id)}
             />
           </div>

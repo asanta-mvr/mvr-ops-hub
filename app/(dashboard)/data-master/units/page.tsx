@@ -7,6 +7,9 @@ export const metadata: Metadata = { title: 'Units' }
 
 async function getUnits(): Promise<UnitFull[]> {
   const units = await db.unit.findMany({
+    // Deleting a unit soft-deletes it (status → 'inactive'); keep those out of
+    // the Data Master list so a deleted unit stays gone.
+    where: { status: { not: 'inactive' } },
     include: {
       building: { select: { name: true, nickname: true } },
       owner:    { select: { nickname: true, phone: true } },

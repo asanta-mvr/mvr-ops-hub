@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { Button } from '@/components/ui/button'
 import { UnitDetailTabs } from '@/components/modules/data-master/UnitDetailTabs'
+import { DeleteUnitButton } from '@/components/modules/data-master/DeleteUnitButton'
 import type { ListingCustomField } from '@/lib/integrations/guesty'
 import type {
   FolderView,
@@ -50,6 +51,7 @@ function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 export default async function UnitDetailPage({ params }: { params: { id: string } }) {
   const session = await auth()
   const docCanEdit = session ? await canEdit(session, 'data_master.owners') : false
+  const canDeleteUnit = session ? await canEdit(session, 'data_master.units') : false
 
   const [unit, alertTypes] = await Promise.all([
     db.unit.findUnique({
@@ -178,12 +180,15 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
               <span className="text-sm text-muted-foreground">{unit.building.name}</span>
             </div>
           </div>
-          <Link href={`/data-master/units/${params.id}/edit`} className="shrink-0">
-            <Button variant="outline" size="sm">
-              <Pencil className="w-3.5 h-3.5 mr-1.5" />
-              Edit
-            </Button>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href={`/data-master/units/${params.id}/edit`}>
+              <Button variant="outline" size="sm">
+                <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                Edit
+              </Button>
+            </Link>
+            {canDeleteUnit && <DeleteUnitButton unitId={params.id} unitNumber={unit.number} />}
+          </div>
         </div>
       </div>
 
