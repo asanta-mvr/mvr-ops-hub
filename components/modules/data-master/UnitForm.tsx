@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SuperAdminSaveNotice } from '@/components/modules/data-master/SuperAdminSaveNotice'
+import { normalizePhotoQuality } from '@/lib/validations/unit'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -565,7 +566,7 @@ export default function UnitForm({
       mvrPortfolio:   values.mvrPortfolio ?? false,
       unitTypes:      values.unitTypes      || undefined,
       driveFolderUrl: values.driveFolderUrl || undefined,
-      photoQuality:   values.photoQuality   || undefined,
+      photoQuality:   normalizePhotoQuality(values.photoQuality),
       notes:          values.notes          || undefined,
       // score is intentionally excluded — it is calculated, not user-editable
     }

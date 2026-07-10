@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import UnitForm, { type FieldOption, type UnitFormValues } from '@/components/modules/data-master/UnitForm'
+import { normalizePhotoQuality } from '@/lib/validations/unit'
 
 export interface UnitFormOptions {
   type: FieldOption[]
@@ -66,7 +67,7 @@ export function EditUnitModal({ unitId, buildings, owners, options, onClose }: P
           otherBeds: str(u.otherBeds),
           features,
           driveFolderUrl: str(u.driveFolderUrl),
-          photoQuality: (u.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
+          photoQuality: normalizePhotoQuality(u.photoQuality),
           notes: str(u.notes),
         })
         setScore(u.score != null ? String(u.score) : undefined)

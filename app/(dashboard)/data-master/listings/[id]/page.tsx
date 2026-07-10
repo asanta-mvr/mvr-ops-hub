@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { canEdit, requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
+import { normalizePhotoQuality } from '@/lib/validations/unit'
 import {
   projectListingToUnitBaseline,
   projectListingToDataMaster,
@@ -186,7 +187,7 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
           mvrPortfolio: unit.mvrPortfolio ?? false,
           unitTypes: unit.unitTypes ?? '',
           driveFolderUrl: unit.driveFolderUrl ?? '',
-          photoQuality: (unit.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
+          photoQuality: normalizePhotoQuality(unit.photoQuality),
           notes: unit.notes ?? '',
         }
       })()

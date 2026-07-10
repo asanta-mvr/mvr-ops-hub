@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { db } from '@/lib/db'
 import UnitForm from '@/components/modules/data-master/UnitForm'
+import { normalizePhotoQuality } from '@/lib/validations/unit'
 
 export const metadata: Metadata = { title: 'Edit Unit' }
 
@@ -72,7 +73,7 @@ export default async function EditUnitPage({ params }: { params: { id: string } 
     mvrPortfolio:   unit.mvrPortfolio      ?? false,
     unitTypes:      unit.unitTypes         ?? '',
     driveFolderUrl: unit.driveFolderUrl    ?? '',
-    photoQuality:   (unit.photoQuality as 'pro' | 'preliminary' | 'low_quality' | null) ?? undefined,
+    photoQuality:   normalizePhotoQuality(unit.photoQuality),
     notes:          unit.notes             ?? '',
   }
 
