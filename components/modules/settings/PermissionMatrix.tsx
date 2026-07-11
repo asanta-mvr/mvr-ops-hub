@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { RESOURCES, type Level, type Resource } from '@/lib/auth/resources'
+import { RESOURCES, supportsErase, type Level, type Resource } from '@/lib/auth/resources'
 
 export type PermissionSelection = Record<Resource, Level | 'none'>
 
@@ -16,7 +16,7 @@ export function selectionFromPermissions(
 ): PermissionSelection {
   const sel = emptySelection()
   for (const p of perms) {
-    if ((p.level === 'view' || p.level === 'edit') && p.resource in sel) {
+    if ((p.level === 'view' || p.level === 'edit' || p.level === 'delete') && p.resource in sel) {
       sel[p.resource as Resource] = p.level
     }
   }
@@ -35,9 +35,13 @@ interface Props {
   value: PermissionSelection
   onChange: (next: PermissionSelection) => void
   disabled?: boolean
+  // When true (viewer is a super admin), erase-supporting resources expose the
+  // "Erase" level. Otherwise the Erase tier is hidden and any existing erase
+  // grant is shown locked so it can't be changed.
+  canGrantErase?: boolean
 }
 
-export function PermissionMatrix({ value, onChange, disabled = false }: Props) {
+export function PermissionMatrix({ value, onChange, disabled = false, canGrantErase = false }: Props) {
   const grouped = useMemo(() => {
     const groups = new Map<string, typeof RESOURCES[number][]>()
     for (const r of RESOURCES) {
@@ -125,6 +129,13 @@ export function PermissionMatrix({ value, onChange, disabled = false }: Props) {
             <div className="divide-y divide-[#E0DBD4]">
               {resources.map((r) => {
                 const current = value[r.key]
+                const eraseHere = supportsErase(r.key)
+                const showErase = eraseHere && canGrantErase
+                // A non-super-admin can't manage an existing Erase grant — lock it.
+                const lockedErase = eraseHere && current === 'delete' && !canGrantErase
+                const rowLevels: Array<Level | 'none'> = showErase
+                  ? ['none', 'view', 'edit', 'delete']
+                  : ['none', 'view', 'edit']
                 return (
                   <div
                     key={r.key}
@@ -134,31 +145,39 @@ export function PermissionMatrix({ value, onChange, disabled = false }: Props) {
                       <div className="text-sm text-mvr-primary font-medium">{r.label}</div>
                       <div className="text-[11px] text-muted-foreground font-mono">{r.key}</div>
                     </div>
-                    <div className="inline-flex rounded-md border border-[#E0DBD4] bg-white overflow-hidden text-xs">
-                      {(['none', 'view', 'edit'] as const).map((level) => {
-                        const isActiveLvl = current === level
-                        return (
-                          <button
-                            key={level}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => setOne(r.key, level)}
-                            className={[
-                              'px-3 py-1 capitalize transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-                              isActiveLvl
-                                ? level === 'edit'
-                                  ? 'bg-mvr-primary text-white font-semibold'
-                                  : level === 'view'
-                                    ? 'bg-mvr-sand-light text-mvr-primary font-semibold'
-                                    : 'bg-mvr-neutral text-muted-foreground font-semibold'
-                                : 'text-mvr-primary hover:bg-mvr-cream',
-                            ].join(' ')}
-                          >
-                            {level}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {lockedErase ? (
+                      <span className="inline-flex items-center rounded-md border border-mvr-danger/30 bg-mvr-danger-light px-3 py-1 text-xs font-semibold text-mvr-danger">
+                        Erase — super-admin only
+                      </span>
+                    ) : (
+                      <div className="inline-flex rounded-md border border-[#E0DBD4] bg-white overflow-hidden text-xs">
+                        {rowLevels.map((level) => {
+                          const isActiveLvl = current === level
+                          const activeClass =
+                            level === 'delete'
+                              ? 'bg-mvr-danger text-white font-semibold'
+                              : level === 'edit'
+                                ? 'bg-mvr-primary text-white font-semibold'
+                                : level === 'view'
+                                  ? 'bg-mvr-sand-light text-mvr-primary font-semibold'
+                                  : 'bg-mvr-neutral text-muted-foreground font-semibold'
+                          return (
+                            <button
+                              key={level}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() => setOne(r.key, level)}
+                              className={[
+                                'px-3 py-1 capitalize transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
+                                isActiveLvl ? activeClass : 'text-mvr-primary hover:bg-mvr-cream',
+                              ].join(' ')}
+                            >
+                              {level === 'delete' ? 'Erase' : level}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}

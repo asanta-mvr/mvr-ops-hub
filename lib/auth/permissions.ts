@@ -9,7 +9,7 @@ import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import type { Session } from 'next-auth'
 import { db } from '@/lib/db'
-import { isResource, levelSatisfies, type Level, type Resource } from './resources'
+import { isResource, levelSatisfies, LEVELS, type Level, type Resource } from './resources'
 
 export function isSuperAdmin(role: string | null | undefined): boolean {
   return role === 'super_admin'
@@ -26,8 +26,8 @@ export const getUserPermissions = cache(
     const map = new Map<Resource, Level>()
     for (const r of rows) {
       if (!isResource(r.resource)) continue
-      if (r.level === 'view' || r.level === 'edit') {
-        map.set(r.resource, r.level)
+      if ((LEVELS as readonly string[]).includes(r.level)) {
+        map.set(r.resource, r.level as Level)
       }
     }
     return map
@@ -61,6 +61,19 @@ export async function canEdit(
   if (isSuperAdmin(session.user.role)) return true
   const perms = await getUserPermissions(session.user.id)
   return levelSatisfies(perms.get(resource), 'edit')
+}
+
+// Permanent hard-delete ("Erase"). Super admins always pass; everyone else needs
+// an explicit `delete` level (only super admins can grant it — see the users
+// permissions route). Only meaningful for resources in ERASE_RESOURCES.
+export async function canDelete(
+  session: Session | null | undefined,
+  resource: Resource
+): Promise<boolean> {
+  if (!session?.user?.id) return false
+  if (isSuperAdmin(session.user.role)) return true
+  const perms = await getUserPermissions(session.user.id)
+  return levelSatisfies(perms.get(resource), 'delete')
 }
 
 // Redirect helpers for server components. Either go to /login (no session)
@@ -105,6 +118,17 @@ export async function authzEdit(
 ): Promise<AuthzFailure | AuthzSuccess> {
   if (!session?.user) return { ok: false, status: 401, message: 'Unauthorized' }
   if (!(await canEdit(session, resource))) {
+    return { ok: false, status: 403, message: 'Forbidden' }
+  }
+  return { ok: true }
+}
+
+export async function authzDelete(
+  session: Session | null | undefined,
+  resource: Resource
+): Promise<AuthzFailure | AuthzSuccess> {
+  if (!session?.user) return { ok: false, status: 401, message: 'Unauthorized' }
+  if (!(await canDelete(session, resource))) {
     return { ok: false, status: 403, message: 'Forbidden' }
   }
   return { ok: true }

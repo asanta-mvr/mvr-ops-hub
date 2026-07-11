@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
-import { canEdit } from '@/lib/auth/permissions'
+import { canEdit, isSuperAdmin } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { updatePermissionsSchema } from '@/lib/auth/schemas'
 
@@ -47,6 +47,31 @@ export async function PUT(
       where: { userId: params.id },
       select: { resource: true, level: true },
     })
+
+    // Only super admins may grant, remove, or change an Erase (delete) grant.
+    // Non-super-admins can still edit other levels as long as they leave any
+    // existing erase grant untouched.
+    if (!isSuperAdmin(session.user.role)) {
+      const oldLevel = new Map(oldPermissions.map((p) => [p.resource, p.level] as const))
+      const newLevel = new Map(parsed.data.permissions.map((p) => [p.resource, p.level] as const))
+      const resources = Array.from(
+        new Set(
+          oldPermissions
+            .map((p) => p.resource)
+            .concat(parsed.data.permissions.map((p) => p.resource))
+        )
+      )
+      for (const resource of resources) {
+        const was = oldLevel.get(resource)
+        const now = newLevel.get(resource)
+        if ((was === 'delete' || now === 'delete') && was !== now) {
+          return NextResponse.json(
+            { error: 'Only super admins can grant or change Erase permissions.' },
+            { status: 403 }
+          )
+        }
+      }
+    }
 
     // Atomic replace: delete all then insert the new set.
     await db.$transaction([

@@ -47,6 +47,7 @@ export default async function EditUserPage({ params }: { params: { id: string } 
         isActive={user.isActive}
         isSelf={isSelf}
         isSuperAdmin={isSuperAdmin(user.role)}
+        viewerIsSuperAdmin={isSuperAdmin(session!.user.role)}
         initialPermissions={user.permissions}
       />
     </div>

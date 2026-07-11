@@ -3,7 +3,10 @@
 // more `UserPermission` rows pairing a resource with a level. super_admin
 // bypasses the matrix and has implicit `edit` on everything.
 
-export type Level = 'view' | 'edit'
+// Levels in increasing strictness: view < edit < delete. `delete` ("Erase")
+// grants permanent hard-delete and implies edit + view. It can only be granted
+// by a super_admin and only applies to resources listed in ERASE_RESOURCES.
+export type Level = 'view' | 'edit' | 'delete'
 
 export const RESOURCES = [
   { key: 'dashboard',                          label: 'Dashboard',           group: 'General' },
@@ -39,10 +42,20 @@ export function resourceMeta(key: Resource): (typeof RESOURCES)[number] {
 }
 
 // Convenience: levels in increasing strictness order.
-export const LEVELS: readonly Level[] = ['view', 'edit'] as const
+export const LEVELS: readonly Level[] = ['view', 'edit', 'delete'] as const
+
+const LEVEL_RANK: Record<Level, number> = { view: 1, edit: 2, delete: 3 }
 
 export function levelSatisfies(actual: Level | undefined, required: Level): boolean {
   if (!actual) return false
-  if (required === 'view') return actual === 'view' || actual === 'edit'
-  return actual === 'edit'
+  return LEVEL_RANK[actual] >= LEVEL_RANK[required]
+}
+
+// Resources that support permanent hard-delete ("Erase"). Only these expose the
+// Erase level in the permission matrix, and only these enforce `canDelete`.
+// Extend this as hard-delete is built for more resources.
+export const ERASE_RESOURCES: readonly Resource[] = ['data_master.units'] as const
+
+export function supportsErase(resource: Resource): boolean {
+  return ERASE_RESOURCES.includes(resource)
 }
