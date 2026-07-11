@@ -45,6 +45,9 @@ next-env.d.ts
 # n8n workflow JSON snapshots — local-only safety backups
 /n8n-snapshots
 
+# Notion owner/unit export — contains owner PII (names, emails, phones)
+/prisma/notion-units.csv
+
 # Design-inspiration mockups — only the README is versioned
 /web_apps_examples/*
 !/web_apps_examples/README.md
