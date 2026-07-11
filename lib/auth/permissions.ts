@@ -63,9 +63,9 @@ export async function canEdit(
   return levelSatisfies(perms.get(resource), 'edit')
 }
 
-// Permanent hard-delete ("Erase"). Super admins always pass; everyone else needs
-// an explicit `delete` level (only super admins can grant it — see the users
-// permissions route). Only meaningful for resources in ERASE_RESOURCES.
+// Permanent hard-delete / erase. Requires the top `full` level. Super admins
+// always pass; everyone else needs an explicit `full` grant on the resource
+// (only super admins can grant it — see the users permissions route).
 export async function canDelete(
   session: Session | null | undefined,
   resource: Resource
@@ -73,7 +73,7 @@ export async function canDelete(
   if (!session?.user?.id) return false
   if (isSuperAdmin(session.user.role)) return true
   const perms = await getUserPermissions(session.user.id)
-  return levelSatisfies(perms.get(resource), 'delete')
+  return levelSatisfies(perms.get(resource), 'full')
 }
 
 // Redirect helpers for server components. Either go to /login (no session)

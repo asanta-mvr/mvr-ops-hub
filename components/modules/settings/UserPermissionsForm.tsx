@@ -17,7 +17,7 @@ interface Props {
   isActive: boolean
   isSelf: boolean
   isSuperAdmin: boolean
-  // Whether the CURRENT viewer is a super admin (controls who can grant Erase),
+  // Whether the CURRENT viewer is a super admin (controls who can grant Full),
   // distinct from `isSuperAdmin` which is about the user being edited.
   viewerIsSuperAdmin: boolean
   initialPermissions: Array<{ resource: string; level: string }>
@@ -46,7 +46,7 @@ export function UserPermissionsForm({
 
   const totalCount = Object.values(selection).filter((v) => v !== 'none').length
   const editCount = Object.values(selection).filter((v) => v === 'edit').length
-  const eraseCount = Object.values(selection).filter((v) => v === 'delete').length
+  const fullCount = Object.values(selection).filter((v) => v === 'full').length
 
   const dirty = useMemo(() => {
     for (const key of Object.keys(selection)) {
@@ -108,7 +108,7 @@ export function UserPermissionsForm({
           {name && <p className="text-sm text-muted-foreground font-mono">{email}</p>}
           <p className="text-xs text-muted-foreground mt-1">
             {totalCount} resource{totalCount === 1 ? '' : 's'} granted · {editCount} with edit access
-            {eraseCount > 0 && <> · <span className="text-mvr-danger font-medium">{eraseCount} with erase</span></>}
+            {fullCount > 0 && <> · <span className="text-mvr-danger font-medium">{fullCount} with full</span></>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -136,7 +136,7 @@ export function UserPermissionsForm({
         value={selection}
         onChange={setSelection}
         disabled={disabled}
-        canGrantErase={viewerIsSuperAdmin}
+        canGrantFull={viewerIsSuperAdmin}
       />
 
       <div className="sticky bottom-0 bg-white border-t border-[#E0DBD4] shadow-panel rounded-xl px-5 py-3 flex items-center justify-between gap-3 flex-wrap">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { RESOURCES, supportsErase, type Level, type Resource } from '@/lib/auth/resources'
+import { RESOURCES, type Level, type Resource } from '@/lib/auth/resources'
 
 export type PermissionSelection = Record<Resource, Level | 'none'>
 
@@ -16,7 +16,7 @@ export function selectionFromPermissions(
 ): PermissionSelection {
   const sel = emptySelection()
   for (const p of perms) {
-    if ((p.level === 'view' || p.level === 'edit' || p.level === 'delete') && p.resource in sel) {
+    if ((p.level === 'view' || p.level === 'edit' || p.level === 'full') && p.resource in sel) {
       sel[p.resource as Resource] = p.level
     }
   }
@@ -35,13 +35,25 @@ interface Props {
   value: PermissionSelection
   onChange: (next: PermissionSelection) => void
   disabled?: boolean
-  // When true (viewer is a super admin), erase-supporting resources expose the
-  // "Erase" level. Otherwise the Erase tier is hidden and any existing erase
-  // grant is shown locked so it can't be changed.
-  canGrantErase?: boolean
+  // When true (viewer is a super admin), every resource exposes the top "Full"
+  // level (view + edit + erase). Otherwise the Full tier is hidden and any
+  // existing Full grant is shown locked so it can't be changed.
+  canGrantFull?: boolean
 }
 
-export function PermissionMatrix({ value, onChange, disabled = false, canGrantErase = false }: Props) {
+export function PermissionMatrix({ value, onChange, disabled = false, canGrantFull = false }: Props) {
+  // Level options offered by the bulk / group / per-row controls. Super-admin
+  // viewers also get the top "Full" level.
+  const bulkLevels: Array<Level | 'none'> = canGrantFull
+    ? ['view', 'edit', 'full', 'none']
+    : ['view', 'edit', 'none']
+  const groupLevels: Array<Level | 'none'> = canGrantFull
+    ? ['none', 'view', 'edit', 'full']
+    : ['none', 'view', 'edit']
+  const rowLevels: Array<Level | 'none'> = canGrantFull
+    ? ['none', 'view', 'edit', 'full']
+    : ['none', 'view', 'edit']
+
   const grouped = useMemo(() => {
     const groups = new Map<string, typeof RESOURCES[number][]>()
     for (const r of RESOURCES) {
@@ -79,7 +91,7 @@ export function PermissionMatrix({ value, onChange, disabled = false, canGrantEr
         <span className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mr-1">
           Bulk:
         </span>
-        {(['view', 'edit', 'none'] as const).map((lvl) => (
+        {bulkLevels.map((lvl) => (
           <button
             key={lvl}
             type="button"
@@ -109,7 +121,7 @@ export function PermissionMatrix({ value, onChange, disabled = false, canGrantEr
                 {group}
               </h3>
               <div className="inline-flex rounded-md border border-[#E0DBD4] bg-white overflow-hidden text-[10px] uppercase tracking-wider">
-                {(['none', 'view', 'edit'] as const).map((level) => (
+                {groupLevels.map((level) => (
                   <button
                     key={level}
                     type="button"
@@ -129,13 +141,9 @@ export function PermissionMatrix({ value, onChange, disabled = false, canGrantEr
             <div className="divide-y divide-[#E0DBD4]">
               {resources.map((r) => {
                 const current = value[r.key]
-                const eraseHere = supportsErase(r.key)
-                const showErase = eraseHere && canGrantErase
-                // A non-super-admin can't manage an existing Erase grant — lock it.
-                const lockedErase = eraseHere && current === 'delete' && !canGrantErase
-                const rowLevels: Array<Level | 'none'> = showErase
-                  ? ['none', 'view', 'edit', 'delete']
-                  : ['none', 'view', 'edit']
+                // Full applies to every resource; only super-admin viewers may
+                // grant it. A non-super-admin can't manage an existing Full grant.
+                const lockedFull = current === 'full' && !canGrantFull
                 return (
                   <div
                     key={r.key}
@@ -145,16 +153,16 @@ export function PermissionMatrix({ value, onChange, disabled = false, canGrantEr
                       <div className="text-sm text-mvr-primary font-medium">{r.label}</div>
                       <div className="text-[11px] text-muted-foreground font-mono">{r.key}</div>
                     </div>
-                    {lockedErase ? (
+                    {lockedFull ? (
                       <span className="inline-flex items-center rounded-md border border-mvr-danger/30 bg-mvr-danger-light px-3 py-1 text-xs font-semibold text-mvr-danger">
-                        Erase — super-admin only
+                        Full — super-admin only
                       </span>
                     ) : (
                       <div className="inline-flex rounded-md border border-[#E0DBD4] bg-white overflow-hidden text-xs">
                         {rowLevels.map((level) => {
                           const isActiveLvl = current === level
                           const activeClass =
-                            level === 'delete'
+                            level === 'full'
                               ? 'bg-mvr-danger text-white font-semibold'
                               : level === 'edit'
                                 ? 'bg-mvr-primary text-white font-semibold'
@@ -172,7 +180,7 @@ export function PermissionMatrix({ value, onChange, disabled = false, canGrantEr
                                 isActiveLvl ? activeClass : 'text-mvr-primary hover:bg-mvr-cream',
                               ].join(' ')}
                             >
-                              {level === 'delete' ? 'Erase' : level}
+                              {level}
                             </button>
                           )
                         })}

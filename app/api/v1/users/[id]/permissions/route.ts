@@ -48,9 +48,9 @@ export async function PUT(
       select: { resource: true, level: true },
     })
 
-    // Only super admins may grant, remove, or change an Erase (delete) grant.
-    // Non-super-admins can still edit other levels as long as they leave any
-    // existing erase grant untouched.
+    // Only super admins may grant, remove, or change a Full grant. Non-super
+    // admins can still edit other levels as long as they leave any existing
+    // Full grant untouched.
     if (!isSuperAdmin(session.user.role)) {
       const oldLevel = new Map(oldPermissions.map((p) => [p.resource, p.level] as const))
       const newLevel = new Map(parsed.data.permissions.map((p) => [p.resource, p.level] as const))
@@ -64,9 +64,9 @@ export async function PUT(
       for (const resource of resources) {
         const was = oldLevel.get(resource)
         const now = newLevel.get(resource)
-        if ((was === 'delete' || now === 'delete') && was !== now) {
+        if ((was === 'full' || now === 'full') && was !== now) {
           return NextResponse.json(
-            { error: 'Only super admins can grant or change Erase permissions.' },
+            { error: 'Only super admins can grant or change Full permissions.' },
             { status: 403 }
           )
         }

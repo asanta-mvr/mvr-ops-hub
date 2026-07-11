@@ -81,8 +81,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Permanent erase — gated by the Erase permission (super admin, or a user
-    // explicitly granted `delete` on data_master.units).
+    // Permanent erase — gated by the Full permission (super admin, or a user
+    // explicitly granted `full` on data_master.units).
     if (!(await canDelete(session, "data_master.units"))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
