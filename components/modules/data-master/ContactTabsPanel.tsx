@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { Plus, Pencil, Trash2, X, Check, Phone, Mail, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Check, Phone, Mail, Clock, LogIn, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   createPropertyManagerSchema,
@@ -244,13 +244,13 @@ export default function ContactTabsPanel({
                   )}
                   {fdValues.checkin && (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-4 h-4 shrink-0" />
+                      <LogIn className="w-4 h-4 shrink-0" />
                       <span>Check-in: {fdValues.checkin}</span>
                     </div>
                   )}
                   {fdValues.checkout && (
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="w-4 h-4 shrink-0" />
+                      <LogOut className="w-4 h-4 shrink-0" />
                       <span>Check-out: {fdValues.checkout}</span>
                     </div>
                   )}
