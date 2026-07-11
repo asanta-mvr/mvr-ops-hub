@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ChevronRight, Pencil } from 'lucide-react'
 import { db } from '@/lib/db'
 import { auth } from '@/lib/auth'
-import { canEdit } from '@/lib/auth/permissions'
+import { canDelete, canEdit } from '@/lib/auth/permissions'
 import { Button } from '@/components/ui/button'
 import { UnitDetailTabs } from '@/components/modules/data-master/UnitDetailTabs'
 import { DeleteUnitButton } from '@/components/modules/data-master/DeleteUnitButton'
@@ -51,7 +51,7 @@ function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 export default async function UnitDetailPage({ params }: { params: { id: string } }) {
   const session = await auth()
   const docCanEdit = session ? await canEdit(session, 'data_master.owners') : false
-  const canDeleteUnit = session ? await canEdit(session, 'data_master.units') : false
+  const canDeleteUnit = session ? await canDelete(session, 'data_master.units') : false
 
   const [unit, alertTypes] = await Promise.all([
     db.unit.findUnique({

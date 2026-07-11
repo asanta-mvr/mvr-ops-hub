@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
-import { canEdit } from '@/lib/auth/permissions'
+import { canDelete, canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { updateUnitSchema } from '@/lib/validations/unit'
 
@@ -81,32 +81,40 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!(await canEdit(session, "data_master.units"))) {
+    // Permanent erase — gated by the Erase permission (super admin, or a user
+    // explicitly granted `delete` on data_master.units).
+    if (!(await canDelete(session, "data_master.units"))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const existing = await db.unit.findUnique({ where: { id: params.id } })
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const unit = await db.unit.update({
-      where: { id: params.id },
-      data: { status: 'inactive' },
-    })
+    // Hard delete in one transaction:
+    //  - clear the dangling GuestyListing.unitId (bare column, no FK constraint)
+    //  - delete UnitInspection rows (required FK → Restrict; the only blocker —
+    //    their InspectionItems cascade)
+    //  - delete the unit; remaining children cascade (owner docs, onboarding,
+    //    document folders, file alerts) or set-null (listings, contracts, tickets)
+    await db.$transaction([
+      db.guestyListing.updateMany({ where: { unitId: params.id }, data: { unitId: null } }),
+      db.unitInspection.deleteMany({ where: { unitId: params.id } }),
+      db.unit.delete({ where: { id: params.id } }),
+    ])
 
     db.auditLog.create({
       data: {
         userId: session.user.id,
         action: 'DELETE',
         tableName: 'units',
-        recordId: unit.id,
+        recordId: params.id,
         oldData: JSON.parse(JSON.stringify(existing)) as Prisma.InputJsonValue,
-        newData: JSON.parse(JSON.stringify(unit)) as Prisma.InputJsonValue,
         ipAddress: req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? undefined,
         userAgent: req.headers.get('user-agent') ?? undefined,
       },
     }).catch((e) => console.error('[audit] units DELETE', e))
 
-    return NextResponse.json({ data: { id: unit.id, status: unit.status } })
+    return NextResponse.json({ data: { id: params.id, deleted: true } })
   } catch (error) {
     console.error('[DELETE /api/v1/units/:id]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

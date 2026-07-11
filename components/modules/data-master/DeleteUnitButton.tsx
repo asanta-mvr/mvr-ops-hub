@@ -94,8 +94,8 @@ export function DeleteUnitButton({ unitId, unitNumber }: DeleteUnitButtonProps) 
               <div className="flex items-start gap-3 rounded-lg border border-mvr-danger/20 bg-mvr-danger-light px-4 py-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-mvr-danger" />
                 <p className="text-sm text-mvr-olive">
-                  Are you sure you want to delete <span className="font-semibold">Unit {unitNumber}</span>? It will be
-                  removed from Data Master. This can&rsquo;t be undone here.
+                  This <span className="font-semibold">permanently erases Unit {unitNumber}</span> and its data from the
+                  database &mdash; it cannot be undone. Linked listings and contracts are kept but unlinked.
                 </p>
               </div>
 
