@@ -6,10 +6,12 @@ import {
   Pencil, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
   BedDouble, Bath, Maximize2, Users, Star, Layers,
-  Eye, Hash, Plus, Camera, Check, SlidersHorizontal,
+  Eye, Hash, Plus, Camera, Check, SlidersHorizontal, KeyRound,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EditUnitModal, type UnitFormOptions } from '@/components/modules/data-master/EditUnitModal'
+import { computeUnitAndKeyCount } from '@/lib/utils/unit-counts'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -183,6 +185,45 @@ function BuildingTreeNav({ allUnits, filterBuilding, onSelectBuilding }: Buildin
           )
         })}
       </div>
+    </div>
+  )
+}
+
+// ── Summary stat cards ────────────────────────────────────────────────────
+// Units / Keys / Owners for the currently filtered set. Mirrors the overview
+// cards in the buildings section so the two views read the same.
+
+interface StatCardsProps {
+  unitCount:     number
+  keyCount:      number
+  ownerCount:    number
+  totalSqft:     number
+  totalCapacity: number
+  avgScore:      number | null
+}
+
+function StatCards({ unitCount, keyCount, ownerCount, totalSqft, totalCapacity, avgScore }: StatCardsProps) {
+  const cards: { icon: LucideIcon; value: string; label: string }[] = [
+    { icon: KeyRound,  value: `${unitCount} / ${keyCount}`,   label: 'Units / Keys' },
+    { icon: User,      value: String(ownerCount),             label: 'Owners'       },
+    { icon: Maximize2, value: totalSqft.toLocaleString(),     label: 'Sqft'         },
+    { icon: Users,     value: totalCapacity.toLocaleString(), label: 'Capacity'     },
+    { icon: Star,      value: avgScore != null ? avgScore.toFixed(1) : '—', label: 'Avg Score' },
+  ]
+  return (
+    <div className="flex flex-1 gap-5">
+      {cards.map(({ icon: Icon, value, label }) => (
+        <div
+          key={label}
+          className="flex-1 flex items-center justify-center gap-3 bg-mvr-neutral rounded-xl px-4 py-3"
+        >
+          <Icon className="w-5 h-5 shrink-0 text-mvr-primary/50" />
+          <div className="text-center">
+            <p className="text-lg font-bold text-mvr-primary tabular-nums leading-none">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1 whitespace-nowrap">{label}</p>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -814,7 +855,8 @@ export default function UnitsTableView({ units, buildings, owners, options, init
   const [sortDir, setSortDir]                 = useState<SortDir>('asc')
   const [search, setSearch]                   = useState('')
   const [filterBuilding, setFilterBuilding]   = useState(initialBuildingId ?? '')
-  const [statusFilter, setStatusFilter]       = useState<string[]>([])
+  // Default view on load/refresh: all buildings + active units only.
+  const [statusFilter, setStatusFilter]       = useState<string[]>(['active'])
 
   function handleSelectBuilding(buildingId: string) {
     setFilterBuilding(buildingId)
@@ -862,6 +904,22 @@ export default function UnitsTableView({ units, buildings, owners, options, init
       return true
     })
   }, [displayUnits, filterBuilding, statusFilter, search])
+
+  // Summary counts for the stat cards — recomputed from the filtered set so
+  // they track the building tree, status filter, and search together.
+  const stats = useMemo(() => {
+    const { unitCount, keyCount } = computeUnitAndKeyCount(filtered.map((u) => u.number))
+    const ownerCount = new Set(filtered.map((u) => u.ownerUniqueId).filter(Boolean)).size
+
+    const totalSqft     = filtered.reduce((sum, u) => sum + (u.sqft ?? 0), 0)
+    const totalCapacity = filtered.reduce((sum, u) => sum + (u.capacity ?? 0), 0)
+
+    // Average only over units that actually have a score, so blanks don't drag it down.
+    const scores  = filtered.map((u) => (u.score ? parseFloat(u.score) : NaN)).filter((n) => !isNaN(n))
+    const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null
+
+    return { unitCount, keyCount, ownerCount, totalSqft, totalCapacity, avgScore }
+  }, [filtered])
 
   // Per-status counts within the current building context (ignores the status
   // filter itself so the toggle counts stay stable while selecting).
@@ -923,9 +981,19 @@ export default function UnitsTableView({ units, buildings, owners, options, init
     <div className="space-y-4">
       {/* Top bar: title (left) + search + new unit (right) */}
       <div className="flex items-center justify-between gap-6">
-        <div className="w-52 shrink-0">
-          <h1 className="text-2xl font-bold text-mvr-primary">Units</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{displayUnits.length} units in portfolio</p>
+        <div className="flex flex-1 items-center gap-5 min-w-0">
+          <div className="w-52 shrink-0">
+            <h1 className="text-2xl font-bold text-mvr-primary">Units</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">{displayUnits.length} units in portfolio</p>
+          </div>
+          <StatCards
+            unitCount={stats.unitCount}
+            keyCount={stats.keyCount}
+            ownerCount={stats.ownerCount}
+            totalSqft={stats.totalSqft}
+            totalCapacity={stats.totalCapacity}
+            avgScore={stats.avgScore}
+          />
         </div>
         <div className="flex items-center gap-3">
           <div className="relative w-72">

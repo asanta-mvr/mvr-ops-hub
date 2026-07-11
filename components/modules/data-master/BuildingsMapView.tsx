@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation'
 import {
   MapPin, Phone, Mail, Clock, Globe, ExternalLink,
   Pencil, Trash2, X, Building2, ChevronRight, ChevronLeft,
-  ChevronUp, ChevronDown, ChevronsUpDown, Images,
+  ChevronUp, ChevronDown, ChevronsUpDown, Images, Star,
+  LogIn, LogOut,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { BuildingMapItem } from './BuildingsMap'
@@ -36,6 +37,9 @@ export interface BuildingFull extends BuildingMapItem {
   unitCount:      number
   keyCount:       number
   ownerCount:     number
+  totalSqft:      number
+  totalCapacity:  number
+  avgScore:       number | null
   createdAt:      string
   city?: { name: string; state?: { isoCode: string | null } | null } | null
 }
@@ -51,6 +55,13 @@ const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
   onboarding: 'bg-mvr-warning-light text-mvr-warning border-mvr-warning',
   inactive:   'bg-mvr-neutral text-[#888] border-[#ccc]',
+}
+
+// Operational-score thresholds, matching the per-unit score colors on the detail page.
+function scoreStyle(score: number): string {
+  if (score >= 8) return 'bg-mvr-success/85 text-white'
+  if (score >= 5) return 'bg-mvr-warning/85 text-white'
+  return 'bg-mvr-danger/85 text-white'
 }
 
 function SortIndicator({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
@@ -154,6 +165,17 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
           <X className="w-4 h-4 text-foreground" />
         </button>
 
+        {/* Average score tag */}
+        {building.avgScore !== null && (
+          <span
+            className={`absolute bottom-3 right-3 z-10 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${scoreStyle(building.avgScore)}`}
+            title="Average unit score"
+          >
+            <Star className="w-3 h-3 fill-current" />
+            {building.avgScore.toFixed(1)}
+          </span>
+        )}
+
         {/* Photo count badge */}
         {galleryUrls.length > 1 && (
           <button
@@ -166,7 +188,7 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
           </button>
         )}
 
-        <div className="absolute bottom-3 left-4 right-10 z-10 pointer-events-none">
+        <div className="absolute bottom-3 left-4 right-16 z-10 pointer-events-none">
           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border mb-1 ${STATUS_STYLES[building.status] ?? STATUS_STYLES.inactive}`}>
             {capitalize(building.status)}
           </span>
@@ -177,109 +199,122 @@ function BuildingPanel({ building, onClose }: { building: BuildingFull; onClose:
         </div>
       </div>
 
-      {/* Two-column body */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-2 divide-x divide-[#E0DBD4]">
-          {/* Left: overview + location */}
-          <div className="p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Overview</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="bg-mvr-neutral rounded-lg px-3 py-3 text-center">
-                <p className="text-sm font-bold text-mvr-primary">{building.unitCount} / {building.keyCount}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">Units / Keys</p>
-              </div>
-              <div className="bg-mvr-neutral rounded-lg px-3 py-3 text-center">
-                <p className="text-sm font-bold text-mvr-primary">{building.ownerCount}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Owners</p>
-              </div>
+        {/* Overview — full-width row of stat cards */}
+        <div className="p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Overview</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            <div className="bg-mvr-neutral rounded-lg px-2 py-3 text-center">
+              <p className="text-sm font-bold text-mvr-primary">{building.unitCount} / {building.keyCount}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Units / Keys</p>
             </div>
-
-            <div className="space-y-1.5 pt-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Location</p>
-              {location && (
-                <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-mvr-primary/60" />
-                  <span>{location}</span>
-                </div>
-              )}
-              {building.zone && (
-                <p className="text-xs text-muted-foreground pl-5">{building.zone}</p>
-              )}
-              {building.googleUrl && (
-                <a href={building.googleUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
-                  <MapPin className="w-3.5 h-3.5 shrink-0" />
-                  Google Maps
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
-              {building.website && (
-                <a href={building.website} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
-                  <Globe className="w-3.5 h-3.5 shrink-0" />
-                  Website
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
+            <div className="bg-mvr-neutral rounded-lg px-2 py-3 text-center">
+              <p className="text-sm font-bold text-mvr-primary">{building.ownerCount}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Owners</p>
+            </div>
+            <div className="bg-mvr-neutral rounded-lg px-2 py-3 text-center">
+              <p className="text-sm font-bold text-mvr-primary">{building.totalSqft > 0 ? building.totalSqft.toLocaleString() : '—'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Sq Ft</p>
+            </div>
+            <div className="bg-mvr-neutral rounded-lg px-2 py-3 text-center">
+              <p className="text-sm font-bold text-mvr-primary">{building.totalCapacity > 0 ? building.totalCapacity : '—'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Capacity</p>
             </div>
           </div>
+        </div>
 
-          {/* Right: front desk + amenities */}
-          <div className="p-4 space-y-3">
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Front Desk</p>
-              {building.frontdeskPhone && (
-                <a href={`tel:${building.frontdeskPhone}`} className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
-                  <Phone className="w-3 h-3 shrink-0" />
-                  {building.frontdeskPhone}
-                </a>
-              )}
-              {building.frontdeskEmail && (
-                <a href={`mailto:${building.frontdeskEmail}`} className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline min-w-0">
-                  <Mail className="w-3 h-3 shrink-0" />
-                  <span className="truncate">{building.frontdeskEmail}</span>
-                </a>
-              )}
-              {building.frontdeskHours && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="w-3 h-3 shrink-0" />
-                  <span>{building.frontdeskHours}</span>
-                </div>
-              )}
-              {building.checkinHours && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="w-3 h-3 shrink-0" />
-                  <span>In: {building.checkinHours}</span>
-                </div>
-              )}
-              {building.checkoutHours && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="w-3 h-3 shrink-0" />
-                  <span>Out: {building.checkoutHours}</span>
-                </div>
-              )}
-              {!building.frontdeskPhone && !building.frontdeskEmail && !building.checkinHours && (
-                <p className="text-xs text-muted-foreground">No info on file.</p>
-              )}
-            </div>
-
-            {building.amenities.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Amenities</p>
-                <div className="flex flex-wrap gap-1">
-                  {building.amenities.slice(0, 6).map((a) => (
-                    <span key={a} className="px-1.5 py-0.5 bg-mvr-neutral rounded-full text-xs text-muted-foreground border">
-                      {a}
-                    </span>
-                  ))}
-                  {building.amenities.length > 6 && (
-                    <span className="text-xs text-muted-foreground px-1">+{building.amenities.length - 6} more</span>
-                  )}
-                </div>
+        {/* Location + Front Desk — aligned two-column row */}
+        <div className="grid grid-cols-2 divide-x divide-[#E0DBD4] border-t">
+          {/* Left: location */}
+          <div className="p-4 space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Location</p>
+            {location && (
+              <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-mvr-primary/60" />
+                <span>{location}</span>
               </div>
+            )}
+            {building.zone && (
+              <p className="text-xs text-muted-foreground pl-5">{building.zone}</p>
+            )}
+            {building.googleUrl && (
+              <a href={building.googleUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                Google Maps
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            {building.website && (
+              <a href={building.website} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
+                <Globe className="w-3.5 h-3.5 shrink-0" />
+                Website
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+
+          {/* Right: front desk */}
+          <div className="p-4 space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Front Desk</p>
+            {building.frontdeskPhone && (
+              <a href={`tel:${building.frontdeskPhone}`} className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline">
+                <Phone className="w-3 h-3 shrink-0" />
+                {building.frontdeskPhone}
+              </a>
+            )}
+            {building.frontdeskEmail && (
+              <a href={`mailto:${building.frontdeskEmail}`} className="flex items-center gap-1.5 text-xs text-mvr-primary hover:underline min-w-0">
+                <Mail className="w-3 h-3 shrink-0" />
+                <span className="truncate">{building.frontdeskEmail}</span>
+              </a>
+            )}
+            {building.frontdeskHours && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3 shrink-0" />
+                <span>{building.frontdeskHours}</span>
+              </div>
+            )}
+            {(building.checkinHours || building.checkoutHours) && (
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {building.checkinHours && (
+                  <span className="flex items-center gap-1.5" title="Check-in">
+                    <LogIn className="w-3 h-3 shrink-0" />
+                    {building.checkinHours}
+                  </span>
+                )}
+                {building.checkoutHours && (
+                  <span className="flex items-center gap-1.5" title="Check-out">
+                    <LogOut className="w-3 h-3 shrink-0" />
+                    {building.checkoutHours}
+                  </span>
+                )}
+              </div>
+            )}
+            {!building.frontdeskPhone && !building.frontdeskEmail && !building.frontdeskHours && !building.checkinHours && !building.checkoutHours && (
+              <p className="text-xs text-muted-foreground">No info on file.</p>
             )}
           </div>
         </div>
+
+        {/* Amenities — full width */}
+        {building.amenities.length > 0 && (
+          <div className="p-4 space-y-1.5 border-t">
+            <p className="text-xs font-semibold uppercase tracking-wide text-mvr-primary">Amenities</p>
+            <div className="flex flex-wrap gap-1">
+              {building.amenities.slice(0, 6).map((a) => (
+                <span key={a} className="px-1.5 py-0.5 bg-mvr-neutral rounded-full text-xs text-muted-foreground border">
+                  {a}
+                </span>
+              ))}
+              {building.amenities.length > 6 && (
+                <span className="text-xs text-muted-foreground px-1">+{building.amenities.length - 6} more</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action */}

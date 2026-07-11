@@ -15,14 +15,20 @@ async function getBuildings(): Promise<BuildingFull[]> {
     include: {
       city:   { include: { state: true } },
       _count: { select: { units: true } },
-      units:  { select: { number: true, ownerUniqueId: true } },
+      units:  { select: { number: true, ownerUniqueId: true, sqft: true, capacity: true, score: true } },
     },
     orderBy: { name: 'asc' },
   })
 
   const signedUrls = await Promise.all(buildings.map((b) => getSignedImageUrl(b.imageUrl)))
 
-  return buildings.map((b, i) => ({
+  return buildings.map((b, i) => {
+    const scored = b.units.map((u) => u.score).filter((s): s is NonNullable<typeof s> => s !== null)
+    const avgScore = scored.length
+      ? Math.round((scored.reduce((sum, s) => sum + Number(s), 0) / scored.length) * 10) / 10
+      : null
+
+    return {
     id:             b.id,
     name:           b.name,
     nickname:       b.nickname,
@@ -43,9 +49,13 @@ async function getBuildings(): Promise<BuildingFull[]> {
     amenities:      b.amenities,
     ...computeUnitAndKeyCount(b.units.map(u => u.number)),
     ownerCount:     new Set(b.units.map((u) => u.ownerUniqueId).filter(Boolean)).size,
+    totalSqft:      b.units.reduce((sum, u) => sum + (u.sqft ?? 0), 0),
+    totalCapacity:  b.units.reduce((sum, u) => sum + (u.capacity ?? 0), 0),
+    avgScore,
     createdAt:      b.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     city:           b.city,
-  }))
+    }
+  })
 }
 
 export default async function BuildingsPage() {
