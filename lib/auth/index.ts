@@ -143,7 +143,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const entries =
             (pendingInvite.permissions as Array<{ resource: string; level: Level }> | null) ?? []
           const valid = entries.filter(
-            (e) => isResource(e.resource) && (e.level === 'view' || e.level === 'edit')
+            (e) =>
+              isResource(e.resource) &&
+              (e.level === 'view' || e.level === 'edit' || e.level === 'full')
           )
           if (valid.length > 0) {
             await db.$transaction([

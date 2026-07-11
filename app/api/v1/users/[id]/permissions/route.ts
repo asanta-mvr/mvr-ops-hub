@@ -73,22 +73,33 @@ export async function PUT(
       }
     }
 
-    // Atomic replace: delete all then insert the new set.
-    await db.$transaction([
+    // Atomic replace: delete all then insert the new set. When `roleId` is
+    // present in the body, also set the user's assigned custom role (the applied
+    // preset label). Any resource absent from the body is removed.
+    const ops: Prisma.PrismaPromise<unknown>[] = [
       db.userPermission.deleteMany({ where: { userId: params.id } }),
-      ...(parsed.data.permissions.length > 0
-        ? [
-            db.userPermission.createMany({
-              data: parsed.data.permissions.map((p) => ({
-                userId: params.id,
-                resource: p.resource,
-                level: p.level,
-                createdBy: session.user.id,
-              })),
-            }),
-          ]
-        : []),
-    ])
+    ]
+    if (parsed.data.permissions.length > 0) {
+      ops.push(
+        db.userPermission.createMany({
+          data: parsed.data.permissions.map((p) => ({
+            userId: params.id,
+            resource: p.resource,
+            level: p.level,
+            createdBy: session.user.id,
+          })),
+        })
+      )
+    }
+    if (parsed.data.roleId !== undefined) {
+      ops.push(
+        db.user.update({
+          where: { id: params.id },
+          data: { customRoleId: parsed.data.roleId },
+        })
+      )
+    }
+    await db.$transaction(ops)
 
     db.auditLog
       .create({

@@ -33,6 +33,17 @@ export const inviteUserSchema = z.object({
 
 export const updatePermissionsSchema = z.object({
   permissions: z.array(permissionEntrySchema).max(RESOURCES.length).default([]),
+  // Optional assigned custom role (null clears it). Permissions remain the
+  // source of truth; this is just the "applied preset" label for display/drift.
+  roleId: z.string().cuid().nullable().optional(),
+})
+
+// A custom role = a named permission preset.
+export const roleSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80),
+  description: z.string().trim().max(300).optional(),
+  rank: z.number().int().min(0).max(1000).optional(),
+  permissions: z.array(permissionEntrySchema).max(RESOURCES.length).default([]),
 })
 
 export const updateUserSchema = z.object({
@@ -44,3 +55,4 @@ export type InviteUserInput = z.infer<typeof inviteUserSchema>
 export type UpdatePermissionsInput = z.infer<typeof updatePermissionsSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 export type PermissionEntry = z.infer<typeof permissionEntrySchema>
+export type RoleInput = z.infer<typeof roleSchema>

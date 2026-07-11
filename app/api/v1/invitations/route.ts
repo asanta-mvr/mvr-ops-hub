@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
-import { canView, canEdit } from '@/lib/auth/permissions'
+import { canView, canEdit, isSuperAdmin } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { inviteUserSchema } from '@/lib/auth/schemas'
 import { sendInvitationEmail, type InvitationPermission } from '@/lib/email'
@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
       )
     }
     const { email, name, permissions, message } = parsed.data
+
+    // Only super admins can invite with a Full grant (mirrors the per-user rule).
+    if (permissions.some((p) => p.level === 'full') && !isSuperAdmin(session.user.role)) {
+      return NextResponse.json(
+        { error: 'Only super admins can grant Full access.' },
+        { status: 403 }
+      )
+    }
 
     const existingUser = await db.user.findUnique({
       where: { email },

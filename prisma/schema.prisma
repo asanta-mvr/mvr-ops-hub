@@ -27,6 +27,7 @@ model User {
   emailVerified DateTime?
   image         String?
   role          UserRole  @default(read_only)
+  customRoleId  String? // assigned custom Role (permission preset); permissions are still stored per-user
   isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
@@ -42,6 +43,7 @@ model User {
   assignedReviews               ReviewAction[]             @relation("AssignedReviews")
   escalatedReviews              ReviewAction[]             @relation("EscalatedReviews")
   permissions                   UserPermission[]
+  customRole                    Role?                      @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
   workspaceCred                 GoogleWorkspaceCredential?
   maintenanceExclusionsCreated  MaintenanceCostExclusion[] @relation("MaintenanceExclusionExcludedBy")
   maintenanceExclusionsRestored MaintenanceCostExclusion[] @relation("MaintenanceExclusionRestoredBy")
@@ -1221,6 +1223,25 @@ model UserPermission {
   @@index([userId])
   @@index([resource])
   @@map("user_permissions")
+}
+
+// A custom role: a named preset of permissions. Applying a role to a user COPIES
+// its `permissions` into that user's UserPermission rows (a starting point the
+// admin can then customize). Editing a role does not retro-change assigned users.
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  rank        Int      @default(0) // tier ordering (higher = more authority)
+  permissions Json // [{ resource, level }] — same shape as UserInvitation.permissions
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy   String // userId of the admin who created it
+
+  users User[]
+
+  @@index([rank])
+  @@map("roles")
 }
 
 model UserInvitation {
