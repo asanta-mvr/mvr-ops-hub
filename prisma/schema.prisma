@@ -38,6 +38,7 @@ model User {
   auditLogs                     AuditLog[]
   assignedTickets               SupportTicket[]            @relation("AssignedTickets")
   ticketComments                TicketComment[]            @relation("TicketComments")
+  unitComments                  UnitComment[]              @relation("UnitComments")
   notificationRules             NotificationRule[]         @relation("NotificationRulesCreated")
   watchlistEntries              NotificationWatchlist[]    @relation("WatchlistEntriesCreated")
   assignedReviews               ReviewAction[]             @relation("AssignedReviews")
@@ -399,7 +400,7 @@ model Unit {
   building    Building             @relation(fields: [buildingId], references: [id])
   owner       Owner?               @relation(fields: [ownerUniqueId], references: [id])
   guestyOwner GuestyOwner?         @relation(fields: [guestyOwnerId], references: [id], onDelete: SetNull)
-  listings        Listing[]
+  unitListings    UnitListing[]
   contracts       OwnerContract[]
   documents       OwnerDocument[]
   inspections     UnitInspection[]
@@ -407,6 +408,7 @@ model Unit {
   tickets         SupportTicket[]
   documentFolders DocumentFolder[]
   fileAlerts      FileAlert[]
+  comments        UnitComment[]
 
   @@unique([buildingId, number])
   @@index([status])
@@ -437,16 +439,14 @@ model Listing {
   urlExpedia      String?
   urlVacasa       String?
   guestyListingId String?   @unique // source GuestyListing.id when pushed from the integration
-  unitId          String? // optional — a listing can exist in Data Master before being attached to a Unit
   photos          Json? // curated ListingPhoto[]: { id, kind: 'guesty'|'drive', src, order }
   customFields    Json? // promoted Guesty custom fields: [{ fieldId, name, type, value }]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  unit    Unit?           @relation(fields: [unitId], references: [id], onDelete: SetNull)
-  tickets SupportTicket[]
+  unitListings UnitListing[]
+  tickets      SupportTicket[]
 
-  @@index([unitId])
   @@map("listings")
 }
 
@@ -888,6 +888,38 @@ model TicketComment {
   createdAt DateTime @default(now())
 
   @@map("ticket_comments")
+}
+
+// Many-to-many link between units and listings. A unit can host many listings,
+// and a listing can span multiple units (combined listings). Source of truth for
+// the unit↔listing relationship; cascades on either side's deletion.
+model UnitListing {
+  unitId    String
+  listingId String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([unitId, listingId])
+  @@index([listingId])
+  @@map("unit_listings")
+}
+
+// Free-text notes left on a Data Master unit (the unit detail panel's
+// "Activity & Comments"). authorId is nullable so removing a user keeps the
+// comment history; the author simply reads as unknown.
+model UnitComment {
+  id       String @id @default(cuid())
+  unitId   String
+  unit     Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  authorId String?
+  author   User?  @relation("UnitComments", fields: [authorId], references: [id])
+  body     String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([unitId])
+  @@map("unit_comments")
 }
 
 // ─── RISK / CHARGEBACKS (ops-hub-owned config) ───────────────────────────────
