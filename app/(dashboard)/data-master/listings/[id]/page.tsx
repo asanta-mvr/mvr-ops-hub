@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Building2 } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { canEdit, requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
@@ -14,7 +14,6 @@ import {
 } from '@/lib/integrations/guesty'
 import GuestyListingDetail from '@/components/modules/data-master/GuestyListingDetail'
 import ListingPhotoGallery, { type GalleryPhoto } from '@/components/modules/data-master/ListingPhotoGallery'
-import ListingUnitCockpit from '@/components/modules/data-master/ListingUnitCockpit'
 import ListingDataMasterPanel from '@/components/modules/data-master/ListingDataMasterPanel'
 import ListingComparisonCard, {
   type DmDriftRow,
@@ -24,7 +23,6 @@ import ListingComparisonCard, {
 import OwnershipCard from '@/components/modules/data-master/OwnershipCard'
 import ListingCustomFieldsCard from '@/components/modules/data-master/ListingCustomFieldsCard'
 import { ListingDetailTabs } from '@/components/modules/data-master/ListingDetailTabs'
-import { computeUnitSuggestions } from '@/lib/data-master/listing-suggestions'
 import UnitForm, { type UnitFormValues } from '@/components/modules/data-master/UnitForm'
 
 export const metadata: Metadata = { title: 'Listing · Data Master' }
@@ -87,10 +85,23 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
     mapped: !!o.ownerUniqueId,
   }))
 
-  // Attached unit (full) → comparison summary + edit-form defaults.
-  const unit = listing.unitId
+  // Attached units (many-to-many). All attached units are shown read-only; the
+  // first one drives the Guesty comparison + the Data Master editor below.
+  const attachedLinks = await db.unitListing.findMany({
+    where: { listingId: listing.id },
+    orderBy: { createdAt: 'asc' },
+    select: { unit: { select: { id: true, number: true, building: { select: { name: true } } } } },
+  })
+  const attachedUnits = attachedLinks.map((ul) => ({
+    id: ul.unit.id,
+    number: ul.unit.number,
+    buildingName: ul.unit.building?.name ?? null,
+  }))
+  const firstUnitId = attachedUnits[0]?.id ?? null
+
+  const unit = firstUnitId
     ? await db.unit.findUnique({
-        where: { id: listing.unitId },
+        where: { id: firstUnitId },
         include: { building: { select: { name: true } } },
       })
     : null
@@ -138,19 +149,6 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
       { label: 'Unit types', unitField: 'unitTypes', kind: 'text', unitVal: unit.unitTypes, guestyVal: g('unit_types') },
     )
   }
-
-  // Suggested unit match (only when this listing isn't attached yet).
-  const unitSuggestion = !unit
-    ? (
-        await computeUnitSuggestions([
-          { id: listing.id, unitId: listing.unitId, name: listing.name, nickname: listing.nickname, customFields: listing.customFields },
-        ])
-      ).get(listing.id)
-    : null
-  const suggestedUnit =
-    unitSuggestion?.suggestedUnitId && unitSuggestion.suggestedUnitLabel
-      ? { id: unitSuggestion.suggestedUnitId, label: unitSuggestion.suggestedUnitLabel }
-      : null
 
   const unitFormDefaults: Partial<UnitFormValues> | null = unit
     ? (() => {
@@ -275,17 +273,35 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
           <ListingDetailTabs
             basicInfo={
               <>
-                <ListingUnitCockpit
-                  listingId={listing.id}
-                  editable={editable}
-                  unit={unitSummary}
-                  unitFormDefaults={unitFormDefaults}
-                  createDefaults={createDefaults}
-                  guesty={guesty}
-                  prereqs={prereqs}
-                  suggestedUnit={suggestedUnit}
-                  showEditor={false}
-                />
+                {/* Read-only: units are attached from the unit side (Data Master →
+                    Unit → Listings). A listing may span several units (combined). */}
+                <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
+                  <h3 className="font-display text-lg text-mvr-primary">
+                    {attachedUnits.length > 1 ? 'Units' : 'Unit'}
+                  </h3>
+                  {attachedUnits.length === 0 ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      No unit attached. Attach this listing from a unit&rsquo;s Listings tab in Data Master.
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {attachedUnits.map((u) => (
+                        <li key={u.id}>
+                          <Link
+                            href={`/data-master/units/${u.id}`}
+                            className="flex items-center gap-2 rounded-lg border border-[#E0DBD4] px-3 py-2 text-sm text-mvr-olive transition-colors hover:bg-mvr-neutral/50"
+                          >
+                            <Building2 className="size-4 shrink-0 text-mvr-steel" />
+                            <span className="font-medium">
+                              {u.buildingName ? `${u.buildingName} · ` : ''}Unit {u.number}
+                            </span>
+                            <ChevronRight className="ml-auto size-4 shrink-0 text-mvr-primary/40" />
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <GuestyListingDetail raw={raw} privileged={editable} part="basic" />
                 <ListingCustomFieldsCard customFields={listingCustomFields} />
                 <OwnershipCard owners={ownersForDetail} />

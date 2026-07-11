@@ -21,15 +21,22 @@ export async function GET(req: NextRequest) {
     let buildingId: string | null = null
     let unitId:     string | null = null
 
-    // 1. Match unit by listing_nickname → Listing.nickname → Listing.unitId
+    // 1. Match unit by listing_nickname → Listing.nickname → first attached unit
     if (reservation.unit) {
       const listing = await db.listing.findFirst({
         where:  { nickname: { equals: reservation.unit, mode: 'insensitive' } },
-        select: { unitId: true, unit: { select: { buildingId: true } } },
+        select: {
+          unitListings: {
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { unit: { select: { id: true, buildingId: true } } },
+          },
+        },
       })
-      if (listing) {
-        unitId     = listing.unitId
-        buildingId = listing.unit?.buildingId ?? null
+      const matchedUnit = listing?.unitListings[0]?.unit
+      if (matchedUnit) {
+        unitId     = matchedUnit.id
+        buildingId = matchedUnit.buildingId
       }
     }
 

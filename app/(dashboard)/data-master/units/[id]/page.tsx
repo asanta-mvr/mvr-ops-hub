@@ -59,12 +59,16 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
       include: {
         building: { select: { id: true, name: true } },
         owner:    { select: { id: true, nickname: true, phone: true, email: true } },
-        listings: {
-          orderBy: { name: 'asc' },
+        unitListings: {
+          orderBy: { listing: { name: 'asc' } },
           select: {
-            id: true, name: true, nickname: true, guestyId: true,
-            urlAirbnb: true, urlBooking: true, urlVrbo: true, urlExpedia: true, urlVacasa: true,
-            customFields: true,
+            listing: {
+              select: {
+                id: true, name: true, nickname: true, guestyId: true,
+                urlAirbnb: true, urlBooking: true, urlVrbo: true, urlExpedia: true, urlVacasa: true,
+                customFields: true,
+              },
+            },
           },
         },
         documentFolders: { orderBy: { createdAt: 'asc' } },
@@ -72,7 +76,7 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
           include: { alertType: true, folder: { select: { id: true, name: true } } },
           orderBy: { expirationDate: 'asc' },
         },
-        _count:   { select: { listings: true, contracts: true, inspections: true } },
+        _count:   { select: { unitListings: true, contracts: true, inspections: true } },
       },
     }),
     db.alertType.findMany({ orderBy: { createdAt: 'asc' } }),
@@ -86,7 +90,8 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
 
   // Pull the Guesty raw payloads for the unit's listings to project read-only
   // pricing/terms + access sections (same source as the listing detail page).
-  const guestyIds = unit.listings.map((l) => l.guestyId).filter((g): g is string => !!g)
+  const unitListingRows = unit.unitListings.map((ul) => ul.listing)
+  const guestyIds = unitListingRows.map((l) => l.guestyId).filter((g): g is string => !!g)
   const guestyRaws = guestyIds.length
     ? await db.guestyListing.findMany({
         where: { guestyId: { in: guestyIds } },
@@ -95,7 +100,7 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
     : []
   const rawByGuestyId = new Map(guestyRaws.map((g) => [g.guestyId, rec(g.raw)]))
 
-  const listingViews: ListingView[] = unit.listings.map((l) => {
+  const listingViews: ListingView[] = unitListingRows.map((l) => {
     const raw = l.guestyId ? rawByGuestyId.get(l.guestyId) ?? null : null
     const channels = [
       { key: 'airbnb', label: 'Airbnb', url: l.urlAirbnb },
@@ -222,7 +227,7 @@ export default async function UnitDetailPage({ params }: { params: { id: string 
         notes={unit.notes}
         createdAt={unit.createdAt.toISOString()}
         updatedAt={unit.updatedAt.toISOString()}
-        listingCount={unit._count.listings}
+        listingCount={unit._count.unitListings}
         contractCount={unit._count.contracts}
         inspectionCount={unit._count.inspections}
         buildingName={unit.building.name}

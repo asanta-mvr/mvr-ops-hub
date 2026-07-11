@@ -4,7 +4,6 @@ import { requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import ListingsTableView from '@/components/modules/data-master/ListingsTableView'
 import type { DataMasterListingRow, BuildingFilterOption } from '@/components/modules/data-master/ListingsTableView'
-import { computeUnitSuggestions } from '@/lib/data-master/listing-suggestions'
 
 export const metadata: Metadata = { title: 'Listings · Data Master' }
 export const dynamic = 'force-dynamic'
@@ -21,14 +20,14 @@ async function getBuildingFilters(): Promise<BuildingFilterOption[]> {
     select: {
       id: true,
       name: true,
-      units: { select: { _count: { select: { listings: true } } } },
+      units: { select: { _count: { select: { unitListings: true } } } },
     },
   })
 
   return buildings.map((b) => ({
     id: b.id,
     name: b.name,
-    listingCount: b.units.reduce((sum, u) => sum + u._count.listings, 0),
+    listingCount: b.units.reduce((sum, u) => sum + u._count.unitListings, 0),
   }))
 }
 
@@ -44,17 +43,15 @@ async function getInitialListings(): Promise<{ rows: DataMasterListingRow[]; tot
         guestyId: true,
         sqrFeet: true,
         totalOccupancy: true,
-        unitId: true,
         customFields: true,
-        unit: { select: { id: true, number: true, building: { select: { name: true } } } },
+        unitListings: {
+          orderBy: { createdAt: 'asc' },
+          select: { unit: { select: { id: true, number: true, building: { select: { name: true } } } } },
+        },
       },
     }),
     db.listing.count(),
   ])
-
-  const suggestions = await computeUnitSuggestions(
-    listings.map((l) => ({ id: l.id, unitId: l.unitId, name: l.name, nickname: l.nickname, customFields: l.customFields }))
-  )
 
   const guestyIds = listings.map((l) => l.guestyId).filter((v): v is string => !!v)
   const projections = guestyIds.length
@@ -75,6 +72,12 @@ async function getInitialListings(): Promise<{ rows: DataMasterListingRow[]; tot
 
   const rows: DataMasterListingRow[] = listings.map((l) => {
     const p = l.guestyId ? projMap.get(l.guestyId) : undefined
+    const units = l.unitListings.map((ul) => ({
+      id: ul.unit.id,
+      number: ul.unit.number,
+      buildingName: ul.unit.building?.name ?? null,
+    }))
+    const firstUnit = units[0] ?? null
     return {
       id: l.id,
       name: l.name,
@@ -82,11 +85,11 @@ async function getInitialListings(): Promise<{ rows: DataMasterListingRow[]; tot
       guestyId: l.guestyId,
       sqrFeet: l.sqrFeet,
       totalOccupancy: l.totalOccupancy,
-      unitId: l.unitId,
-      unitNumber: l.unit ? l.unit.number : null,
-      buildingName: l.unit?.building?.name ?? null,
-      suggestedUnitId: suggestions.get(l.id)?.suggestedUnitId ?? null,
-      suggestedUnitLabel: suggestions.get(l.id)?.suggestedUnitLabel ?? null,
+      unitId: firstUnit?.id ?? null,
+      unitNumber: firstUnit?.number ?? null,
+      buildingName: firstUnit?.buildingName ?? null,
+      units,
+      unitCount: units.length,
       pictureUrl: p?.pictureUrl ?? null,
       active: p?.active ?? null,
       propertyType: p?.propertyType ?? null,

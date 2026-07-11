@@ -48,12 +48,12 @@ export async function GET(req: NextRequest) {
           }
         : {}),
       ...(attachedParam === 'attached'
-        ? { unitId: { not: null } }
+        ? { unitListings: { some: {} } }
         : attachedParam === 'unattached'
-          ? { unitId: null }
+          ? { unitListings: { none: {} } }
           : {}),
       // A building filter implies the listing is attached to a unit in that building.
-      ...(buildingId ? { unit: { buildingId } } : {}),
+      ...(buildingId ? { unitListings: { some: { unit: { buildingId } } } } : {}),
     }
 
     const [rows, total] = await Promise.all([
@@ -69,16 +69,18 @@ export async function GET(req: NextRequest) {
           guestyId: true,
           sqrFeet: true,
           totalOccupancy: true,
-          unitId: true,
           customFields: true,
-          unit: { select: { id: true, number: true, building: { select: { name: true } } } },
+          unitListings: {
+            orderBy: { createdAt: 'asc' },
+            select: { unit: { select: { id: true, number: true, building: { select: { name: true } } } } },
+          },
         },
       }),
       db.listing.count({ where }),
     ])
 
     const suggestions = await computeUnitSuggestions(
-      rows.map((r) => ({ id: r.id, unitId: r.unitId, name: r.name, nickname: r.nickname, customFields: r.customFields }))
+      rows.map((r) => ({ id: r.id, unitId: r.unitListings[0]?.unit.id ?? null, name: r.name, nickname: r.nickname, customFields: r.customFields }))
     )
 
     // Merge each Listing with its source GuestyListing projection (thumbnail,
@@ -102,6 +104,12 @@ export async function GET(req: NextRequest) {
 
     const rowsOut = rows.map((r) => {
       const p = r.guestyId ? projMap.get(r.guestyId) : undefined
+      const units = r.unitListings.map((ul) => ({
+        id: ul.unit.id,
+        number: ul.unit.number,
+        buildingName: ul.unit.building?.name ?? null,
+      }))
+      const firstUnit = units[0] ?? null
       return {
         id: r.id,
         name: r.name,
@@ -109,9 +117,13 @@ export async function GET(req: NextRequest) {
         guestyId: r.guestyId,
         sqrFeet: r.sqrFeet,
         totalOccupancy: r.totalOccupancy,
-        unitId: r.unitId,
-        unitNumber: r.unit ? r.unit.number : null,
-        buildingName: r.unit?.building?.name ?? null,
+        // First attached unit kept for existing single-unit displays; `units`
+        // carries the full set for combined listings.
+        unitId: firstUnit?.id ?? null,
+        unitNumber: firstUnit?.number ?? null,
+        buildingName: firstUnit?.buildingName ?? null,
+        units,
+        unitCount: units.length,
         suggestedUnitId: suggestions.get(r.id)?.suggestedUnitId ?? null,
         suggestedUnitLabel: suggestions.get(r.id)?.suggestedUnitLabel ?? null,
         pictureUrl: p?.pictureUrl ?? null,

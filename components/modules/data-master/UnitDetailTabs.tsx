@@ -16,6 +16,7 @@ import {
   type FileAlertView,
   type AlertTypeView,
 } from '@/components/modules/data-master/DocumentsSection'
+import UnitListingsCockpit from '@/components/modules/data-master/UnitListingsCockpit'
 
 type Tab = 'detail' | 'listings' | 'contracts' | 'inspections' | 'score' | 'documents'
 
@@ -389,8 +390,17 @@ function ListingCard({ listing, canViewAccess }: { listing: ListingView; canView
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const TAB_KEYS: Tab[] = ['detail', 'listings', 'contracts', 'inspections', 'score', 'documents']
+
 export function UnitDetailTabs(props: UnitDetailTabsProps) {
   const [tab, setTab] = useState<Tab>('detail')
+
+  // Open the tab named in the URL hash (e.g. .../units/:id#listings), so the
+  // "Listings (n)" link on the units list lands on the right tab.
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '') as Tab
+    if (TAB_KEYS.includes(hash)) setTab(hash)
+  }, [])
 
   const {
     unitId, number, status, type, floor, line, view, sqft, mt2, capacity, amenityCap,
@@ -640,20 +650,17 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
 
           {/* ── LISTINGS ── */}
           {tab === 'listings' && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border px-5 py-4">
-                <h2 className="font-semibold text-sm uppercase tracking-wide text-mvr-primary">Listings ({listingCount})</h2>
-              </div>
-              {listings.length === 0 ? (
-                <div className="bg-white rounded-xl border p-5">
-                  <p className="text-sm text-muted-foreground">No listings yet.</p>
-                </div>
-              ) : (
-                listings.map(l => (
-                  <ListingCard key={l.id} listing={l} canViewAccess={listingsCanViewAccess} />
-                ))
-              )}
-            </div>
+            <UnitListingsCockpit
+              unitId={unitId}
+              editable={listingsCanViewAccess}
+              attached={listings.map((l) => ({
+                id: l.id,
+                name: l.name,
+                nickname: l.nickname,
+                guestyId: l.guestyId,
+                channels: l.channels,
+              }))}
+            />
           )}
 
           {/* ── CONTRACTS ── */}

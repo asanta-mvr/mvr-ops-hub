@@ -45,7 +45,7 @@ async function getOverviewMetrics() {
     db.unit.findMany({ where: { status: { not: 'inactive' } }, select: { number: true } }),
     db.owner.count({ where: { status: 'active' } }),
     db.listing.count(),
-    db.listing.count({ where: { unitId: null } }),
+    db.listing.count({ where: { unitListings: { none: {} } } }),
     db.supportTicket.count({
       where: { status: { in: ['open', 'in_progress', 'pending_guest', 'pending_ota'] } },
     }),

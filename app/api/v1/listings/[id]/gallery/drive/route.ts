@@ -19,11 +19,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const listing = await db.listing.findUnique({
       where: { id: params.id },
-      select: { photos: true, unit: { select: { driveFolderUrl: true } } },
+      select: {
+        photos: true,
+        // A listing may span several units; use the first attached unit's Drive folder.
+        unitListings: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { unit: { select: { driveFolderUrl: true } } },
+        },
+      },
     })
     if (!listing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const folderUrl = listing.unit?.driveFolderUrl ?? null
+    const folderUrl = listing.unitListings[0]?.unit?.driveFolderUrl ?? null
     if (!folderUrl) {
       return NextResponse.json({ data: { folder: false, images: [] } })
     }

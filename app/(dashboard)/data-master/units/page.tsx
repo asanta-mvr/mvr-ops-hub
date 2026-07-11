@@ -13,7 +13,7 @@ async function getUnits(): Promise<UnitFull[]> {
     include: {
       building: { select: { name: true, nickname: true } },
       owner:    { select: { nickname: true, phone: true } },
-      _count:   { select: { listings: true } },
+      _count:   { select: { unitListings: true } },
     },
     orderBy: { number: 'asc' },
   })
@@ -48,7 +48,7 @@ async function getUnits(): Promise<UnitFull[]> {
     ownerUniqueId:    u.ownerUniqueId,
     ownerNickname:    u.owner?.nickname ?? null,
     ownerPhone:       u.owner?.phone ?? null,
-    listingCount:     u._count.listings,
+    listingCount:     u._count.unitListings,
     createdAt:        u.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
   }))
 }

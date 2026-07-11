@@ -15,7 +15,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const listing = await db.listing.findUnique({
       where: { id: params.id },
-      include: { unit: { select: { id: true, number: true, building: { select: { name: true } } } } },
+      include: {
+        unitListings: {
+          orderBy: { createdAt: 'asc' },
+          select: { unit: { select: { id: true, number: true, building: { select: { name: true } } } } },
+        },
+      },
     })
     if (!listing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -43,21 +48,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Validation failed', details: validated.error.flatten() }, { status: 400 })
     }
 
-    const { unitId, ...rest } = validated.data
-
-    // When attaching, ensure the target Unit exists.
-    if (unitId) {
-      const unit = await db.unit.findUnique({ where: { id: unitId }, select: { id: true } })
-      if (!unit) return NextResponse.json({ error: 'Unit not found' }, { status: 400 })
-    }
-
-    // Normalize cleared URL fields ('' → null).
-    const data: Prisma.ListingUpdateInput = { ...rest }
+    // Attaching/detaching a unit now lives on the unit side
+    // (POST/DELETE /api/v1/units/:id/listings) — a listing may span many units.
+    const data: Prisma.ListingUpdateInput = { ...validated.data }
     for (const key of ['urlAirbnb', 'urlBooking', 'urlVrbo', 'urlExpedia', 'urlVacasa'] as const) {
       if (data[key] === '') data[key] = null
-    }
-    if (unitId !== undefined) {
-      data.unit = unitId ? { connect: { id: unitId } } : { disconnect: true }
     }
 
     const listing = await db.listing.update({ where: { id: params.id }, data })
