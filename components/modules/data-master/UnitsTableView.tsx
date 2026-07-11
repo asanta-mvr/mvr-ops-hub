@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import {
   Pencil, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown,
   ChevronsUpDown, Home, User, Phone, Search, Building2,
@@ -211,7 +212,7 @@ function StatCards({ unitCount, keyCount, ownerCount, totalSqft, totalCapacity, 
     { icon: Star,      value: avgScore != null ? avgScore.toFixed(1) : '—', label: 'Avg Score' },
   ]
   return (
-    <div className="flex flex-1 gap-5">
+    <div className="flex flex-1 min-w-0 gap-5">
       {cards.map(({ icon: Icon, value, label }) => (
         <div
           key={label}
@@ -575,21 +576,79 @@ interface UnitDetailPanelProps {
   onEdit:          () => void
 }
 
+interface PanelComment {
+  id: string
+  body: string
+  createdAt: string
+  authorId: string | null
+  author: { name: string | null; email: string | null } | null
+}
+
+function commentMeta(c: PanelComment): { author: string; date: string } {
+  return {
+    author: c.author?.name || c.author?.email || 'Unknown user',
+    date: new Date(c.createdAt).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    }),
+  }
+}
+
 function UnitDetailPanel({
   unit, index, total,
   onClose, onPrev, onNext, onEdit,
 }: UnitDetailPanelProps) {
-  const [commentText, setCommentText] = useState('')
-  const [savedComments, setSavedComments] = useState<Array<{ id: string; text: string; date: string }>>([])
+  const { data: session } = useSession()
+  const currentUserId = session?.user?.id ?? null
+  const canDeleteAny  = session?.user?.role === 'super_admin'
 
-  function handleAddComment() {
-    if (!commentText.trim()) return
-    setSavedComments(prev => [...prev, {
-      id: Date.now().toString(),
-      text: commentText.trim(),
-      date: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    }])
-    setCommentText('')
+  const [comments, setComments]             = useState<PanelComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(true)
+  const [commentText, setCommentText]       = useState('')
+  const [submitting, setSubmitting]         = useState(false)
+
+  // Load persisted comments whenever the selected unit changes.
+  useEffect(() => {
+    setLoadingComments(true)
+    let cancelled = false
+    fetch(`/api/v1/units/${unit.id}/comments`)
+      .then((r) => r.json())
+      .then((d: { data?: PanelComment[] }) => { if (!cancelled) setComments(d.data ?? []) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingComments(false) })
+    return () => { cancelled = true }
+  }, [unit.id])
+
+  async function handleAddComment() {
+    const body = commentText.trim()
+    if (!body || submitting) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/v1/units/${unit.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      })
+      if (!res.ok) throw new Error('save failed')
+      const { data } = (await res.json()) as { data: PanelComment }
+      setComments((prev) => [...prev, data])
+      setCommentText('')
+    } catch (e) {
+      console.error('[comments] add', e)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteComment(id: string) {
+    const prev = comments
+    setComments((cs) => cs.filter((c) => c.id !== id)) // optimistic
+    try {
+      const res = await fetch(`/api/v1/units/${unit.id}/comments/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('delete failed')
+    } catch (e) {
+      console.error('[comments] delete', e)
+      setComments(prev) // rollback on failure
+    }
   }
 
   return (
@@ -795,22 +854,36 @@ function UnitDetailPanel({
     <div className="bg-white rounded-xl border shadow-panel px-4 py-4 space-y-3">
       <p className="text-[11px] font-bold uppercase tracking-widest text-foreground/70">Activity & Comments</p>
       {/* Saved comments list */}
-      {savedComments.length > 0 && (
+      {loadingComments ? (
+        <p className="text-xs text-muted-foreground">Loading comments…</p>
+      ) : comments.length > 0 ? (
         <div className="space-y-2">
-          {savedComments.map((c) => (
-            <div key={c.id} className="group relative bg-mvr-neutral rounded-xl px-3 py-2.5">
-              <p className="text-xs text-foreground leading-relaxed pr-6">{c.text}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">{c.date}</p>
-              <button
-                onClick={() => setSavedComments(prev => prev.filter(x => x.id !== c.id))}
-                className="absolute top-2 right-2 p-0.5 rounded text-muted-foreground/40 hover:text-mvr-danger hover:bg-mvr-danger-light opacity-0 group-hover:opacity-100 transition-all"
-                title="Delete comment"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
+          {comments.map((c) => {
+            const meta = commentMeta(c)
+            const canDelete = canDeleteAny || (currentUserId != null && c.authorId === currentUserId)
+            return (
+              <div key={c.id} className="group relative bg-mvr-neutral rounded-xl px-3 py-2.5">
+                <p className="text-xs text-foreground leading-relaxed pr-6 whitespace-pre-wrap">{c.body}</p>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <User className="w-2.5 h-2.5 shrink-0 text-muted-foreground/60" />
+                  <span className="text-[10px] font-semibold text-foreground/70">{meta.author}</span>
+                  <span className="text-[10px] text-muted-foreground">· {meta.date}</span>
+                </div>
+                {canDelete && (
+                  <button
+                    onClick={() => handleDeleteComment(c.id)}
+                    className="absolute top-2 right-2 p-0.5 rounded text-muted-foreground/40 hover:text-mvr-danger hover:bg-mvr-danger-light opacity-0 group-hover:opacity-100 transition-all"
+                    title="Delete comment"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No comments yet. Add the first note below.</p>
       )}
       {/* Input */}
       <div className="space-y-2">
@@ -823,10 +896,10 @@ function UnitDetailPanel({
         />
         <button
           onClick={handleAddComment}
-          disabled={!commentText.trim()}
+          disabled={!commentText.trim() || submitting}
           className="w-full py-2 text-xs rounded-xl bg-mvr-primary text-white hover:bg-mvr-primary/90 disabled:opacity-40 transition-colors font-semibold tracking-wide"
         >
-          Add Comment
+          {submitting ? 'Adding…' : 'Add Comment'}
         </button>
       </div>
     </div>
@@ -979,24 +1052,24 @@ export default function UnitsTableView({ units, buildings, owners, options, init
 
   return (
     <div className="space-y-4">
-      {/* Top bar: title (left) + search + new unit (right) */}
-      <div className="flex items-center justify-between gap-6">
-        <div className="flex flex-1 items-center gap-5 min-w-0">
-          <div className="w-52 shrink-0">
-            <h1 className="text-2xl font-bold text-mvr-primary">Units</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{displayUnits.length} units in portfolio</p>
-          </div>
-          <StatCards
-            unitCount={stats.unitCount}
-            keyCount={stats.keyCount}
-            ownerCount={stats.ownerCount}
-            totalSqft={stats.totalSqft}
-            totalCapacity={stats.totalCapacity}
-            avgScore={stats.avgScore}
-          />
+      {/* Top bar mirrors the content grid below so everything lines up:
+          title (w-52, = tree nav) | KPI cards (flex-1, = table) | search + New Unit
+          (= detail panel width when a unit is open). */}
+      <div className="flex items-center gap-4">
+        <div className="w-52 shrink-0">
+          <h1 className="text-2xl font-bold text-mvr-primary">Units</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">{displayUnits.length} units in portfolio</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative w-72">
+        <StatCards
+          unitCount={stats.unitCount}
+          keyCount={stats.keyCount}
+          ownerCount={stats.ownerCount}
+          totalSqft={stats.totalSqft}
+          totalCapacity={stats.totalCapacity}
+          avgScore={stats.avgScore}
+        />
+        <div className={`shrink-0 flex items-center gap-3 ${selectedUnit ? 'w-[440px]' : ''}`}>
+          <div className={`relative ${selectedUnit ? 'flex-1' : 'w-72'}`}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <input
               type="text"
