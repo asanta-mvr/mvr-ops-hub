@@ -10,6 +10,8 @@ export interface UserRow {
   name: string | null
   image: string | null
   role: string
+  roleName: string | null // assigned custom role
+  customized: boolean // permissions diverge from the assigned role's preset
   isActive: boolean
   lastLoginAt: string | null
   permissionCount: number
@@ -41,10 +43,6 @@ function timeAgo(iso: string | null): string {
   const hrs = Math.round(mins / 60)
   if (hrs < 48) return `${hrs} h ago`
   return `${Math.round(hrs / 24)} d ago`
-}
-
-function humanRole(r: string): string {
-  return r.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 export function UserListTable({ rows }: Props) {
@@ -123,7 +121,7 @@ export function UserListTable({ rows }: Props) {
               <tr className="bg-mvr-cream border-b border-[#E0DBD4] text-[10px] uppercase tracking-widest text-muted-foreground">
                 <th className="py-2.5 px-4 text-left">User</th>
                 <th className="py-2.5 px-2 text-left">Status</th>
-                <th className="py-2.5 px-2 text-left">Legacy role</th>
+                <th className="py-2.5 px-2 text-left">Role</th>
                 <th className="py-2.5 px-2 text-left">Last login</th>
                 <th className="py-2.5 px-2 text-right">Resources</th>
                 <th className="py-2.5 px-3 w-10"></th>
@@ -172,9 +170,16 @@ export function UserListTable({ rows }: Props) {
                       </span>
                     </td>
                     <td className="py-3 px-2">
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Shield className="w-3 h-3" aria-hidden />
-                        {humanRole(u.role)}
+                      <span className="inline-flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Shield className="w-3 h-3" aria-hidden />
+                          {u.role === 'super_admin' ? 'Super Admin' : (u.roleName ?? '—')}
+                        </span>
+                        {u.customized && (
+                          <span className="rounded-full border border-mvr-warning/30 bg-mvr-warning-light px-1.5 py-0.5 text-[10px] font-medium text-mvr-warning">
+                            Customized
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-[11px] text-mvr-olive">

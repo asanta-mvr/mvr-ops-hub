@@ -7,11 +7,17 @@ import { Loader2, Mail, Send, ChevronLeft, AlertCircle, CheckCircle2 } from 'luc
 import {
   PermissionMatrix,
   emptySelection,
+  selectionFromPermissions,
   selectionToPermissions,
   type PermissionSelection,
 } from '@/components/modules/settings/PermissionMatrix'
 
 const COMPANY_DOMAIN = 'miamivacationrentals.com'
+
+interface InviteUserFormProps {
+  roles: Array<{ id: string; name: string; permissions: Array<{ resource: string; level: string }> }>
+  canGrantFull: boolean
+}
 
 type ApiSuccess = {
   data: {
@@ -23,12 +29,19 @@ type ApiSuccess = {
   }
 }
 
-export function InviteUserForm() {
+export function InviteUserForm({ roles, canGrantFull }: InviteUserFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
+  const [roleId, setRoleId] = useState<string>('')
   const [selection, setSelection] = useState<PermissionSelection>(() => emptySelection())
+
+  function applyRole(id: string) {
+    setRoleId(id)
+    const r = roles.find((x) => x.id === id)
+    if (r) setSelection(selectionFromPermissions(r.permissions))
+  }
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<{
@@ -86,6 +99,7 @@ export function InviteUserForm() {
       setEmail('')
       setName('')
       setMessage('')
+      setRoleId('')
       setSelection(emptySelection())
       router.refresh()
     } catch (err) {
@@ -223,7 +237,28 @@ export function InviteUserForm() {
             </div>
             <span className="text-xs text-mvr-primary font-medium">{totalGranted} granted</span>
           </div>
-          <PermissionMatrix value={selection} onChange={setSelection} />
+          {roles.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <label htmlFor="invite-role" className="text-xs font-medium text-muted-foreground">
+                Start from a role
+              </label>
+              <select
+                id="invite-role"
+                value={roleId}
+                onChange={(e) => applyRole(e.target.value)}
+                className="rounded-lg border border-[#E0DBD4] bg-white px-3 py-1.5 text-sm outline-none transition-colors focus:border-mvr-primary focus:ring-2 focus:ring-mvr-primary/20"
+              >
+                <option value="">— None —</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[11px] text-muted-foreground">fills the matrix; adjust below as needed.</span>
+            </div>
+          )}
+          <PermissionMatrix value={selection} onChange={setSelection} canGrantFull={canGrantFull} />
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-[#E0DBD4] shadow-panel rounded-xl px-5 py-3 flex items-center justify-between gap-3 flex-wrap">

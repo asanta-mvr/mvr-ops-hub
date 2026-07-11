@@ -14,22 +14,41 @@ export default async function EditUserPage({ params }: { params: { id: string } 
   const session = await auth()
   await requireView(session, 'settings.users', '/no-access')
 
-  const user = await db.user.findUnique({
-    where: { id: params.id },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      isActive: true,
-      lastLoginAt: true,
-      permissions: { select: { resource: true, level: true } },
-    },
-  })
+  const [user, roles] = await Promise.all([
+    db.user.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        customRoleId: true,
+        isActive: true,
+        lastLoginAt: true,
+        permissions: { select: { resource: true, level: true } },
+      },
+    }),
+    db.role.findMany({
+      orderBy: [{ rank: 'desc' }, { name: 'asc' }],
+      select: { id: true, name: true, permissions: true },
+    }),
+  ])
 
   if (!user) notFound()
 
   const isSelf = session!.user.id === user.id
+
+  const roleOptions = roles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    permissions: Array.isArray(r.permissions)
+      ? (r.permissions as unknown[])
+          .filter((x): x is { resource: string; level: string } =>
+            !!x && typeof x === 'object' && 'resource' in x && 'level' in x
+          )
+          .map((x) => ({ resource: String(x.resource), level: String(x.level) }))
+      : [],
+  }))
 
   return (
     <div className="space-y-4 max-w-4xl">
@@ -48,6 +67,8 @@ export default async function EditUserPage({ params }: { params: { id: string } 
         isSelf={isSelf}
         isSuperAdmin={isSuperAdmin(user.role)}
         viewerIsSuperAdmin={isSuperAdmin(session!.user.role)}
+        initialRoleId={user.customRoleId}
+        roles={roleOptions}
         initialPermissions={user.permissions}
       />
     </div>

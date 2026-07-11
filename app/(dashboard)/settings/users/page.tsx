@@ -1,24 +1,37 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { UserPlus } from 'lucide-react'
 import { auth } from '@/lib/auth'
-import { requireView } from '@/lib/auth/permissions'
+import { requireView, canEdit, isSuperAdmin } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { UserListTable, type UserRow } from '@/components/modules/settings/UserListTable'
-import {
-  PendingInvitationsList,
-  type PendingInvitationRow,
-} from '@/components/modules/settings/users/PendingInvitationsList'
+import { type UserRow } from '@/components/modules/settings/UserListTable'
+import { type PendingInvitationRow } from '@/components/modules/settings/users/PendingInvitationsList'
+import { UsersRolesTabs } from '@/components/modules/settings/UsersRolesTabs'
+import { type RoleRow } from '@/components/modules/settings/RolesManager'
 
 export const metadata: Metadata = { title: 'Settings · Users' }
 export const dynamic = 'force-dynamic'
 
+type Perm = { resource: string; level: string }
+
+function asPerms(v: unknown): Perm[] {
+  if (!Array.isArray(v)) return []
+  return (v as unknown[])
+    .filter((x): x is Perm => !!x && typeof x === 'object' && 'resource' in x && 'level' in x)
+    .map((x) => ({ resource: String(x.resource), level: String(x.level) }))
+}
+
+// Order-independent signature of a permission set, for drift detection.
+function permKey(perms: Perm[]): string {
+  return perms.map((p) => `${p.resource}:${p.level}`).sort().join('|')
+}
+
 export default async function UsersListPage() {
   const session = await auth()
   await requireView(session, 'settings.users', '/no-access')
+  const canEditUsers = await canEdit(session, 'settings.users')
+  const viewerIsSuperAdmin = isSuperAdmin(session!.user.role)
 
   const now = new Date()
-  const [users, invitations] = await Promise.all([
+  const [users, invitations, roles] = await Promise.all([
     db.user.findMany({
       orderBy: [{ isActive: 'desc' }, { lastLoginAt: 'desc' }, { email: 'asc' }],
       select: {
@@ -29,6 +42,8 @@ export default async function UsersListPage() {
         role: true,
         isActive: true,
         lastLoginAt: true,
+        customRole: { select: { id: true, name: true, permissions: true } },
+        permissions: { select: { resource: true, level: true } },
         _count: { select: { permissions: true } },
       },
     }),
@@ -45,17 +60,37 @@ export default async function UsersListPage() {
         createdAt: true,
       },
     }),
+    db.role.findMany({
+      orderBy: [{ rank: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { users: true } } },
+    }),
   ])
 
-  const rows: UserRow[] = users.map((u) => ({
-    id: u.id,
-    email: u.email,
-    name: u.name,
-    image: u.image,
-    role: u.role,
-    isActive: u.isActive,
-    lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
-    permissionCount: u._count.permissions,
+  const rows: UserRow[] = users.map((u) => {
+    const rolePerms = u.customRole ? asPerms(u.customRole.permissions) : null
+    const userPerms = u.permissions.map((p) => ({ resource: p.resource, level: p.level }))
+    const customized = rolePerms !== null && permKey(rolePerms) !== permKey(userPerms)
+    return {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      image: u.image,
+      role: u.role,
+      roleName: u.customRole?.name ?? null,
+      customized,
+      isActive: u.isActive,
+      lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
+      permissionCount: u._count.permissions,
+    }
+  })
+
+  const roleRows: RoleRow[] = roles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    rank: r.rank,
+    permissions: asPerms(r.permissions),
+    userCount: r._count.users,
   }))
 
   const inviterIds = Array.from(new Set(invitations.map((i) => i.invitedBy)))
@@ -84,25 +119,20 @@ export default async function UsersListPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-mvr-primary">Users</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage who can sign in to MVR-OS and what each person can see.
-          </p>
-        </div>
-        <Link
-          href="/settings/users/invite"
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-mvr-primary text-white hover:bg-mvr-primary/90 transition-colors"
-        >
-          <UserPlus className="w-4 h-4" />
-          Invite user
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold text-mvr-primary">Users &amp; Roles</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage who can sign in to MVR-OS, what each person can see, and the roles that preset access.
+        </p>
       </div>
 
-      <PendingInvitationsList rows={pendingRows} />
-
-      <UserListTable rows={rows} />
+      <UsersRolesTabs
+        users={rows}
+        pending={pendingRows}
+        roles={roleRows}
+        canEdit={canEditUsers}
+        viewerIsSuperAdmin={viewerIsSuperAdmin}
+      />
     </div>
   )
 }
