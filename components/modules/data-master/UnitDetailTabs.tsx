@@ -7,7 +7,6 @@ import {
   User, Phone, Mail, ExternalLink, BedDouble, Bath, Maximize2,
   Home, Layers, Users, ChevronLeft, ChevronRight, X, Camera,
   Building2, Hash, Eye, Calendar, Clock, FolderCheck,
-  Wifi, DollarSign, Moon, LogIn, LogOut,
 } from 'lucide-react'
 import { TYPE_LABELS } from '@/lib/constants/units'
 import {
@@ -250,144 +249,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-// ── Listings tab: read-only per-listing card ───────────────────────────────────
-
-// OTA channel logos live in public/icons/ota-* (see CLAUDE.md). Vacasa has no
-// dedicated icon → generic fallback.
-const OTA_ICON: Record<string, string> = {
-  airbnb:  '/icons/ota-airbnb.jpg',
-  booking: '/icons/ota-booking.png',
-  vrbo:    '/icons/ota-vrbo.png',
-  expedia: '/icons/ota-expedia.png',
-  vacasa:  '/icons/ota-other.png',
-}
-
-function ListingCard({ listing, canViewAccess }: { listing: ListingView; canViewAccess: boolean }) {
-  const { name, nickname, guestyId, channels, pricing, access, customFields } = listing
-
-  const money = (v: number | null) =>
-    v == null ? null : `${pricing?.currency ? `${pricing.currency} ` : ''}${v.toLocaleString()}`
-
-  const hasPricing =
-    !!pricing &&
-    (pricing.basePrice != null || pricing.cleaningFee != null || pricing.securityDeposit != null ||
-      pricing.minNights != null || pricing.maxNights != null || !!pricing.checkIn || !!pricing.checkOut)
-
-  const hasAccess =
-    !!access && (!!access.wifiName || !!access.wifiPassword)
-
-  return (
-    <div className="bg-white rounded-xl border p-5 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 border-b border-[#E0DBD4] pb-3">
-        <div className="min-w-0">
-          <Link href={`/data-master/listings/${listing.id}`} className="font-semibold text-mvr-primary hover:underline">
-            {nickname || name}
-          </Link>
-          {nickname && <p className="text-xs text-muted-foreground truncate">{name}</p>}
-        </div>
-        {guestyId && (
-          <Link
-            href={`/data-master/listings/${listing.id}`}
-            className="shrink-0 font-mono text-xs text-mvr-primary hover:underline"
-          >
-            {guestyId}
-          </Link>
-        )}
-      </div>
-
-      {/* Pricing & Terms */}
-      <Section title="Pricing & Terms">
-        {hasPricing ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Base"       value={money(pricing!.basePrice)}       icon={DollarSign} />
-            <Field label="Cleaning"   value={money(pricing!.cleaningFee)}     icon={DollarSign} />
-            <Field label="Deposit"    value={money(pricing!.securityDeposit)} icon={DollarSign} />
-            <Field label="Min nights" value={pricing!.minNights}              icon={Moon} />
-            <Field label="Max nights" value={pricing!.maxNights}              icon={Moon} />
-            <Field label="Check-in"   value={pricing!.checkIn}                icon={LogIn} />
-            <Field label="Check-out"  value={pricing!.checkOut}               icon={LogOut} />
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No pricing or terms available from Guesty.</p>
-        )}
-      </Section>
-
-      {/* Access — sensitive, gated by listing edit rights */}
-      {canViewAccess && (
-        <Section title="Access">
-          {hasAccess ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Field label="Wi-Fi network"  value={access!.wifiName}     icon={Wifi} />
-              <Field label="Wi-Fi password" value={access!.wifiPassword} icon={Wifi} />
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No access details recorded.</p>
-          )}
-        </Section>
-      )}
-
-      {/* Custom fields — promoted from Guesty, tied to this listing */}
-      {customFields.length > 0 && (
-        <Section title="Custom fields">
-          <dl className="space-y-2 text-sm">
-            {customFields.map((cf) => (
-              <div key={cf.fieldId} className="flex flex-col gap-0.5 border-t border-[#E0DBD4]/60 pt-2 first:border-0 first:pt-0 sm:flex-row sm:justify-between sm:gap-4">
-                <dt className="shrink-0 text-muted-foreground">{cf.name}</dt>
-                <dd className="text-mvr-olive sm:max-w-[60%] sm:text-right">
-                  {cf.value == null || cf.value === '' ? (
-                    <span className="text-muted-foreground/60">—</span>
-                  ) : typeof cf.value === 'boolean' ? (
-                    cf.value ? 'Yes' : 'No'
-                  ) : /^https?:\/\//i.test(String(cf.value)) ? (
-                    <a
-                      href={String(cf.value)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="break-all text-mvr-primary underline underline-offset-2 hover:text-mvr-primary/80"
-                    >
-                      {String(cf.value)}
-                    </a>
-                  ) : (
-                    <span className="break-words">{String(cf.value)}</span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Section>
-      )}
-
-      {/* Channel URLs — clickable hyperlinks to the live listings */}
-      <Section title="Channel URLs">
-        {channels.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {channels.map(c => (
-              <a
-                key={c.key}
-                href={c.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group inline-flex items-center gap-2.5 text-sm text-mvr-primary hover:underline w-fit"
-              >
-                <img
-                  src={OTA_ICON[c.key] ?? '/icons/ota-other.png'}
-                  alt=""
-                  className="w-5 h-5 rounded shrink-0 object-contain"
-                />
-                {c.label}
-                <ExternalLink className="w-3 h-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
-              </a>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No channel URLs recorded.</p>
-        )}
-      </Section>
-    </div>
-  )
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 const TAB_KEYS: Tab[] = ['detail', 'listings', 'contracts', 'inspections', 'score', 'documents']
@@ -406,7 +267,7 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
     unitId, number, status, type, floor, line, view, sqft, mt2, capacity, amenityCap,
     totalBeds, bedrooms, bathrooms, bathType, kings, queens, twins, otherBeds,
     hasKitchen, hasBalcony, features, driveFolderUrl, photoQuality, score, notes,
-    createdAt, updatedAt, listingCount, contractCount, inspectionCount,
+    createdAt, updatedAt, contractCount, inspectionCount,
     buildingName, buildingId, ownerId, ownerNickname, ownerPhone, ownerEmail,
     listings, listingsCanViewAccess, folders, fileAlerts, alertTypes, docCanEdit,
   } = props

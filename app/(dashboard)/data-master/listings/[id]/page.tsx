@@ -29,12 +29,6 @@ export const metadata: Metadata = { title: 'Listing · Data Master' }
 export const dynamic = 'force-dynamic'
 
 type Raw = Record<string, unknown>
-function rec(v: unknown): Raw | null {
-  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null
-}
-function str(v: unknown): string | null {
-  return typeof v === 'string' && v.length > 0 ? v : null
-}
 
 export default async function ListingDetailPage({ params }: { params: { id: string } }) {
   const session = await auth()
@@ -190,27 +184,6 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
         }
       })()
     : null
-
-  // "Create new unit" suggestions from Guesty (a new unit has nothing to overwrite).
-  const address = rec(raw.address)
-  const buildingName = str(address?.buildingName)
-  const matchedBuilding = buildingName
-    ? buildings.find((b) => b.name.trim().toLowerCase() === buildingName.trim().toLowerCase())
-    : undefined
-  const numberSuggestion = str(address?.unit) ?? str(address?.apt) ?? str(address?.apartment) ?? ''
-  const createDefaults: Partial<UnitFormValues> = {
-    number: numberSuggestion,
-    buildingId: matchedBuilding?.id ?? '',
-    status: 'onboarding',
-    bedrooms: guesty.bedrooms != null ? String(guesty.bedrooms) : '',
-    bathrooms: guesty.bathrooms != null ? String(guesty.bathrooms) : '',
-    capacity: guesty.capacity != null ? String(guesty.capacity) : '',
-    sqft: guesty.sqft != null ? String(guesty.sqft) : '',
-    totalBeds: guesty.totalBeds != null ? String(guesty.totalBeds) : '0',
-    kings: String(guesty.kings),
-    queens: String(guesty.queens),
-    twins: String(guesty.twins),
-  }
 
   // Curated photo set (Data Master) → display list for the gallery.
   const initialPhotos: GalleryPhoto[] = (Array.isArray(listing.photos) ? listing.photos : [])
