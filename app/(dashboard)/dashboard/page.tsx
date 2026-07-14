@@ -59,12 +59,12 @@ async function getOverviewMetrics() {
     db.guestyOwner.count({ where: { ownerUniqueId: null } }),
   ])
 
-  const { keyCount } = computeUnitAndKeyCount(activeUnitNumbers.map((u) => u.number))
+  const { unitCount: activeUnits, keyCount } = computeUnitAndKeyCount(activeUnitNumbers.map((u) => u.number))
 
   return {
     buildings,
     onboardingBuildings,
-    activeUnits: activeUnitNumbers.length,
+    activeUnits,
     keyCount,
     owners,
     listings,
