@@ -3,11 +3,16 @@ import { suggestUnit, type UnitLite } from './unit-match'
 
 type CF = { name?: string; value?: unknown }
 
+/** Read a named string custom-field value off a Listing.customFields JSON array. */
+export function customFieldValue(customFields: unknown, name: string): string | null {
+  const cf = Array.isArray(customFields) ? (customFields as CF[]) : []
+  const v = cf.find((c) => c.name === name)?.value
+  return typeof v === 'string' ? v : null
+}
+
 /** Pull the Guesty "building" custom field value off a Listing.customFields JSON. */
 function buildingHint(customFields: unknown): string | null {
-  const cf = Array.isArray(customFields) ? (customFields as CF[]) : []
-  const v = cf.find((c) => c.name === 'building')?.value
-  return typeof v === 'string' ? v : null
+  return customFieldValue(customFields, 'building')
 }
 
 export interface SuggestionInput {

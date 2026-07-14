@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
-import { computeUnitSuggestions } from '@/lib/data-master/listing-suggestions'
+import { computeUnitSuggestions, customFieldValue } from '@/lib/data-master/listing-suggestions'
 
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 200
@@ -36,7 +36,18 @@ export async function GET(req: NextRequest) {
     ]
 
     const attachedParam = searchParams.get('attached') // 'attached' | 'unattached' | null (all)
-    const buildingId = searchParams.get('buildingId')?.trim() // filter to listings whose unit is in this building
+    // Group by the Guesty "building" custom field value (e.g. "Elser"), NOT the
+    // attached unit's building — a listing's building is authoritative here.
+    const building = searchParams.get('building')?.trim()
+    const listingType = searchParams.get('listingType')?.trim() // "Individual" | "Combined"
+
+    // Building and listing-type both filter the customFields JSON, so combine
+    // them with AND — a single `customFields` key can hold only one
+    // array_contains. JSONB containment matches array elements holding these
+    // name/value pairs (extra keys ignored).
+    const cfFilters: Prisma.ListingWhereInput[] = []
+    if (building) cfFilters.push({ customFields: { array_contains: [{ name: 'building', value: building }] } })
+    if (listingType) cfFilters.push({ customFields: { array_contains: [{ name: 'unit_types', value: listingType }] } })
 
     const where: Prisma.ListingWhereInput = {
       ...(q
@@ -52,8 +63,18 @@ export async function GET(req: NextRequest) {
         : attachedParam === 'unattached'
           ? { unitListings: { none: {} } }
           : {}),
-      // A building filter implies the listing is attached to a unit in that building.
-      ...(buildingId ? { unitListings: { some: { unit: { buildingId } } } } : {}),
+      ...(cfFilters.length ? { AND: cfFilters } : {}),
+    }
+
+    // Status (Active/Inactive) lives on the source GuestyListing (linked by
+    // guestyId), so resolve the matching guestyIds and constrain the listings.
+    const statusParam = searchParams.get('status') // 'active' | 'inactive' | null
+    if (statusParam === 'active' || statusParam === 'inactive') {
+      const gls = await db.guestyListing.findMany({
+        where: { active: statusParam === 'active' },
+        select: { guestyId: true },
+      })
+      where.guestyId = { in: gls.map((g) => g.guestyId) }
     }
 
     const [rows, total] = await Promise.all([
@@ -126,6 +147,8 @@ export async function GET(req: NextRequest) {
         unitCount: units.length,
         suggestedUnitId: suggestions.get(r.id)?.suggestedUnitId ?? null,
         suggestedUnitLabel: suggestions.get(r.id)?.suggestedUnitLabel ?? null,
+        // "Unit Types" custom field (Combined / Individual) — shown as "Listing Type".
+        listingType: customFieldValue(r.customFields, 'unit_types'),
         pictureUrl: p?.pictureUrl ?? null,
         active: p?.active ?? null,
         propertyType: p?.propertyType ?? null,

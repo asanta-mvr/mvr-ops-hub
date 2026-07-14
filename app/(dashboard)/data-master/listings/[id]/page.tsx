@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Building2 } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { canEdit, requireView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
@@ -22,6 +22,7 @@ import ListingComparisonCard, {
 } from '@/components/modules/data-master/ListingComparisonCard'
 import OwnershipCard from '@/components/modules/data-master/OwnershipCard'
 import ListingCustomFieldsCard from '@/components/modules/data-master/ListingCustomFieldsCard'
+import ListingUnitsCockpit from '@/components/modules/data-master/ListingUnitsCockpit'
 import { ListingDetailTabs } from '@/components/modules/data-master/ListingDetailTabs'
 import UnitForm, { type UnitFormValues } from '@/components/modules/data-master/UnitForm'
 
@@ -39,18 +40,26 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
   if (!listing) notFound()
 
   // Source Guesty payload + form prerequisites.
-  const [source, buildings, owners, allOptions] = await Promise.all([
+  const [source, buildings, owners, allOptions, cfDefs] = await Promise.all([
     listing.guestyId
       ? db.guestyListing.findUnique({ where: { guestyId: listing.guestyId }, select: { raw: true } })
       : Promise.resolve(null),
     db.building.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     db.owner.findMany({ select: { id: true, nickname: true }, where: { status: 'active' }, orderBy: { nickname: 'asc' } }),
     db.unitFieldOption.findMany({ orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] }),
+    db.guestyCustomField.findMany({
+      where: { objectType: 'listing' },
+      select: { guestyId: true, displayName: true, key: true, type: true },
+    }),
   ])
   const raw = (source?.raw as Raw | undefined) ?? {}
-  const listingCustomFields: ListingCustomField[] = Array.isArray(listing.customFields)
-    ? (listing.customFields as unknown as ListingCustomField[])
-    : []
+
+  // Title each custom field by its human-readable `key` (e.g. "Unit Types") from
+  // the definitions catalog, falling back to the stored name when unmapped.
+  const cfKeyByFieldId = new Map(cfDefs.map((d) => [d.guestyId, d.key]))
+  const listingCustomFields: ListingCustomField[] = (
+    Array.isArray(listing.customFields) ? (listing.customFields as unknown as ListingCustomField[]) : []
+  ).map((cf) => ({ ...cf, name: cfKeyByFieldId.get(cf.fieldId) || cf.name }))
 
   const prereqs = {
     buildings,
@@ -123,10 +132,6 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
   // definitions catalog (fieldId → displayName), then matched to Unit fields.
   const cfRows: CfDriftRow[] = []
   if (unit) {
-    const cfDefs = await db.guestyCustomField.findMany({
-      where: { objectType: 'listing' },
-      select: { guestyId: true, displayName: true, type: true },
-    })
     const cfDefsMap = new Map(cfDefs.map((d) => [d.guestyId, { displayName: d.displayName, type: d.type }]))
     const cfByName = new Map(projectListingCustomFields(raw, cfDefsMap).map((f) => [f.name, f]))
     const g = (key: string) => cfByName.get(key)?.value ?? null
@@ -246,35 +251,9 @@ export default async function ListingDetailPage({ params }: { params: { id: stri
           <ListingDetailTabs
             basicInfo={
               <>
-                {/* Read-only: units are attached from the unit side (Data Master →
-                    Unit → Listings). A listing may span several units (combined). */}
-                <div className="rounded-xl border border-[#E0DBD4] bg-white p-5 shadow-card">
-                  <h3 className="font-display text-lg text-mvr-primary">
-                    {attachedUnits.length > 1 ? 'Units' : 'Unit'}
-                  </h3>
-                  {attachedUnits.length === 0 ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      No unit attached. Attach this listing from a unit&rsquo;s Listings tab in Data Master.
-                    </p>
-                  ) : (
-                    <ul className="mt-3 space-y-2">
-                      {attachedUnits.map((u) => (
-                        <li key={u.id}>
-                          <Link
-                            href={`/data-master/units/${u.id}`}
-                            className="flex items-center gap-2 rounded-lg border border-[#E0DBD4] px-3 py-2 text-sm text-mvr-olive transition-colors hover:bg-mvr-neutral/50"
-                          >
-                            <Building2 className="size-4 shrink-0 text-mvr-steel" />
-                            <span className="font-medium">
-                              {u.buildingName ? `${u.buildingName} · ` : ''}Unit {u.number}
-                            </span>
-                            <ChevronRight className="ml-auto size-4 shrink-0 text-mvr-primary/40" />
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                {/* Attach/detach units directly from the listing (mirror of the
+                    unit's Listings tab; a listing may span several combined units). */}
+                <ListingUnitsCockpit listingId={listing.id} editable={editable} attached={attachedUnits} />
                 <GuestyListingDetail raw={raw} privileged={editable} part="basic" />
                 <ListingCustomFieldsCard customFields={listingCustomFields} />
                 <OwnershipCard owners={ownersForDetail} />
