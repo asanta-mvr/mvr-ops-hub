@@ -60,8 +60,8 @@ import { TYPE_LABELS } from '@/lib/constants/units'
 
 const STATUS_STYLES: Record<string, string> = {
   active:     'bg-mvr-success-light text-mvr-success border-mvr-success',
-  onboarding: 'bg-mvr-warning-light text-mvr-warning border-mvr-warning',
-  inactive:   'bg-mvr-neutral text-[#888] border-[#ccc]',
+  onboarding: 'bg-purple-50 text-purple-600 border-purple-200',
+  inactive:   'bg-mvr-danger-light text-mvr-danger border-mvr-danger',
   renovation: 'bg-blue-50 text-blue-600 border-blue-200',
 }
 
@@ -81,9 +81,9 @@ function statusLabel(s: string): string {
 
 const STATUS_DOT: Record<string, string> = {
   active:     'bg-mvr-success',
-  onboarding: 'bg-mvr-warning',
+  onboarding: 'bg-purple-400',
   renovation: 'bg-blue-400',
-  inactive:   'bg-[#ccc]',
+  inactive:   'bg-mvr-danger',
   off_board:  'bg-mvr-danger',
   churn:      'bg-mvr-danger',
   churned:    'bg-mvr-danger',

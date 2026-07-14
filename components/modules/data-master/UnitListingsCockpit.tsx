@@ -11,7 +11,8 @@ export interface AttachedListing {
   name: string
   nickname: string | null
   guestyId: string | null
-  channels: { key: string; label: string; url: string }[]
+  // "Unit Types" custom field: "Combined" | "Individual" (null when unset).
+  listingType: string | null
 }
 
 interface Props {
@@ -98,16 +99,10 @@ export default function UnitListingsCockpit({ unitId, editable, attached }: Prop
                   <span className="truncate text-sm font-medium text-mvr-olive">
                     {l.nickname || l.name}
                   </span>
-                  {l.guestyId && (
-                    <span className="shrink-0 rounded bg-white px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground border border-[#E0DBD4]">
-                      {l.guestyId}
-                    </span>
-                  )}
+                  {l.listingType && <ListingTypeTag value={l.listingType} />}
                 </div>
-                {l.channels.length > 0 && (
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                    {l.channels.map((c) => c.label).join(' · ')}
-                  </p>
+                {l.guestyId && (
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{l.guestyId}</p>
                 )}
               </div>
               {editable && (
@@ -126,6 +121,20 @@ export default function UnitListingsCockpit({ unitId, editable, attached }: Prop
         </ul>
       )}
     </div>
+  )
+}
+
+// Combined / Individual tag derived from the listing's "Unit Types" custom field.
+function ListingTypeTag({ value }: { value: string }) {
+  const isCombined = value.trim().toLowerCase() === 'combined'
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+        isCombined ? 'bg-mvr-primary-light text-mvr-primary' : 'bg-mvr-sand-light text-mvr-olive'
+      }`}
+    >
+      {value}
+    </span>
   )
 }
 

@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { useForm, Controller } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { z } from 'zod'
-import { Check, X } from 'lucide-react'
+import { Check, X, Search, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SuperAdminSaveNotice } from '@/components/modules/data-master/SuperAdminSaveNotice'
 import { normalizePhotoQuality } from '@/lib/validations/unit'
@@ -303,6 +303,87 @@ function EditableSelect({
   )
 }
 
+// ── OwnerCombobox ─────────────────────────────────────────────────────────────
+// Searchable owner picker: click to open, type to filter owners by name, click
+// to select. Backed by the already-loaded `owners` list (no network calls).
+
+function OwnerCombobox({
+  owners,
+  value,
+  onChange,
+}: {
+  owners:   { id: string; nickname: string }[]
+  value:    string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ]       = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const selected = owners.find((o) => o.id === value) ?? null
+  const term     = q.trim().toLowerCase()
+  const filtered = term ? owners.filter((o) => o.nickname.toLowerCase().includes(term)) : owners
+
+  // Close when clicking outside the widget.
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen((v) => !v); setQ('') }}
+        className="w-full flex items-center justify-between gap-2 border rounded-lg px-3 py-2 text-sm text-left bg-white focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary"
+      >
+        <span className={selected ? 'text-mvr-olive truncate' : 'text-muted-foreground'}>
+          {selected ? selected.nickname : 'Select owner…'}
+        </span>
+        <ChevronsUpDown className="w-4 h-4 shrink-0 text-muted-foreground/60" />
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1 w-full rounded-lg border bg-white shadow-panel">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search owners by name…"
+                className="w-full rounded-md border pl-8 pr-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary"
+              />
+            </div>
+          </div>
+          <ul className="max-h-56 overflow-y-auto py-1">
+            {filtered.length === 0 && (
+              <li className="px-3 py-2 text-xs text-muted-foreground">No owners found</li>
+            )}
+            {filtered.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  onClick={() => { onChange(o.id); setOpen(false); setQ('') }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm text-mvr-olive hover:bg-mvr-neutral/50 transition-colors"
+                >
+                  <span className="truncate">{o.nickname}</span>
+                  {o.id === value && <Check className="w-4 h-4 shrink-0 text-mvr-primary" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── FeaturesSection ───────────────────────────────────────────────────────────
 
 function FeaturesSection({
@@ -505,6 +586,7 @@ export default function UnitForm({
   const viewValue      = watch('view')           ?? ''
   const bathTypeValue  = watch('bathType')       ?? ''
   const statusValue    = watch('status')         ?? ''
+  const ownerValue     = watch('ownerUniqueId')  ?? ''
 
   // Auto-compute total beds from kings + queens + twins
   const kingsStr  = watch('kings')  ?? '0'
@@ -762,12 +844,11 @@ export default function UnitForm({
           </div>
           <div>
             <Label required>Owner</Label>
-            <NativeSelect {...register('ownerUniqueId')}>
-              <option value="">Select owner…</option>
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>{o.nickname}</option>
-              ))}
-            </NativeSelect>
+            <OwnerCombobox
+              owners={owners}
+              value={ownerValue}
+              onChange={(id) => setValue('ownerUniqueId', id, { shouldValidate: true })}
+            />
             <FieldError message={errors.ownerUniqueId?.message} />
           </div>
         </div>

@@ -5,31 +5,15 @@ import { auth } from '@/lib/auth'
 import { canEdit, canView } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
 import { projectListingPhotos, type ListingPhoto } from '@/lib/integrations/guesty'
+import { parseListingPhotos, listingPhotoUrl } from '@/lib/data-master/listing-photos'
 
 export const dynamic = 'force-dynamic'
 
 // Coerce the stored Json into a typed, order-sorted ListingPhoto[].
-function parsePhotos(json: unknown): ListingPhoto[] {
-  if (!Array.isArray(json)) return []
-  const out: ListingPhoto[] = []
-  for (const p of json) {
-    if (p && typeof p === 'object') {
-      const r = p as Record<string, unknown>
-      if (typeof r.id === 'string' && typeof r.src === 'string' && (r.kind === 'guesty' || r.kind === 'drive')) {
-        out.push({ id: r.id, kind: r.kind, src: r.src, order: typeof r.order === 'number' ? r.order : 0 })
-      }
-    }
-  }
-  return out.sort((a, b) => a.order - b.order)
-}
-
-/** Display URL: Guesty CDN URL as-is; Drive fileId via the image proxy. */
-function displayUrl(p: ListingPhoto): string {
-  return p.kind === 'drive' ? `/api/v1/drive/image/${p.src}` : p.src
-}
+const parsePhotos = parseListingPhotos
 
 function toClient(photos: ListingPhoto[]) {
-  return photos.map((p) => ({ id: p.id, kind: p.kind, url: displayUrl(p), order: p.order }))
+  return photos.map((p) => ({ id: p.id, kind: p.kind, url: listingPhotoUrl(p), order: p.order }))
 }
 
 function asJson(photos: ListingPhoto[]): Prisma.InputJsonValue {

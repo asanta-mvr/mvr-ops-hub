@@ -514,13 +514,17 @@ export function UnitDetailTabs(props: UnitDetailTabsProps) {
             <UnitListingsCockpit
               unitId={unitId}
               editable={listingsCanViewAccess}
-              attached={listings.map((l) => ({
-                id: l.id,
-                name: l.name,
-                nickname: l.nickname,
-                guestyId: l.guestyId,
-                channels: l.channels,
-              }))}
+              attached={listings.map((l) => {
+                // "Unit Types" custom field (Combined / Individual), shown as a tag.
+                const t = l.customFields.find((c) => c.name === 'unit_types')?.value
+                return {
+                  id: l.id,
+                  name: l.name,
+                  nickname: l.nickname,
+                  guestyId: l.guestyId,
+                  listingType: typeof t === 'string' ? t : null,
+                }
+              })}
             />
           )}
 
