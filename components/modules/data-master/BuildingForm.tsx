@@ -37,10 +37,16 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>
 
+interface ZoneOption {
+  id:    string
+  value: string
+  label: string
+}
+
 interface BuildingFormProps {
   buildingId?:          string
   defaultValues?:       Partial<FormValues>
-  zones?:               string[]
+  zoneOptions?:         ZoneOption[]
   serviceAccountEmail?: string | null
 }
 
@@ -92,31 +98,67 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
-// ── Zone selector: dropdown + inline "add new zone" ───────────────────────
+// ── Zone selector: managed dropdown (add new + manage/remove) ──────────────
+// Options are persisted in building_field_options via /api/v1/building-options.
+// Building.zone stores the option's display label (free text), so selecting,
+// adding, and the saved value all operate on labels; the slugified `value` is
+// only the table's uniqueness key.
 
 function ZoneSelect({
-  zones,
+  initialOptions,
   value,
   onChange,
-  error,
 }: {
-  zones:    string[]
-  value:    string
-  onChange: (v: string) => void
-  error?:   string
+  initialOptions: ZoneOption[]
+  value:          string
+  onChange:       (v: string) => void
 }) {
-  const [addingNew, setAddingNew]   = useState(false)
+  const [options, setOptions]         = useState<ZoneOption[]>(initialOptions)
+  const [addingNew, setAddingNew]     = useState(false)
+  const [showManage, setShowManage]   = useState(false)
   const [newZoneName, setNewZoneName] = useState('')
+  const [saving, setSaving]           = useState(false)
 
-  const knownZones  = Array.from(new Set(zones.filter(Boolean)))
-  const isCustomVal = value && !knownZones.includes(value)
+  // A saved building may hold a zone label no longer in the options list (e.g.
+  // the option was removed). Keep it visible/selected so it isn't silently lost.
+  const isCustomVal = value && !options.some((o) => o.label === value)
 
-  function confirmNew() {
+  async function confirmNew() {
     const trimmed = newZoneName.trim()
-    if (!trimmed) return
-    onChange(trimmed)
-    setAddingNew(false)
-    setNewZoneName('')
+    if (!trimmed || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/v1/building-options', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ field: 'zone', label: trimmed }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        toast.error(j?.error ?? 'Could not add zone')
+        return
+      }
+      const { data } = (await res.json()) as { data: ZoneOption }
+      setOptions((prev) => (prev.some((o) => o.id === data.id) ? prev : [...prev, data]))
+      onChange(data.label)
+      setNewZoneName('')
+      setAddingNew(false)
+    } catch {
+      toast.error('Network error while adding zone')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function removeOption(id: string, label: string) {
+    const res = await fetch(`/api/v1/building-options/${id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      toast.error('Could not remove zone')
+      return
+    }
+    setOptions((prev) => prev.filter((o) => o.id !== id))
+    if (value === label) onChange('')
+    toast.success('Zone removed')
   }
 
   if (addingNew) {
@@ -126,14 +168,15 @@ function ZoneSelect({
           autoFocus
           value={newZoneName}
           onChange={(e) => setNewZoneName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmNew() } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void confirmNew() } }}
           placeholder="New neighborhood name"
           className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-mvr-primary/30 focus:border-mvr-primary"
         />
         <button
           type="button"
-          onClick={confirmNew}
-          className="px-3 py-2 bg-mvr-primary text-white rounded-lg text-sm hover:bg-mvr-primary/90 transition-colors"
+          onClick={() => void confirmNew()}
+          disabled={saving || !newZoneName.trim()}
+          className="px-3 py-2 bg-mvr-primary text-white rounded-lg text-sm hover:bg-mvr-primary/90 disabled:opacity-50 transition-colors"
         >
           <Check className="w-4 h-4" />
         </button>
@@ -161,15 +204,43 @@ function ZoneSelect({
         }}
       >
         <option value="">Select zone…</option>
-        {knownZones.map((z) => (
-          <option key={z} value={z}>{z}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.label}>{o.label}</option>
         ))}
-        {isCustomVal && (
-          <option value={value}>{value}</option>
-        )}
+        {isCustomVal && <option value={value}>{value}</option>}
         <option value="__add_new__">＋ Add new zone…</option>
       </Select>
-      <FieldError message={error} />
+
+      {options.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowManage((v) => !v)}
+          className="mt-1.5 text-xs text-muted-foreground hover:text-mvr-primary transition-colors"
+        >
+          {showManage ? 'Hide options' : `Manage options (${options.length})`}
+        </button>
+      )}
+
+      {showManage && (
+        <div className="flex flex-wrap gap-1.5 pt-1.5">
+          {options.map((o) => (
+            <span
+              key={o.id}
+              className="inline-flex items-center gap-1 text-xs bg-mvr-neutral rounded-full px-2.5 py-1"
+            >
+              {o.label}
+              <button
+                type="button"
+                onClick={() => void removeOption(o.id, o.label)}
+                className="text-muted-foreground hover:text-mvr-danger leading-none"
+                title="Remove option"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </>
   )
 }
@@ -284,7 +355,7 @@ function AmenitiesTagPicker({
 
 // ── Main form ──────────────────────────────────────────────────────────────
 
-export default function BuildingForm({ buildingId, defaultValues, zones = [], serviceAccountEmail }: BuildingFormProps) {
+export default function BuildingForm({ buildingId, defaultValues, zoneOptions = [], serviceAccountEmail }: BuildingFormProps) {
   const router    = useRouter()
   const { data: session } = useSession()
   // Super admins can save with blank required fields (for DB cleanup); everyone
@@ -418,10 +489,9 @@ export default function BuildingForm({ buildingId, defaultValues, zones = [], se
           <div>
             <Label required>Zone</Label>
             <ZoneSelect
-              zones={zones}
+              initialOptions={zoneOptions}
               value={zoneValue}
               onChange={(v) => setValue('zone', v, { shouldValidate: true })}
-              error={errors.zone?.message}
             />
             <FieldError message={errors.zone?.message} />
           </div>

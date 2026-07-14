@@ -7,19 +7,17 @@ import { getDriveServiceAccountEmail } from '@/lib/integrations/google-drive'
 
 export const metadata: Metadata = { title: 'New Building' }
 
-async function getZones(): Promise<string[]> {
-  const buildings = await db.building.findMany({
-    where: { zone: { not: null } },
-    select: { zone: true },
-    distinct: ['zone'],
-    orderBy: { zone: 'asc' },
+async function getZoneOptions() {
+  return db.buildingFieldOption.findMany({
+    where: { field: 'zone' },
+    select: { id: true, value: true, label: true },
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
   })
-  return buildings.map((b) => b.zone).filter((z): z is string => z !== null)
 }
 
 export default async function NewBuildingPage() {
-  const [zones, serviceAccountEmail] = await Promise.all([
-    getZones(),
+  const [zoneOptions, serviceAccountEmail] = await Promise.all([
+    getZoneOptions(),
     Promise.resolve(getDriveServiceAccountEmail()),
   ])
 
@@ -35,7 +33,7 @@ export default async function NewBuildingPage() {
         <p className="text-muted-foreground text-sm mt-1">Add a new property to the portfolio</p>
       </div>
 
-      <BuildingForm zones={zones} serviceAccountEmail={serviceAccountEmail} />
+      <BuildingForm zoneOptions={zoneOptions} serviceAccountEmail={serviceAccountEmail} />
     </div>
   )
 }

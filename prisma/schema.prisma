@@ -354,6 +354,22 @@ model UnitFieldOption {
   @@map("unit_field_options")
 }
 
+// Configurable option lists for building form fields (currently "zone").
+// Mirrors UnitFieldOption; `field` namespaces option groups. Building.zone
+// stores the option's display label (free text), same as before.
+model BuildingFieldOption {
+  id        String   @id @default(cuid())
+  field     String // "zone"
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([field, value])
+  @@index([field])
+  @@map("building_field_options")
+}
+
 model Unit {
   id             String   @id @default(cuid())
   number         String
