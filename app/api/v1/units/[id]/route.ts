@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canDelete, canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
@@ -71,6 +71,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     return NextResponse.json({ data: unit })
   } catch (error) {
+    // Duplicate (buildingId, number) → clean field error instead of a 500.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: { formErrors: [], fieldErrors: { number: ['A unit with this number already exists in this building'] } },
+        },
+        { status: 409 }
+      )
+    }
     console.error('[PATCH /api/v1/units/:id]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

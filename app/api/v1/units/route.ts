@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { canEdit } from '@/lib/auth/permissions'
 import { db } from '@/lib/db'
@@ -64,6 +64,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Confirm the referenced building exists (building ids are 8-char hex, not
+    // cuids), returning a field-level error instead of a raw FK failure.
+    const building = await db.building.findUnique({
+      where: { id: validated.data.buildingId },
+      select: { id: true },
+    })
+    if (!building) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: { formErrors: [], fieldErrors: { buildingId: ['Invalid building ID'] } } },
+        { status: 400 }
+      )
+    }
+
     const unit = await db.unit.create({
       data: validated.data as Parameters<typeof db.unit.create>[0]['data'],
     })
@@ -82,6 +95,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: unit }, { status: 201 })
   } catch (error) {
+    // Duplicate (buildingId, number) → clean field error instead of a 500.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json(
+        {
+          error: 'Validation failed',
+          details: { formErrors: [], fieldErrors: { number: ['A unit with this number already exists in this building'] } },
+        },
+        { status: 409 }
+      )
+    }
     console.error('[POST /api/v1/units]', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

@@ -48,7 +48,9 @@ export const createUnitSchema = z.object({
   status:         z.string().min(1).default('onboarding'),
   score:          z.number().min(0).max(10).optional(),
   notes:          z.string().optional(),
-  buildingId:     z.string().cuid('Invalid building ID'),
+  // Building ids are 8-char hex (see buildings POST route), not cuids — validate
+  // presence here and confirm existence in the route.
+  buildingId:     z.string().min(1, 'Building is required'),
   ownerUniqueId:  z.string().optional(),
 })
 
